@@ -49,7 +49,9 @@ const AUTO_SAVE_DELAY_MS = 30_000
 export function usePersistence(
   requestedProjectId: string | undefined,
   adapter: IPersistenceAdapter = localAdapter,
+  options: { rememberLastProject?: boolean } = {},
 ) {
+  const rememberLastProject = options.rememberLastProject ?? true
   /** Whether the initial load has completed — prevents auto-save before load */
   const loadedRef = useRef(false)
   /** Stable reference to the adapter so it doesn't trigger re-renders */
@@ -63,9 +65,9 @@ export function usePersistence(
     if (!project) return
 
     await adapterRef.current.saveProject(project)
-    localStorage.setItem(LAST_PROJECT_KEY, project.id)
+    if (rememberLastProject) localStorage.setItem(LAST_PROJECT_KEY, project.id)
     setHasUnsavedChanges(false)
-  }, [])
+  }, [rememberLastProject])
 
   // ─── 1. Load project on mount ──────────────────────────────────────────────
   useEffect(() => {
@@ -77,7 +79,9 @@ export function usePersistence(
 
       const idToTry = requestedProjectId && requestedProjectId !== 'new-project'
         ? requestedProjectId
-        : localStorage.getItem(LAST_PROJECT_KEY) ?? undefined
+        : rememberLastProject
+          ? localStorage.getItem(LAST_PROJECT_KEY) ?? undefined
+          : undefined
 
       if (idToTry) {
         try {
@@ -86,7 +90,7 @@ export function usePersistence(
             // Constraint #230 — validate before hydrating the store
             const validated = validateProject(raw)
             loadProject(validated)
-            localStorage.setItem(LAST_PROJECT_KEY, validated.id)
+            if (rememberLastProject) localStorage.setItem(LAST_PROJECT_KEY, validated.id)
             loadedRef.current = true
             return
           }
@@ -102,14 +106,14 @@ export function usePersistence(
       // Fallback: create a fresh blank project
       if (!cancelled) {
         const newProject = createProject('My Project')
-        localStorage.setItem(LAST_PROJECT_KEY, newProject.id)
+        if (rememberLastProject) localStorage.setItem(LAST_PROJECT_KEY, newProject.id)
         loadedRef.current = true
       }
     }
 
     load()
     return () => { cancelled = true }
-  }, [requestedProjectId])
+  }, [rememberLastProject, requestedProjectId])
 
   // ─── 2. Auto-save (debounced) ──────────────────────────────────────────────
   useEffect(() => {

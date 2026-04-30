@@ -17,7 +17,8 @@ function corsHeaders(origin: string | null): Record<string, string> {
   const allow = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0]
   return {
     'Access-Control-Allow-Origin': allow,
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Credentials': 'true',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   }
 }
@@ -35,7 +36,7 @@ Bun.serve({
     }
 
     try {
-      const res = await handleServerRequest(req, { db })
+      const res = await handleServerRequest(req, { db, staticDir: config.staticDir })
       for (const [k, v] of Object.entries(cors)) {
         res.headers.set(k, v)
       }

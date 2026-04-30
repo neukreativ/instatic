@@ -44,6 +44,7 @@ export const CMS_MIGRATIONS: Migration[] = [
         status text not null default 'draft',
         draft_document_json jsonb not null,
         active_version_id text,
+        sort_order integer not null default 0,
         created_at timestamptz not null default now(),
         updated_at timestamptz not null default now()
       );
@@ -67,6 +68,13 @@ export const CMS_MIGRATIONS: Migration[] = [
         public_path text not null unique,
         created_at timestamptz not null default now()
       );
+    `,
+  },
+  {
+    id: '002_page_sort_order',
+    sql: `
+      alter table pages
+        add column if not exists sort_order integer not null default 0;
     `,
   },
 ]

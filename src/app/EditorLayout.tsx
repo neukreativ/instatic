@@ -34,15 +34,30 @@ import { SettingsModal } from '@editor/components/Settings'
 import { usePersistence } from '@editor/hooks/usePersistence'
 import { useEditorLayoutPersistence } from '@editor/hooks/useEditorLayoutPersistence'
 import { selectRightSidebarExpanded, useEditorStore } from '@core/editor-store/store'
+import { cmsAdapter, localAdapter } from '@core/persistence'
 import styles from './EditorLayout.module.css'
 
-export default function EditorLayout() {
+interface EditorLayoutProps {
+  persistenceMode?: 'local' | 'cms'
+}
+
+export default function EditorLayout({ persistenceMode = 'local' }: EditorLayoutProps) {
   const { projectId } = useParams<{ projectId: string }>()
   const propertiesPanelMode = useEditorStore((s) => s.propertiesPanelMode)
   const rightSidebarExpanded = useEditorStore(selectRightSidebarExpanded)
 
-  // J12 — wire IndexedDB persistence: load, auto-save, toolbar Save, Cmd+S
-  const saveProject = usePersistence(projectId)
+  const persistenceAdapter = persistenceMode === 'cms' ? cmsAdapter : localAdapter
+  const requestedProjectId = persistenceMode === 'cms' ? 'default' : projectId
+  const persistenceOptions = persistenceMode === 'cms'
+    ? { rememberLastProject: false }
+    : undefined
+
+  // J12 — wire persistence: load, auto-save, toolbar Save, Cmd+S.
+  const saveProject = usePersistence(
+    requestedProjectId,
+    persistenceAdapter,
+    persistenceOptions,
+  )
   useEditorLayoutPersistence()
 
   return (

@@ -18,6 +18,11 @@ describe('CMS migrations', () => {
     expect(sql).toContain('snapshot_json jsonb not null')
   })
 
+  it('stores page sort order for reconstructing the editor draft', () => {
+    const sql = CMS_MIGRATIONS.map((m) => m.sql).join('\n')
+    expect(sql).toContain('sort_order integer not null default 0')
+  })
+
   it('enforces a single-site row', () => {
     const sql = CMS_MIGRATIONS.map((m) => m.sql).join('\n')
     expect(sql).toContain("id text primary key default 'default'")

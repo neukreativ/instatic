@@ -66,3 +66,26 @@ export async function createSession(
     [input.idHash, input.adminUserId, input.expiresAt],
   )
 }
+
+export async function findAdminBySessionHash(
+  db: DbClient,
+  idHash: string,
+): Promise<AdminUserRow | null> {
+  const result = await db.query<AdminUserRow>(
+    `select admin_users.id,
+            admin_users.email,
+            admin_users.password_hash,
+            admin_users.created_at
+     from sessions
+     join admin_users on admin_users.id = sessions.admin_user_id
+     where sessions.id_hash = $1
+       and sessions.expires_at > now()
+     limit 1`,
+    [idHash],
+  )
+  return result.rows[0] ?? null
+}
+
+export async function deleteSessionByHash(db: DbClient, idHash: string): Promise<void> {
+  await db.query('delete from sessions where id_hash = $1', [idHash])
+}

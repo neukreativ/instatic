@@ -459,7 +459,9 @@ describe('Toolbar — structural requirements', () => {
       'utf-8',
     )
     expect(src).toContain("import { Toolbar }")
-    expect(src).toContain('const saveProject = usePersistence(projectId)')
+    expect(src).toContain('const saveProject = usePersistence(')
+    expect(src).toContain('requestedProjectId')
+    expect(src).toContain('persistenceAdapter')
     expect(src).toContain('<Toolbar onSave={saveProject} />')
   })
 

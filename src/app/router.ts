@@ -20,6 +20,10 @@ export const router = createBrowserRouter([
     element: withSuspense(createElement(Dashboard)),
   },
   {
+    path: '/admin',
+    element: withSuspense(createElement(EditorLayout, { persistenceMode: 'cms' })),
+  },
+  {
     path: '/editor/:projectId',
     element: withSuspense(createElement(EditorLayout)),
   },

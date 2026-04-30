@@ -21,6 +21,7 @@ services:
       DATABASE_URL: postgres://page_builder:page_builder@postgres:5432/page_builder
       SESSION_SECRET: change-me
       UPLOADS_DIR: /app/uploads
+      STATIC_DIR: /app/dist
     volumes:
       - .:/app
       - uploads:/app/uploads
