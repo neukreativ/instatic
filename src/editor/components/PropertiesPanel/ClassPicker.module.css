@@ -1,14 +1,14 @@
 /* ClassPicker - class stack manager inside the Properties inspector. */
 
 .container {
-  display: grid;
-  gap: 10px;
+    display: grid;
+    gap: 10px;
 }
 
 .pillsContainer {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
 }
 
 /* -------------------------------------------------------------------------
@@ -17,115 +17,95 @@
    -------------------------------------------------------------------------*/
 
 .pill {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  max-width: 100%;
-  min-height: 20px;
-  gap: 4px;
-  padding: 0 7px;
-  border: 1px solid var(--pill-border-rest);
-  border-radius: 4px;
-  cursor: pointer;
-  user-select: none;
-  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
-
-  --pill-color: var(--editor-text-secondary);
-  --pill-glow: transparent;
-  --pill-border-rest: rgba(255, 255, 255, 0.20);
-  --pill-bg-hover: rgba(255, 255, 255, 0.06);
-  --pill-border-hover: rgba(255, 255, 255, 0.30);
-  --pill-bg-active: rgba(255, 255, 255, 0.12);
-  --pill-border-active: rgba(255, 255, 255, 0.50);
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    min-height: 20px;
+    gap: 4px;
+    padding: 0 7px;
+    border: 0;
+    border-radius: 6px;
+    cursor: pointer;
+    user-select: none;
+    transition:
+        background-color 120ms ease,
+        border-color 120ms ease,
+        color 120ms ease;
+    --pill-color: var(--editor-text-secondary);
+    --pill-glow: transparent;
+    --pill-border-rest: rgba(255, 255, 255, 0.2);
+    --pill-bg-hover: rgba(255, 255, 255, 0.06);
+    --pill-border-hover: rgba(255, 255, 255, 0.3);
+    --pill-bg-active: rgba(255, 255, 255, 0.12);
+    --pill-border-active: rgba(255, 255, 255, 0.5);
 }
 
 .pill[data-accent="mint"] {
-  --pill-color: var(--rail-tint-mint);
-  --pill-glow: rgba(142, 230, 200, 0.50);
-  --pill-border-rest: rgba(142, 230, 200, 0.35);
-  --pill-bg-hover: rgba(142, 230, 200, 0.14);
-  --pill-border-hover: rgba(142, 230, 200, 0.55);
-  --pill-bg-active: rgba(142, 230, 200, 0.30);
-  --pill-border-active: rgba(142, 230, 200, 0.85);
+    --pill-color: var(--rail-tint-mint);
+    --pill-glow: rgba(142, 230, 200, 0.5);
+    --pill-border-rest: rgba(142, 230, 200, 0.35);
+    --pill-bg-hover: rgba(142, 230, 200, 0.14);
+    --pill-border-hover: rgba(142, 230, 200, 0.55);
+    --pill-bg-active: rgba(142, 230, 200, 0.3);
+    --pill-border-active: rgba(142, 230, 200, 0.85);
 }
 
 .pill[data-accent="lilac"] {
-  --pill-color: var(--rail-tint-lilac);
-  --pill-glow: rgba(200, 182, 255, 0.50);
-  --pill-border-rest: rgba(200, 182, 255, 0.35);
-  --pill-bg-hover: rgba(200, 182, 255, 0.14);
-  --pill-border-hover: rgba(200, 182, 255, 0.55);
-  --pill-bg-active: rgba(200, 182, 255, 0.30);
-  --pill-border-active: rgba(200, 182, 255, 0.85);
+    --pill-color: var(--rail-tint-lilac);
+    --pill-glow: rgba(200, 182, 255, 0.5);
+    --pill-border-rest: rgba(200, 182, 255, 0.35);
+    --pill-bg-hover: rgba(200, 182, 255, 0.14);
+    --pill-border-hover: rgba(200, 182, 255, 0.55);
+    --pill-bg-active: rgba(200, 182, 255, 0.3);
+    --pill-border-active: rgba(200, 182, 255, 0.85);
 }
 
 .pill[data-accent="sky"] {
-  --pill-color: var(--rail-tint-sky);
-  --pill-glow: rgba(155, 220, 255, 0.48);
-  --pill-border-rest: rgba(155, 220, 255, 0.33);
-  --pill-bg-hover: rgba(155, 220, 255, 0.13);
-  --pill-border-hover: rgba(155, 220, 255, 0.52);
-  --pill-bg-active: rgba(155, 220, 255, 0.28);
-  --pill-border-active: rgba(155, 220, 255, 0.82);
+    --pill-color: var(--rail-tint-sky);
+    --pill-glow: rgba(155, 220, 255, 0.48);
+    --pill-border-rest: rgba(155, 220, 255, 0.33);
+    --pill-bg-hover: rgba(155, 220, 255, 0.13);
+    --pill-border-hover: rgba(155, 220, 255, 0.52);
+    --pill-bg-active: rgba(155, 220, 255, 0.28);
+    --pill-border-active: rgba(155, 220, 255, 0.82);
 }
 
 .pill[data-accent="peach"] {
-  --pill-color: var(--rail-tint-peach);
-  --pill-glow: rgba(255, 199, 168, 0.48);
-  --pill-border-rest: rgba(255, 199, 168, 0.33);
-  --pill-bg-hover: rgba(255, 199, 168, 0.13);
-  --pill-border-hover: rgba(255, 199, 168, 0.52);
-  --pill-bg-active: rgba(255, 199, 168, 0.28);
-  --pill-border-active: rgba(255, 199, 168, 0.82);
+    --pill-color: var(--rail-tint-peach);
+    --pill-glow: rgba(255, 199, 168, 0.48);
+    --pill-border-rest: rgba(255, 199, 168, 0.33);
+    --pill-bg-hover: rgba(255, 199, 168, 0.13);
+    --pill-border-hover: rgba(255, 199, 168, 0.52);
+    --pill-bg-active: rgba(255, 199, 168, 0.28);
+    --pill-border-active: rgba(255, 199, 168, 0.82);
 }
 
 /* Inactive: tinted text + tinted border from rest — color is on by default */
 .pillInactive {
-  background: transparent;
-  border: 1px solid var(--pill-border-rest);
-  color: var(--pill-color);
+    background: linear-gradient(0deg, var(--pill-bg-hover), transparent);
+    color: var(--pill-color);
 }
 
 /* Hover: strengthen bg and border; color stays (already the tint) */
 .pillInactive:hover {
-  background: var(--pill-bg-hover);
-  border-color: var(--pill-border-hover);
+    background: var(--pill-bg-hover);
 }
 
 /* Active: saturated tinted bg + strong border + top sheen */
 .pillActive {
-  background: var(--pill-bg-active);
-  border-color: var(--pill-border-active);
-  color: var(--pill-color);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
-}
-
-/* Glow on the name text only */
-.pillActive .pillName {
-  text-shadow: 0 0 6px var(--pill-glow);
-}
-
-/* Bottom glow line — marks the actively-edited chip */
-.pillActive::after {
-  content: '';
-  position: absolute;
-  left: 6px;
-  right: 6px;
-  bottom: -3px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--pill-color), transparent);
-  opacity: 0.9;
-  border-radius: 1px;
-  pointer-events: none;
+    background: var(--pill-bg-active);
+    color: var(--pill-color);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .pillName {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 11px;
-  font-weight: 620;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+    font-weight: 620;
 }
 
 /* × remove button — width-collapsed at rest, slides in on chip hover/focus.
@@ -133,18 +113,18 @@
    on non-hovered siblings (they only shift when this chip expands, which
    is intentional and transitions smoothly at 140ms). */
 .pillRemoveBtn {
-  width: 0;
-  opacity: 0;
-  overflow: hidden;
-  margin-left: 0;
-  transition: width 140ms ease, opacity 120ms ease, margin-left 140ms ease;
+    width: 10px;
+    overflow: hidden;
+    transition:
+        width 140ms ease,
+        opacity 120ms ease,
+        margin-left 140ms ease;
 }
 
 .pill:hover .pillRemoveBtn,
 .pill:focus-within .pillRemoveBtn {
-  width: 16px;
-  opacity: 1;
-  margin-left: 2px;
+    width: 10px;
+    background: transparent;
 }
 
 /* Input + optional trailing action (e.g. the Componentize button).
@@ -153,39 +133,39 @@
    intrinsic width (auto). The suggestions dropdown is portaled to <body>
    and anchors to this row, so its width covers both columns. */
 .inputRow {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
-  align-items: center;
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    align-items: center;
 }
 
 .inputRow[data-with-action="true"] {
-  grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .noMatch {
-  padding: 9px 10px;
-  color: var(--editor-text-muted);
-  font-size: 11px;
+    padding: 9px 10px;
+    color: var(--editor-text-muted);
+    font-size: 11px;
 }
 
 .suggestionLabel {
-  min-width: 0;
-  flex: 1 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .utilityBadge {
-  flex: 0 0 auto;
-  padding: 2px 5px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--editor-text-muted);
-  font-size: 9px;
-  font-weight: 700;
-  line-height: 1;
-  text-transform: uppercase;
+    flex: 0 0 auto;
+    padding: 2px 5px;
+    border-radius: 999px;
+    background: var(--editor-surface-5);
+    color: var(--editor-text);
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1;
+    text-transform: uppercase;
 }
