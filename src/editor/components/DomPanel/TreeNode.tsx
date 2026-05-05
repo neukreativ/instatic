@@ -67,6 +67,9 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth }: TreeNodeProps)
   const duplicateNode = useEditorStore((s) => s.duplicateNode)
   const renameNode = useEditorStore((s) => s.renameNode)
   const wrapNode = useEditorStore((s) => s.wrapNode)
+  const copyNode = useEditorStore((s) => s.copyNode)
+  const cutNode = useEditorStore((s) => s.cutNode)
+  const pasteNode = useEditorStore((s) => s.pasteNode)
 
   const { isExpanded, toggleExpanded } = useDomTree()
 
@@ -327,6 +330,9 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth }: TreeNodeProps)
             wrapNode(nodeId, 'base.container')
             setContextMenu(null)
           }}
+          onCopy={() => { copyNode(nodeId); setContextMenu(null) }}
+          onCut={() => { cutNode(nodeId); setContextMenu(null) }}
+          onPaste={() => { pasteNode(nodeId); setContextMenu(null) }}
         />,
         document.body,
       )}

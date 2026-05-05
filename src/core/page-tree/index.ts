@@ -61,9 +61,13 @@ export {
   toggleNodeHidden,
   moveNode,
   duplicateNode,
+  buildSubtreeNodeIdMap,
+  pasteSubtree,
   wrapNode,
   addPage,
   deletePage,
   renamePage,
   reorderPages,
 } from './mutations'
+
+export { getParent } from './selectors'

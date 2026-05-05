@@ -28,7 +28,7 @@ function makeVC(id: string, name: string): VisualComponent {
     name,
     rootNode: {
       id: `root-${id}`,
-      moduleId: 'base.root',
+      moduleId: 'base.body',
       props: {},
       children: [],
       breakpointOverrides: {},
@@ -52,7 +52,7 @@ function resetStore(vcs: VisualComponent[] = []) {
     slug: 'index',
     rootNodeId: 'root-home',
     nodes: {
-      'root-home': makeNode({ id: 'root-home', moduleId: 'base.root', children: ['container-node'] }),
+      'root-home': makeNode({ id: 'root-home', moduleId: 'base.body', children: ['container-node'] }),
       'container-node': makeNode({ id: 'container-node', moduleId: 'base.container' }),
     },
   })
@@ -84,6 +84,9 @@ function renderMenu(nodeId = 'container-node', vcs: VisualComponent[] = []) {
       onDuplicate={noop}
       onRename={noop}
       onWrapInContainer={noop}
+      onCopy={noop}
+      onCut={noop}
+      onPaste={noop}
     />,
   )
 }
@@ -168,6 +171,9 @@ describe('LayerNodeContextMenu — Insert module here', () => {
         onDuplicate={noop}
         onRename={noop}
         onWrapInContainer={noop}
+        onCopy={noop}
+        onCut={noop}
+        onPaste={noop}
       />,
     )
 

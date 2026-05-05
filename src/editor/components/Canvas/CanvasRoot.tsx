@@ -91,6 +91,9 @@ export function CanvasRoot() {
   const duplicateNode = useEditorStore((s) => s.duplicateNode)
   const renameNode = useEditorStore((s) => s.renameNode)
   const wrapNode = useEditorStore((s) => s.wrapNode)
+  const copyNode = useEditorStore((s) => s.copyNode)
+  const cutNode = useEditorStore((s) => s.cutNode)
+  const pasteNode = useEditorStore((s) => s.pasteNode)
   const setActiveBreakpoint = useEditorStore((s) => s.setActiveBreakpoint)
   const setFocusedPanel = useEditorStore((s) => s.setFocusedPanel)
   const setActiveDocument = useEditorStore((s) => s.setActiveDocument)
@@ -215,8 +218,42 @@ export function CanvasRoot() {
         e.preventDefault()
         duplicateNode(selectedNodeId)
       }
+
+      // Ctrl/Cmd+C / X / V — clipboard. Skip when the active element is a
+      // text input / contenteditable so native text-clipboard behaviour wins
+      // when the user is editing a value, not the layer tree.
+      if (e.ctrlKey || e.metaKey) {
+        const target = e.target as HTMLElement
+        const isTextInput =
+          target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable
+        if (isTextInput) return
+
+        if (e.key === 'c') {
+          e.preventDefault()
+          copyNode(selectedNodeId)
+        } else if (e.key === 'x') {
+          e.preventDefault()
+          cutNode(selectedNodeId)
+        } else if (e.key === 'v') {
+          e.preventDefault()
+          pasteNode(selectedNodeId)
+        }
+      }
     },
-    [selectedNodeId, canvasKeyDown, deleteNode, clearSelection, duplicateNode, activeDocument, setActiveDocument],
+    [
+      selectedNodeId,
+      canvasKeyDown,
+      deleteNode,
+      clearSelection,
+      duplicateNode,
+      activeDocument,
+      setActiveDocument,
+      copyNode,
+      cutNode,
+      pasteNode,
+    ],
   )
 
   // ─── Canvas background click → deselect ───────────────────────────────────
@@ -338,6 +375,7 @@ export function CanvasRoot() {
           <LayerNodeContextMenu
             x={contextMenu.x}
             y={contextMenu.y}
+            nodeId={contextMenu.nodeId}
             onClose={closeContextMenu}
             onDelete={() => {
               deleteNode(contextMenu.nodeId)
@@ -354,6 +392,18 @@ export function CanvasRoot() {
             }}
             onWrapInContainer={() => {
               wrapNode(contextMenu.nodeId, 'base.container')
+              closeContextMenu()
+            }}
+            onCopy={() => {
+              copyNode(contextMenu.nodeId)
+              closeContextMenu()
+            }}
+            onCut={() => {
+              cutNode(contextMenu.nodeId)
+              closeContextMenu()
+            }}
+            onPaste={() => {
+              pasteNode(contextMenu.nodeId)
               closeContextMenu()
             }}
           />,

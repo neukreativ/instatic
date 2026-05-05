@@ -245,6 +245,116 @@ export function duplicateNode(page: Page, nodeId: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Paste — insert a foreign subtree from a clipboard payload
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a map of fresh node IDs for every node reachable from `rootNodeId`
+ * inside `nodes`. Each entry maps the source-side ID to a freshly minted
+ * `nanoid()` ID, suitable for inserting the subtree into the target page
+ * without collisions.
+ *
+ * Exposed separately from `pasteSubtree` because the clipboard slice needs
+ * the map up front: scoped classes carry a `scope.nodeId` that must be
+ * remapped to the new node ID before the class is added to the target site.
+ */
+export function buildSubtreeNodeIdMap(
+  rootNodeId: string,
+  nodes: Record<string, PageNode>,
+): Map<string, string> {
+  const idMap = new Map<string, string>()
+  const stack = [rootNodeId]
+  while (stack.length > 0) {
+    const id = stack.pop()!
+    const node = nodes[id]
+    if (!node) continue
+    if (idMap.has(id)) continue
+    idMap.set(id, nanoid())
+    stack.push(...node.children)
+  }
+  return idMap
+}
+
+/**
+ * Insert a foreign subtree (root node + descendants) under a target parent.
+ *
+ * The payload comes from the clipboard slice and may originate from any page
+ * (or even any site). All node IDs are regenerated on insert so collisions
+ * with the target page are impossible.
+ *
+ * `options.nodeIdMap` accepts a precomputed map (typically built via
+ * `buildSubtreeNodeIdMap`); if omitted, one is built locally. Callers that
+ * need to remap class scope.nodeId in tandem with node IDs MUST precompute
+ * the map and pass it in.
+ *
+ * `options.classIdRemap` lets the caller filter / remap classIds at insertion
+ * time — needed when the payload references classes that don't exist in the
+ * target site (cross-site paste, or framework classes that aren't reconciled
+ * in the target). Return `null` from the mapper to drop a classId, or a
+ * string to remap it.
+ *
+ * Returns the new root node ID inside the target page.
+ */
+export function pasteSubtree(
+  page: Page,
+  payload: { rootNodeId: string; nodes: Record<string, PageNode> },
+  parentId: string,
+  index?: number,
+  options: {
+    nodeIdMap?: Map<string, string>
+    classIdRemap?: (classId: string) => string | null
+  } = {}
+): string {
+  const parent = page.nodes[parentId]
+  if (!parent) {
+    throw new Error(`[PageTree] Parent node "${parentId}" not found`)
+  }
+
+  const idMap = options.nodeIdMap ?? buildSubtreeNodeIdMap(payload.rootNodeId, payload.nodes)
+  const { classIdRemap } = options
+
+  // Clone every node with remapped ID, props, breakpointOverrides, children,
+  // and (optionally) filtered classIds.
+  for (const [oldId, newId] of idMap) {
+    const original = payload.nodes[oldId]
+    if (!original) continue
+
+    const remappedClassIds = classIdRemap
+      ? original.classIds.flatMap((cid) => {
+          const next = classIdRemap(cid)
+          return next === null ? [] : [next]
+        })
+      : [...original.classIds]
+
+    page.nodes[newId] = {
+      ...original,
+      id: newId,
+      props: { ...original.props },
+      breakpointOverrides: Object.fromEntries(
+        Object.entries(original.breakpointOverrides).map(([k, v]) => [k, { ...v }])
+      ),
+      children: original.children
+        .map((childId) => idMap.get(childId))
+        .filter((cid): cid is string => typeof cid === 'string'),
+      classIds: remappedClassIds,
+    }
+  }
+
+  // Insert the new root under its target parent.
+  const newRootId = idMap.get(payload.rootNodeId)
+  if (!newRootId) {
+    throw new Error('[PageTree] Clipboard payload root not found in payload.nodes')
+  }
+  if (index === undefined || index >= parent.children.length) {
+    parent.children.push(newRootId)
+  } else {
+    parent.children.splice(Math.max(0, index), 0, newRootId)
+  }
+
+  return newRootId
+}
+
+// ---------------------------------------------------------------------------
 // Wrap / unwrap
 // ---------------------------------------------------------------------------
 
@@ -282,7 +392,7 @@ export function wrapNode(
 // ---------------------------------------------------------------------------
 
 export function addPage(site: SiteDocument, title: string, slug: string): Page {
-  const rootNode = createNode('base.root')
+  const rootNode = createNode('base.body')
   const page: Page = {
     id: nanoid(),
     title,

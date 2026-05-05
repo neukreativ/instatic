@@ -15,12 +15,13 @@ import { createVisualComponentsSlice } from './slices/visualComponentsSlice'
 import { createSettingsSlice } from './slices/settingsSlice'
 import { createAgentSlice } from '../agent/agentSlice'
 import { createSitePanelSlice } from './slices/sitePanelSlice'
+import { createClipboardSlice } from './slices/clipboardSlice'
 import { setAgentStoreApi } from '../agent/storeRef'
 
 /**
  * EditorStore — the central Zustand store for the page builder editor.
  *
- * Composed of 10 slices (6 canonical Phase 0 + agentSlice + sitePanelSlice + filesSlice + visualComponentsSlice):
+ * Composed of 11 slices (6 canonical Phase 0 + agentSlice + sitePanelSlice + filesSlice + visualComponentsSlice + clipboardSlice):
  *   - siteSlice:        owns SiteDocument (pages, nodes, breakpoints, settings, classes, files)
  *   - selectionSlice:      selectedNodeId, hoveredNodeId
  *   - canvasSlice:         zoom, pan, activeBreakpointId, canvasMode (Constraint #317)
@@ -31,6 +32,7 @@ import { setAgentStoreApi } from '../agent/storeRef'
  *   - settingsSlice:       settings modal open/close + active section (Guideline #193/#323)
  *   - agentSlice:          AI Agent Panel state + streaming (Phase D)
  *   - sitePanelSlice:      dependency manifest + site runtime settings
+ *   - clipboardSlice:      copy / cut / paste of layer subtrees, persisted globally across sites
  *
  * The combined `EditorStore` type lives in `./types` so each slice can import
  * it without going through this module — that's how the historical
@@ -58,6 +60,7 @@ export const useEditorStore = create<EditorStore>()(
       ...createSettingsSlice(...args),
       ...createAgentSlice(...args),
       ...createSitePanelSlice(...args),
+      ...createClipboardSlice(...args),
     }))
   )
 )
