@@ -27,7 +27,7 @@ interface ModulePickerMenuProps {
   anchorRef: RefObject<HTMLElement | null>
   /** Preferred side relative to the anchor. Default: 'auto'. */
   side?: FloatingSide
-  /** Cross-axis alignment. Default: 'start'. */
+  /** Cross-axis alignment. Default: 'center' — the menu centers on the trigger. */
   align?: FloatingAlign
   /** Stack order. Default: 1000. */
   zIndex?: number
@@ -39,7 +39,7 @@ interface ModulePickerMenuProps {
 export function ModulePickerMenu({
   anchorRef,
   side = 'auto',
-  align = 'start',
+  align = 'center',
   zIndex = 1000,
   onClose,
   onSelectModule,
