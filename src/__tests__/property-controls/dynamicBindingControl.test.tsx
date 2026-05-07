@@ -67,6 +67,8 @@ describe('dynamic binding controls', () => {
     render(<PropertiesPanel />)
 
     fireEvent.focus(screen.getByLabelText('Text'))
+    expect(screen.getByRole('menuitem', { name: /current post author name/i })).toBeDefined()
+    expect(screen.queryByRole('menuitem', { name: /author id/i })).toBeNull()
     fireEvent.click(screen.getByRole('menuitem', { name: /current post title/i }))
 
     let node = useEditorStore.getState().site?.pages[0].nodes['text-1']
@@ -81,6 +83,20 @@ describe('dynamic binding controls', () => {
 
     node = useEditorStore.getState().site?.pages[0].nodes['text-1']
     expect(node?.dynamicBindings).toBeUndefined()
+  })
+
+  it('binds template text controls to the current post author name', () => {
+    loadTemplateWithTextNode()
+    render(<PropertiesPanel />)
+
+    fireEvent.focus(screen.getByLabelText('Text'))
+    fireEvent.click(screen.getByRole('menuitem', { name: /current post author name/i }))
+
+    const node = useEditorStore.getState().site?.pages[0].nodes['text-1']
+    expect(node?.dynamicBindings?.text).toMatchObject({
+      source: 'currentEntry',
+      field: 'authorName',
+    })
   })
 
   it('offers featured media and first body image bindings for image controls', () => {

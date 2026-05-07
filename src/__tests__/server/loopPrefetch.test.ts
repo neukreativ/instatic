@@ -18,7 +18,7 @@ import { makePage, makeSite } from '../publisher/helpers'
 import '@core/loops/sources'
 
 describe('loopPrefetch', () => {
-  it('maps published content authorship into loop fields with display names and roles', () => {
+  it('maps published content authorship into public loop fields', () => {
     const item = publishedContentEntryToLoopItem({
       id: 'version_1',
       entryId: 'entry_1',
@@ -46,13 +46,27 @@ describe('loopPrefetch', () => {
     })
 
     expect(item.fields).toMatchObject({
+      author: {
+        displayName: 'Author Name',
+        roleSlug: 'editor',
+        roleName: 'Editor',
+      },
       authorName: 'Author Name',
       authorRoleName: 'Editor',
       authorRoleSlug: 'editor',
+      publishedBy: {
+        displayName: 'Publisher Name',
+        roleSlug: 'admin',
+        roleName: 'Admin',
+      },
       publishedByName: 'Publisher Name',
       publishedByRoleName: 'Admin',
       publishedByRoleSlug: 'admin',
     })
+    expect('authorUserId' in item.fields).toBe(false)
+    expect('authorId' in item.fields).toBe(false)
+    expect('publishedByUserId' in item.fields).toBe(false)
+    expect('publishedById' in item.fields).toBe(false)
   })
 
   it('readLoopProps coerces missing/invalid props into safe defaults', () => {

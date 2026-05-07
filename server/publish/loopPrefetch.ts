@@ -20,6 +20,7 @@ import type {
 import { loopSourceRegistry } from '@core/loops/registry'
 import { firstImagePathFromMarkdown } from '@core/markdown/renderContentMarkdown'
 import { normalizeRouteBase } from '@core/templates/templateMatching'
+import { publicContentUserFromParts } from '@core/content/publicContentUser'
 import type { DbClient } from '../db/client'
 import type { PublishedContentEntry } from '../repositories/content'
 
@@ -47,6 +48,12 @@ export function publishedContentEntryToLoopItem(entry: PublishedContentEntry): L
   )
   const permalink = `${collectionRouteBase === '/' ? '' : collectionRouteBase}/${entry.slug}`
   const firstImagePath = firstImagePathFromMarkdown(entry.bodyMarkdown)
+  const author = publicContentUserFromParts(entry.authorName, entry.authorRoleSlug, entry.authorRoleName)
+  const publishedBy = publicContentUserFromParts(
+    entry.publishedByName,
+    entry.publishedByRoleSlug,
+    entry.publishedByRoleName,
+  )
 
   return {
     id: entry.id,
@@ -59,16 +66,14 @@ export function publishedContentEntryToLoopItem(entry: PublishedContentEntry): L
       collectionId: entry.collectionId,
       collectionSlug: entry.collectionSlug,
       collectionRouteBase,
-      authorUserId: entry.authorUserId,
-      authorId: entry.authorUserId,
-      authorName: entry.authorName,
-      authorRoleSlug: entry.authorRoleSlug,
-      authorRoleName: entry.authorRoleName,
-      publishedByUserId: entry.publishedByUserId,
-      publishedById: entry.publishedByUserId,
-      publishedByName: entry.publishedByName,
-      publishedByRoleSlug: entry.publishedByRoleSlug,
-      publishedByRoleName: entry.publishedByRoleName,
+      author,
+      authorName: author?.displayName ?? null,
+      authorRoleSlug: author?.roleSlug ?? null,
+      authorRoleName: author?.roleName ?? null,
+      publishedBy,
+      publishedByName: publishedBy?.displayName ?? null,
+      publishedByRoleSlug: publishedBy?.roleSlug ?? null,
+      publishedByRoleName: publishedBy?.roleName ?? null,
       // Content
       title: entry.title,
       slug: entry.slug,

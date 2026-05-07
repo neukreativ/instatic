@@ -79,7 +79,7 @@ describe('template preview data', () => {
     })
   })
 
-  it('maps editable entry authorship into template binding fields', () => {
+  it('maps editable entry authorship into public template fields', () => {
     const item = contentEntryToLoopItem(entry({
       authorUserId: 'user_author',
       updatedByUserId: 'user_editor',
@@ -108,18 +108,34 @@ describe('template preview data', () => {
     }))
 
     expect(item.fields).toMatchObject({
-      authorUserId: 'user_author',
-      authorId: 'user_author',
+      author: {
+        displayName: 'Author Name',
+        roleSlug: 'editor',
+        roleName: 'Editor',
+      },
       authorName: 'Author Name',
       authorRoleName: 'Editor',
       authorRoleSlug: 'editor',
-      updatedByUserId: 'user_editor',
+      updatedBy: {
+        displayName: 'Editor Name',
+        roleSlug: 'admin',
+        roleName: 'Admin',
+      },
       updatedByName: 'Editor Name',
       updatedByRoleName: 'Admin',
-      publishedByUserId: 'user_publisher',
+      publishedBy: {
+        displayName: 'Publisher Name',
+        roleSlug: 'admin',
+        roleName: 'Admin',
+      },
       publishedByName: 'Publisher Name',
       publishedByRoleName: 'Admin',
     })
+    expect('authorUserId' in item.fields).toBe(false)
+    expect('authorId' in item.fields).toBe(false)
+    expect('updatedByUserId' in item.fields).toBe(false)
+    expect('publishedByUserId' in item.fields).toBe(false)
+    expect(JSON.stringify(item.fields)).not.toContain('@example.com')
   })
 
   it('resolves an editable entry featured media id to a preview media path', () => {

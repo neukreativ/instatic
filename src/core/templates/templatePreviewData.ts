@@ -15,6 +15,7 @@ import type { CmsMediaAsset } from '../persistence/cmsMedia'
 import type { LoopItem } from '../loops/types'
 import { firstImagePathFromMarkdown } from '../markdown/renderContentMarkdown'
 import { normalizeRouteBase } from './templateMatching'
+import { publicContentUserReference } from '../content/publicContentUser'
 
 function dateTimestamp(value: string | null | undefined): number {
   const timestamp = Date.parse(value ?? '')
@@ -42,10 +43,10 @@ function mediaPublicPath(mediaAssets: CmsMediaAsset[], mediaId: string | null): 
 /**
  * Project a ContentEntry into the generic LoopItem shape.
  *
- * The `fields` map carries every value reachable through historical
- * `currentEntry` bindings — including the alias names (`featuredMedia`,
+ * The `fields` map carries the public values available to `currentEntry`
+ * bindings, including ergonomic aliases (`featuredMedia`,
  * `featuredMediaPath`, `featuredMediaUrl`, `firstImage`, `firstImagePath`,
- * `firstImageUrl`) that earlier persisted bindings may already use.
+ * `firstImageUrl`) for the same resolved media paths.
  * Format coercions (markdown → HTML for `body`) happen in the resolver
  * when `binding.format === 'html'`.
  */
@@ -57,6 +58,10 @@ export function contentEntryToLoopItem(
   const firstImagePath = firstImagePathFromMarkdown(entry.bodyMarkdown)
   const collectionRouteBase = normalizeRouteBase(entry.collectionId)
   const permalink = `${collectionRouteBase === '/' ? '' : collectionRouteBase}/${entry.slug}`
+  const author = publicContentUserReference(entry.author)
+  const createdBy = publicContentUserReference(entry.createdBy)
+  const updatedBy = publicContentUserReference(entry.updatedBy)
+  const publishedBy = publicContentUserReference(entry.publishedBy)
 
   return {
     id: entry.id,
@@ -67,26 +72,22 @@ export function contentEntryToLoopItem(
       collectionId: entry.collectionId,
       collectionSlug: entry.collectionId,
       collectionRouteBase,
-      authorUserId: entry.authorUserId ?? null,
-      authorId: entry.authorUserId ?? null,
-      authorName: entry.author?.displayName ?? null,
-      authorRoleSlug: entry.author?.roleSlug ?? null,
-      authorRoleName: entry.author?.roleName ?? null,
-      createdByUserId: entry.createdByUserId ?? null,
-      createdById: entry.createdByUserId ?? null,
-      createdByName: entry.createdBy?.displayName ?? null,
-      createdByRoleSlug: entry.createdBy?.roleSlug ?? null,
-      createdByRoleName: entry.createdBy?.roleName ?? null,
-      updatedByUserId: entry.updatedByUserId ?? null,
-      updatedById: entry.updatedByUserId ?? null,
-      updatedByName: entry.updatedBy?.displayName ?? null,
-      updatedByRoleSlug: entry.updatedBy?.roleSlug ?? null,
-      updatedByRoleName: entry.updatedBy?.roleName ?? null,
-      publishedByUserId: entry.publishedByUserId ?? null,
-      publishedById: entry.publishedByUserId ?? null,
-      publishedByName: entry.publishedBy?.displayName ?? null,
-      publishedByRoleSlug: entry.publishedBy?.roleSlug ?? null,
-      publishedByRoleName: entry.publishedBy?.roleName ?? null,
+      author,
+      authorName: author?.displayName ?? null,
+      authorRoleSlug: author?.roleSlug ?? null,
+      authorRoleName: author?.roleName ?? null,
+      createdBy,
+      createdByName: createdBy?.displayName ?? null,
+      createdByRoleSlug: createdBy?.roleSlug ?? null,
+      createdByRoleName: createdBy?.roleName ?? null,
+      updatedBy,
+      updatedByName: updatedBy?.displayName ?? null,
+      updatedByRoleSlug: updatedBy?.roleSlug ?? null,
+      updatedByRoleName: updatedBy?.roleName ?? null,
+      publishedBy,
+      publishedByName: publishedBy?.displayName ?? null,
+      publishedByRoleSlug: publishedBy?.roleSlug ?? null,
+      publishedByRoleName: publishedBy?.roleName ?? null,
       // Content
       title: entry.title,
       slug: entry.slug,

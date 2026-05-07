@@ -23,6 +23,7 @@
 import type { LoopEntitySource, LoopFetchResult, LoopItem, LoopSourceDb } from '../types'
 import { firstImagePathFromMarkdown } from '../../markdown/renderContentMarkdown'
 import { normalizeRouteBase } from '../../templates/templateMatching'
+import { publicContentUserFromParts } from '../../content/publicContentUser'
 
 interface PublishedEntryRow {
   version_id: string
@@ -72,6 +73,16 @@ function rowToLoopItem(row: PublishedEntryRow): LoopItem {
   )
   const permalink = `${collectionRouteBase === '/' ? '' : collectionRouteBase}/${row.slug}`
   const firstImagePath = firstImagePathFromMarkdown(row.body_markdown)
+  const author = publicContentUserFromParts(
+    row.author_display_name,
+    row.author_role_slug,
+    row.author_role_name,
+  )
+  const publishedBy = publicContentUserFromParts(
+    row.published_by_display_name,
+    row.published_by_role_slug,
+    row.published_by_role_name,
+  )
 
   return {
     id: row.entry_id,
@@ -83,20 +94,14 @@ function rowToLoopItem(row: PublishedEntryRow): LoopItem {
       collectionId: row.collection_id,
       collectionSlug: row.collection_slug,
       collectionRouteBase,
-      authorUserId: row.author_user_id,
-      authorId: row.author_user_id,
-      authorName: row.author_display_name,
-      authorRoleSlug: row.author_role_slug,
-      authorRoleName: row.author_role_name,
-      createdByUserId: row.created_by_user_id,
-      createdById: row.created_by_user_id,
-      updatedByUserId: row.updated_by_user_id,
-      updatedById: row.updated_by_user_id,
-      publishedByUserId: row.published_by_user_id,
-      publishedById: row.published_by_user_id,
-      publishedByName: row.published_by_display_name,
-      publishedByRoleSlug: row.published_by_role_slug,
-      publishedByRoleName: row.published_by_role_name,
+      author,
+      authorName: author?.displayName ?? null,
+      authorRoleSlug: author?.roleSlug ?? null,
+      authorRoleName: author?.roleName ?? null,
+      publishedBy,
+      publishedByName: publishedBy?.displayName ?? null,
+      publishedByRoleSlug: publishedBy?.roleSlug ?? null,
+      publishedByRoleName: publishedBy?.roleName ?? null,
       title: row.title,
       slug: row.slug,
       body: row.body_markdown,
@@ -524,9 +529,8 @@ export const ContentEntriesSource: LoopEntitySource = {
   fields: [
     { id: 'title', label: 'Title' },
     { id: 'slug', label: 'Slug' },
-    { id: 'authorName', label: 'Author' },
+    { id: 'authorName', label: 'Author name' },
     { id: 'authorRoleName', label: 'Author role' },
-    { id: 'authorUserId', label: 'Author ID' },
     { id: 'body', label: 'Body' },
     { id: 'bodyMarkdown', label: 'Body (raw markdown)' },
     { id: 'featuredMedia', label: 'Featured media', format: 'media' },
@@ -537,7 +541,6 @@ export const ContentEntriesSource: LoopEntitySource = {
     { id: 'publishedAt', label: 'Published date' },
     { id: 'publishedByName', label: 'Published by' },
     { id: 'publishedByRoleName', label: 'Publisher role' },
-    { id: 'publishedByUserId', label: 'Published by ID' },
     { id: 'createdAt', label: 'Created date' },
     { id: 'updatedAt', label: 'Updated date' },
   ],

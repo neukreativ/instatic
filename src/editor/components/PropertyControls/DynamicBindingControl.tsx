@@ -30,7 +30,7 @@ interface DynamicBindingControlProps {
   /**
    * Fields offered by the closest enclosing scope's source (loop or
    * template). When provided, the picker generates options from these
-   * instead of the legacy hard-coded "Current post X" set.
+   * instead of the built-in "Current post X" set.
    */
   availableFields?: LoopSourceField[]
   /** Human label for the source — prefixed onto each option for clarity. */
@@ -92,8 +92,8 @@ function optionsFromSourceFields(
   return result
 }
 
-/** Hard-coded fallback option set for legacy single-entry template pages. */
-function legacyContentEntryOptions(control: PropertyControl): BindingOption[] {
+/** Built-in option set for single-entry template pages. */
+function templateContentEntryOptions(control: PropertyControl): BindingOption[] {
   if (control.type === 'image' || (control.type === 'media' && control.mediaKind === 'image')) {
     return [
       {
@@ -119,6 +119,8 @@ function legacyContentEntryOptions(control: PropertyControl): BindingOption[] {
   if (control.type === 'text' || control.type === 'textarea' || control.type === 'url') {
     return [
       { label: 'Current post title', binding: { source: 'currentEntry', field: 'title' } },
+      { label: 'Current post author name', binding: { source: 'currentEntry', field: 'authorName' } },
+      { label: 'Current post author role', binding: { source: 'currentEntry', field: 'authorRoleName' } },
       { label: 'Current post slug', binding: { source: 'currentEntry', field: 'slug' } },
       { label: 'Current post SEO title', binding: { source: 'currentEntry', field: 'seoTitle' } },
       { label: 'Current post SEO description', binding: { source: 'currentEntry', field: 'seoDescription' } },
@@ -140,9 +142,11 @@ function bindingLabelFromFields(
       return `${prefix}${match.label}`
     }
   }
-  // Fallback to legacy labels for known content-entry field ids.
+  // Fallback labels for known content-entry field ids.
   switch (binding.field) {
     case 'title': return 'Current post title'
+    case 'authorName': return 'Current post author name'
+    case 'authorRoleName': return 'Current post author role'
     case 'slug': return 'Current post slug'
     case 'body':
     case 'bodyMarkdown': return 'Current post body'
@@ -176,7 +180,7 @@ export function DynamicBindingControl({
     () =>
       availableFields && availableFields.length > 0
         ? optionsFromSourceFields(availableFields, control, sourceLabel ?? '')
-        : legacyContentEntryOptions(control),
+        : templateContentEntryOptions(control),
     [availableFields, control, sourceLabel],
   )
   const resolvedBindingLabel = (b: DynamicPropBinding) =>
