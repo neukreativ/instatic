@@ -10,11 +10,11 @@ import {
   DataTableHeader,
   DataTableRow,
 } from '@ui/components/DataTable'
+import { Dialog } from '@ui/components/Dialog'
 import { Input } from '@ui/components/Input'
 import { Select } from '@ui/components/Select'
 import { pillAccent } from '@ui/pillAccent'
 import { ChevronDownIcon } from 'pixel-art-icons/icons/chevron-down'
-import { CloseIcon } from 'pixel-art-icons/icons/close'
 import { DeleteIcon } from 'pixel-art-icons/icons/delete'
 import { EditIcon } from 'pixel-art-icons/icons/edit'
 import { EyeIcon } from 'pixel-art-icons/icons/eye'
@@ -910,6 +910,8 @@ interface UserDialogProps {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
 }
 
+const USER_FORM_ID = 'users-page-user-form'
+
 function UserDialog({
   mode,
   form,
@@ -922,100 +924,94 @@ function UserDialog({
   onSubmit,
 }: UserDialogProps) {
   const title = mode === 'create' ? 'Create User' : mode === 'edit' ? 'Edit User' : 'Reset Password'
+  const submitLabel = mode === 'create' ? 'Create User' : mode === 'edit' ? 'Save User' : 'Reset Password'
   return (
-    <div className={dialogStyles.backdrop} data-testid="user-dialog-backdrop">
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="user-dialog-title"
-        className={`${dialogStyles.dialog} ${styles.managementDialog}`}
-        data-testid="user-dialog"
-      >
-        <div className={dialogStyles.header}>
-          <h2 id="user-dialog-title" className={dialogStyles.title}>{title}</h2>
-          <Button variant="ghost" size="xs" iconOnly aria-label="Close dialog" onClick={onClose}>
-            <CloseIcon size={12} color="currentColor" aria-hidden="true" />
+    <Dialog
+      open
+      onClose={onClose}
+      title={title}
+      size="lg"
+      footer={
+        <>
+          <Button type="button" variant="secondary" size="sm" onClick={onClose} disabled={busy}>
+            <span>Cancel</span>
           </Button>
-        </div>
-        <form className={dialogStyles.form} autoComplete="off" onSubmit={(event) => void onSubmit(event)}>
-          {mode !== 'reset' && (
-            <>
+          <Button type="submit" form={USER_FORM_ID} variant="primary" size="sm" disabled={busy}>
+            {mode === 'create' ? <PlusIcon size={14} aria-hidden="true" /> : <SaveIcon size={14} aria-hidden="true" />}
+            <span>{submitLabel}</span>
+          </Button>
+        </>
+      }
+    >
+      <form id={USER_FORM_ID} className={dialogStyles.form} autoComplete="off" onSubmit={(event) => void onSubmit(event)}>
+        {mode !== 'reset' && (
+          <>
+            <label className={dialogStyles.field}>
+              <span className={dialogStyles.label}>Email</span>
+              <Input
+                value={form.email}
+                type="email"
+                name={mode === 'create' ? 'new-user-email-address' : 'edited-user-email-address'}
+                autoComplete="off"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                required
+                onChange={(event) => onChange({ ...form, email: event.currentTarget.value })}
+              />
+            </label>
+            <label className={dialogStyles.field}>
+              <span className={dialogStyles.label}>Display name</span>
+              <Input
+                value={form.displayName}
+                name={mode === 'create' ? 'new-user-display-name' : 'edited-user-display-name'}
+                autoComplete="off"
+                onChange={(event) => onChange({ ...form, displayName: event.currentTarget.value })}
+              />
+            </label>
+          </>
+        )}
+        <label className={dialogStyles.field}>
+          <span className={dialogStyles.label}>{mode === 'create' ? 'Initial password' : 'New password'}</span>
+          <Input
+            value={form.password}
+            type="password"
+            name={mode === 'create' ? 'new-user-initial-password' : 'edited-user-new-password'}
+            autoComplete="new-password"
+            data-lpignore="true"
+            data-1p-ignore="true"
+            minLength={12}
+            placeholder={mode === 'edit' ? 'Leave blank to keep current password' : undefined}
+            required={mode !== 'edit'}
+            onChange={(event) => onChange({ ...form, password: event.currentTarget.value })}
+          />
+        </label>
+        {mode !== 'reset' && (
+          <>
+            <label className={dialogStyles.field}>
+              <span className={dialogStyles.label}>Role</span>
+              <Select
+                value={form.roleId}
+                name={mode === 'create' ? 'new-user-role' : 'edited-user-role'}
+                options={roleOptions}
+                onChange={(event) => onChange({ ...form, roleId: event.currentTarget.value })}
+              />
+            </label>
+            {mode === 'edit' && (
               <label className={dialogStyles.field}>
-                <span className={dialogStyles.label}>Email</span>
-                <Input
-                  value={form.email}
-                  type="email"
-                  name={mode === 'create' ? 'new-user-email-address' : 'edited-user-email-address'}
-                  autoComplete="off"
-                  data-lpignore="true"
-                  data-1p-ignore="true"
-                  required
-                  onChange={(event) => onChange({ ...form, email: event.currentTarget.value })}
-                />
-              </label>
-              <label className={dialogStyles.field}>
-                <span className={dialogStyles.label}>Display name</span>
-                <Input
-                  value={form.displayName}
-                  name={mode === 'create' ? 'new-user-display-name' : 'edited-user-display-name'}
-                  autoComplete="off"
-                  onChange={(event) => onChange({ ...form, displayName: event.currentTarget.value })}
-                />
-              </label>
-            </>
-          )}
-          <label className={dialogStyles.field}>
-            <span className={dialogStyles.label}>{mode === 'create' ? 'Initial password' : 'New password'}</span>
-            <Input
-              value={form.password}
-              type="password"
-              name={mode === 'create' ? 'new-user-initial-password' : 'edited-user-new-password'}
-              autoComplete="new-password"
-              data-lpignore="true"
-              data-1p-ignore="true"
-              minLength={12}
-              placeholder={mode === 'edit' ? 'Leave blank to keep current password' : undefined}
-              required={mode !== 'edit'}
-              onChange={(event) => onChange({ ...form, password: event.currentTarget.value })}
-            />
-          </label>
-          {mode !== 'reset' && (
-            <>
-              <label className={dialogStyles.field}>
-                <span className={dialogStyles.label}>Role</span>
+                <span className={dialogStyles.label}>Status</span>
                 <Select
-                  value={form.roleId}
-                  name={mode === 'create' ? 'new-user-role' : 'edited-user-role'}
-                  options={roleOptions}
-                  onChange={(event) => onChange({ ...form, roleId: event.currentTarget.value })}
+                  value={form.status}
+                  name="edited-user-status"
+                  options={statusOptions}
+                  onChange={(event) => onChange({ ...form, status: event.currentTarget.value as CmsCurrentUser['status'] })}
                 />
               </label>
-              {mode === 'edit' && (
-                <label className={dialogStyles.field}>
-                  <span className={dialogStyles.label}>Status</span>
-                  <Select
-                    value={form.status}
-                    name="edited-user-status"
-                    options={statusOptions}
-                    onChange={(event) => onChange({ ...form, status: event.currentTarget.value as CmsCurrentUser['status'] })}
-                  />
-                </label>
-              )}
-            </>
-          )}
-          {error && <p role="alert" className={dialogStyles.errorText}>{error}</p>}
-          <div className={dialogStyles.actions}>
-            <Button type="button" variant="secondary" size="sm" onClick={onClose} disabled={busy}>
-              <span>Cancel</span>
-            </Button>
-            <Button type="submit" variant="primary" size="sm" disabled={busy}>
-              {mode === 'create' ? <PlusIcon size={14} aria-hidden="true" /> : <SaveIcon size={14} aria-hidden="true" />}
-              <span>{mode === 'create' ? 'Create User' : mode === 'edit' ? 'Save User' : 'Reset Password'}</span>
-            </Button>
-          </div>
-        </form>
-      </section>
-    </div>
+            )}
+          </>
+        )}
+        {error && <p role="alert" className={dialogStyles.errorText}>{error}</p>}
+      </form>
+    </Dialog>
   )
 }
 
@@ -1030,6 +1026,8 @@ interface RoleDialogProps {
   onToggleCapability: (capability: string, checked: boolean) => void
   onSetCapabilityGroup: (group: CapabilityGroup, checked: boolean) => void
 }
+
+const ROLE_FORM_ID = 'users-page-role-form'
 
 function RoleDialog({
   mode,
@@ -1046,108 +1044,101 @@ function RoleDialog({
   const readonly = mode === 'view'
   const selectedCapabilities = new Set(form.capabilities)
   return (
-    <div className={dialogStyles.backdrop} data-testid="role-dialog-backdrop">
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="role-dialog-title"
-        className={`${dialogStyles.dialog} ${styles.managementDialog} ${styles.roleDialog}`}
-        data-testid="role-dialog"
-      >
-        <div className={dialogStyles.header}>
-          <h2 id="role-dialog-title" className={dialogStyles.title}>{title}</h2>
-          <Button variant="ghost" size="xs" iconOnly aria-label="Close dialog" onClick={onClose}>
-            <CloseIcon size={12} color="currentColor" aria-hidden="true" />
+    <Dialog
+      open
+      onClose={onClose}
+      title={title}
+      size="xl"
+      footer={
+        <>
+          <Button type="button" variant="secondary" size="sm" onClick={onClose} disabled={busy}>
+            <span>{readonly ? 'Close' : 'Cancel'}</span>
           </Button>
-        </div>
-        <form className={dialogStyles.form} onSubmit={(event) => void onSubmit(event)}>
-          <label className={dialogStyles.field}>
-            <span className={dialogStyles.label}>Name</span>
-            <Input
-              value={form.name}
-              required
-              disabled={readonly}
-              onChange={(event) => onChange({ ...form, name: event.currentTarget.value })}
-            />
-          </label>
-          <label className={dialogStyles.field}>
-            <span className={dialogStyles.label}>Slug</span>
-            <Input
-              value={form.slug}
-              disabled={readonly}
-              onChange={(event) => onChange({ ...form, slug: event.currentTarget.value })}
-            />
-          </label>
-          <label className={dialogStyles.field}>
-            <span className={dialogStyles.label}>Description</span>
-            <Input
-              value={form.description}
-              disabled={readonly}
-              onChange={(event) => onChange({ ...form, description: event.currentTarget.value })}
-            />
-          </label>
-          <div className={styles.capabilityPicker}>
-            {CAPABILITY_GROUPS.map((group) => {
-              const selectedCount = group.capabilities.filter((capability) => selectedCapabilities.has(capability)).length
-              return (
-                <section key={group.title} className={styles.capabilityGroup}>
-                  <div className={styles.capabilityGroupHeader}>
-                    <h3>{group.title}</h3>
-                    {!readonly && (
-                      <div className={styles.groupActions}>
+          {!readonly && (
+            <Button type="submit" form={ROLE_FORM_ID} variant="primary" size="sm" disabled={busy}>
+              <SaveIcon size={14} aria-hidden="true" />
+              <span>{mode === 'create' ? 'Create Role' : 'Save Role'}</span>
+            </Button>
+          )}
+        </>
+      }
+    >
+      <form id={ROLE_FORM_ID} className={dialogStyles.form} onSubmit={(event) => void onSubmit(event)}>
+        <label className={dialogStyles.field}>
+          <span className={dialogStyles.label}>Name</span>
+          <Input
+            value={form.name}
+            required
+            disabled={readonly}
+            onChange={(event) => onChange({ ...form, name: event.currentTarget.value })}
+          />
+        </label>
+        <label className={dialogStyles.field}>
+          <span className={dialogStyles.label}>Slug</span>
+          <Input
+            value={form.slug}
+            disabled={readonly}
+            onChange={(event) => onChange({ ...form, slug: event.currentTarget.value })}
+          />
+        </label>
+        <label className={dialogStyles.field}>
+          <span className={dialogStyles.label}>Description</span>
+          <Input
+            value={form.description}
+            disabled={readonly}
+            onChange={(event) => onChange({ ...form, description: event.currentTarget.value })}
+          />
+        </label>
+        <div className={styles.capabilityPicker}>
+          {CAPABILITY_GROUPS.map((group) => {
+            const selectedCount = group.capabilities.filter((capability) => selectedCapabilities.has(capability)).length
+            return (
+              <section key={group.title} className={styles.capabilityGroup}>
+                <div className={styles.capabilityGroupHeader}>
+                  <h3>{group.title}</h3>
+                  {!readonly && (
+                    <div className={styles.groupActions}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        aria-label={`Select all ${group.title} capabilities`}
+                        onClick={() => onSetCapabilityGroup(group, true)}
+                      >
+                        <span>All</span>
+                      </Button>
+                      {selectedCount > 0 && (
                         <Button
                           type="button"
                           variant="ghost"
                           size="xs"
-                          aria-label={`Select all ${group.title} capabilities`}
-                          onClick={() => onSetCapabilityGroup(group, true)}
+                          aria-label={`Clear ${group.title} capabilities`}
+                          onClick={() => onSetCapabilityGroup(group, false)}
                         >
-                          <span>All</span>
+                          <span>Clear</span>
                         </Button>
-                        {selectedCount > 0 && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="xs"
-                            aria-label={`Clear ${group.title} capabilities`}
-                            onClick={() => onSetCapabilityGroup(group, false)}
-                          >
-                            <span>Clear</span>
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <div className={styles.capabilities}>
-                    {group.capabilities.map((capability) => (
-                      <label key={capability}>
-                        <Checkbox
-                          checked={form.capabilities.includes(capability)}
-                          disabled={readonly}
-                          onCheckedChange={(checked) => onToggleCapability(capability, checked)}
-                        />
-                        <span>{capability}</span>
-                      </label>
-                    ))}
-                  </div>
-                </section>
-              )
-            })}
-          </div>
-          {error && <p role="alert" className={dialogStyles.errorText}>{error}</p>}
-          <div className={dialogStyles.actions}>
-            <Button type="button" variant="secondary" size="sm" onClick={onClose} disabled={busy}>
-              <span>{readonly ? 'Close' : 'Cancel'}</span>
-            </Button>
-            {!readonly && (
-              <Button type="submit" variant="primary" size="sm" disabled={busy}>
-                <SaveIcon size={14} aria-hidden="true" />
-                <span>{mode === 'create' ? 'Create Role' : 'Save Role'}</span>
-              </Button>
-            )}
-          </div>
-        </form>
-      </section>
-    </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className={styles.capabilities}>
+                  {group.capabilities.map((capability) => (
+                    <label key={capability}>
+                      <Checkbox
+                        checked={form.capabilities.includes(capability)}
+                        disabled={readonly}
+                        onCheckedChange={(checked) => onToggleCapability(capability, checked)}
+                      />
+                      <span>{capability}</span>
+                    </label>
+                  ))}
+                </div>
+              </section>
+            )
+          })}
+        </div>
+        {error && <p role="alert" className={dialogStyles.errorText}>{error}</p>}
+      </form>
+    </Dialog>
   )
 }

@@ -1,6 +1,7 @@
 /* Users page body — sits inside AdminPageLayout, which provides the
    scroll container, max-width, and page header. We just stack the
-   per-section blocks (Users / Roles / Audit) and the inline dialogs. */
+   per-section blocks (Users / Roles / Audit). User and role edits are
+   shown via the shared <Dialog/> primitive (portaled to body). */
 .body {
     display: grid;
     gap: 28px;
@@ -111,14 +112,6 @@
 
 .badge[data-accent="peach"] {
     --badge-color: var(--rail-tint-peach);
-}
-
-.managementDialog {
-    width: min(480px, 100%);
-}
-
-.roleDialog {
-    width: min(640px, 100%);
 }
 
 .capabilityPicker {
