@@ -50,6 +50,11 @@ const UNRESTRICTED_ADMIN_USER: CmsCurrentUser = {
   },
   capabilities: [...CORE_CAPABILITIES],
   lastLoginAt: null,
+  failedLoginCount: 0,
+  lockedUntil: null,
+  avatarMediaId: null,
+  avatarUrl: null,
+  gravatarHash: '',
   createdAt: '1970-01-01T00:00:00.000Z',
   updatedAt: '1970-01-01T00:00:00.000Z',
 }
@@ -57,7 +62,10 @@ const UNRESTRICTED_ADMIN_USER: CmsCurrentUser = {
 export function ContentPage() {
   const [activeContentPanel, setActiveContentPanel] = useState<ContentPanelId | null>('content')
   const [collectionDialogOpen, setCollectionDialogOpen] = useState(false)
-  const titleId = useId()
+  // These are monotonic counters used purely as "do the action now" pings:
+  // bumping them re-runs the focus effect inside the canvas / body editor.
+  const [focusTitleSignal, setFocusTitleSignal] = useState(0)
+  const [focusBodySignal, setFocusBodySignal] = useState(0)
   const slugId = useId()
   const seoTitleId = useId()
   const seoDescriptionId = useId()
@@ -98,8 +106,13 @@ export function ContentPage() {
     workspace.setError(null)
     try {
       const entry = await workspace.createUntitledEntry()
+      // `createUntitledEntry` hands us an entry whose title is empty so the
+      // editor's title field renders as a placeholder rather than
+      // pre-filling "Untitled" (the server-side fallback that the sidebar
+      // list still shows). The user can type their real title immediately.
       draft.applySelectedEntry(entry)
       draft.setSaveMessage('saved')
+      setFocusTitleSignal((n) => n + 1)
     } catch (err) {
       draft.setSaveMessage('error')
       workspace.setError(err instanceof Error ? err.message : 'Could not create entry')
@@ -439,12 +452,14 @@ export function ContentPage() {
             selectedCollection={workspace.selectedCollection}
             loading={workspace.contentLoading}
             title={draft.title}
-            titleId={titleId}
             blocks={draft.blocks}
             notchActions={notchActions}
             canEditEntry={canEditSelectedEntry}
             canCreateEntry={canCreateEntries}
+            focusTitleSignal={focusTitleSignal}
+            focusBodySignal={focusBodySignal}
             onTitleChange={draft.setTitle}
+            onTitleEnter={() => setFocusBodySignal((n) => n + 1)}
             onBlocksChange={draft.setBlocks}
             onRequestMedia={(blockId) => void mediaPicker.openMediaPicker('media', blockId)}
             onCreateEntry={() => void handleCreateEntry()}

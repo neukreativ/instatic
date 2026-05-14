@@ -158,9 +158,16 @@ export function useContentWorkspace({
       title: 'Untitled',
       slug: nextSlug,
     })
+    // Keep "Untitled" stored on the server + visible in the sidebar list, but
+    // hand the editor a draft view with an empty title so the title field
+    // shows its placeholder instead of pre-filling "Untitled". The user can
+    // start typing their real title immediately; on save the draft is
+    // persisted with whatever they entered (falling back to "Untitled" on
+    // the server side if they leave it blank).
+    const draftEntry: ContentEntry = { ...entry, title: '' }
     setEntries((current) => updateEntryList(current, entry))
-    selectEntry(entry)
-    return entry
+    selectEntry(draftEntry)
+    return draftEntry
   }, [entries.length, selectEntry, selectedCollection])
 
   const duplicateEntry = useCallback(async (entry: ContentEntry) => {
