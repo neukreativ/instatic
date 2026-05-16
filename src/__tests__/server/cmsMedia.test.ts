@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 import { tmpdir } from 'node:os'
+import sharp from 'sharp'
 import { SESSION_COOKIE_NAME, hashSessionToken } from '../../../server/auth/tokens'
 import type { DbClient, DbResult } from '../../../server/db'
 import { handleCmsRequest } from '../../../server/handlers/cms'
@@ -13,14 +14,26 @@ import {
   renameMediaAsset,
 } from '../../../server/repositories/media'
 
-// Real magic-byte prefixes used to make the upload handler's MIME sniffer
-// accept the test fixture as the indicated type. Padded with a few bytes
-// so the prefix never coincides with `file.size <= 0`.
-const PNG_PREFIX = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01])
-const JPEG_PREFIX = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46])
+// Real, sharp-decodable PNG / JPEG bytes used as upload fixtures. The upload
+// pipeline runs `processImageVariants` (sharp) on any sniffed image MIME, so
+// passing raw magic-byte prefixes would trigger `Input buffer has corrupt
+// header` warnings in test output. A tiny (4x4) valid image keeps the test
+// fast while exercising the real metadata + BlurHash path. The image is
+// smaller than every TARGET_WIDTHS entry (64+), so no on-disk variant files
+// are written — only `setMediaAssetVariants` (dimensions + BlurHash) runs.
+const PNG_BYTES = new Uint8Array(
+  await sharp({
+    create: { width: 4, height: 4, channels: 4, background: { r: 200, g: 100, b: 50, alpha: 1 } },
+  }).png().toBuffer(),
+)
+const JPEG_BYTES = new Uint8Array(
+  await sharp({
+    create: { width: 4, height: 4, channels: 3, background: { r: 200, g: 100, b: 50 } },
+  }).jpeg().toBuffer(),
+)
 
 function pngFile(name: string): File {
-  return new File([PNG_PREFIX], name, { type: 'image/png' })
+  return new File([PNG_BYTES], name, { type: 'image/png' })
 }
 
 /**
@@ -42,6 +55,9 @@ function mediaRow(input: Record<string, unknown>): Record<string, unknown> {
     dominant_color: null,
     deleted_at: null,
     replaced_at: null,
+    blur_hash: null,
+    variants_json: [],
+    poster_path: null,
     ...input,
   }
 }
@@ -153,6 +169,18 @@ function makeFakeDb() {
       const row = media.find((asset) => asset.id === values[1])
       if (!row) return { rows: [], rowCount: 0 }
       row.filename = values[0]
+      return { rows: [row as Row], rowCount: 1 }
+    }
+
+    // setMediaAssetVariants — stamps responsive-pipeline output:
+    // width, height, blur_hash, variants_json, id (values[0..4])
+    if (normalized.startsWith('update media_assets set width =')) {
+      const row = media.find((asset) => asset.id === values[4])
+      if (!row) return { rows: [], rowCount: 0 }
+      row.width = values[0]
+      row.height = values[1]
+      row.blur_hash = values[2]
+      row.variants_json = values[3]
       return { rows: [row as Row], rowCount: 1 }
     }
 
@@ -346,7 +374,7 @@ describe('CMS media handlers', () => {
       // The on-disk extension is server-chosen (`.png`), not user-supplied —
       // the original filename's extension is irrelevant once stripped.
       expect(extname(String(db.media[0].storage_path))).toBe('.png')
-      expect(new Uint8Array(await readFile(join(uploadsDir, String(db.media[0].storage_path))))).toEqual(PNG_PREFIX)
+      expect(new Uint8Array(await readFile(join(uploadsDir, String(db.media[0].storage_path))))).toEqual(PNG_BYTES)
     } finally {
       rmSync(uploadsDir, { recursive: true, force: true })
     }
@@ -401,7 +429,7 @@ describe('CMS media handlers', () => {
     const body = new FormData()
     // Real PNG bytes, but the filename claims `.html`. Server must rename
     // it to `.png` (the magic-byte-derived extension) on disk.
-    body.set('file', new File([PNG_PREFIX], 'pwn.html', { type: 'image/png' }))
+    body.set('file', new File([PNG_BYTES], 'pwn.html', { type: 'image/png' }))
 
     try {
       const res = await handleCmsRequest(
@@ -461,7 +489,7 @@ describe('CMS media handlers', () => {
     const cookie = await createCookie(db)
     const uploadsDir = mkdtempSync(join(tmpdir(), 'page-builder-uploads-'))
     const body = new FormData()
-    body.set('file', new File([JPEG_PREFIX], 'photo.jpg', { type: 'image/jpeg' }))
+    body.set('file', new File([JPEG_BYTES], 'photo.jpg', { type: 'image/jpeg' }))
 
     try {
       const res = await handleCmsRequest(
