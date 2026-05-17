@@ -158,47 +158,69 @@ export const sqliteMigrations: Migration[] = [
   },
   {
     id: '003_content_documents',
+    // See migrations-pg.ts:003 — same semantic effect, SQLite dialect.
+    // SQLite has no jsonb / timestamptz — `_json` columns are TEXT (the
+    // SQLite adapter auto-parses on read / stringifies on write). The
+    // active-version FK is inline in the CREATE TABLE; SQLite accepts
+    // forward FK references provided both tables exist before the first
+    // INSERT that would trigger the check.
     sql: `
-      create table if not exists content_collections (
+      create table if not exists data_tables (
         id text primary key,
         name text not null,
         slug text not null,
+        kind text not null default 'data',
         route_base text not null default '',
         singular_label text not null,
         plural_label text not null,
-        fields_json text not null default '{"builtIn":{"body":true,"featuredMedia":true,"seo":true},"custom":[]}',
+        primary_field_id text not null default 'title',
+        fields_json text not null default '[]',
         created_by_user_id text references users(id) on delete set null,
         updated_by_user_id text references users(id) on delete set null,
         created_at text not null default current_timestamp,
         updated_at text not null default current_timestamp,
-        deleted_at text
+        deleted_at text,
+        constraint data_tables_kind_check check (kind in ('postType', 'data'))
       );
 
-      create unique index if not exists content_collections_slug_active_idx
-        on content_collections (slug)
+      create unique index if not exists data_tables_slug_active_idx
+        on data_tables (slug)
         where deleted_at is null;
 
-      insert into content_collections (id, name, slug, route_base, singular_label, plural_label)
-      values ('posts', 'Posts', 'posts', '/posts', 'Post', 'Posts')
+      insert into data_tables (
+        id, name, slug, kind, route_base, singular_label, plural_label,
+        primary_field_id, fields_json
+      )
+      values (
+        'posts',
+        'Posts',
+        'posts',
+        'postType',
+        '/posts',
+        'Post',
+        'Posts',
+        'title',
+        '[{"type":"text","id":"title","label":"Title","required":true,"builtIn":true},{"type":"text","id":"slug","label":"Slug","required":true,"builtIn":true},{"type":"richText","id":"body","label":"Body","format":"markdown","builtIn":true},{"type":"media","id":"featuredMedia","label":"Featured media","mediaKind":"image","builtIn":true},{"type":"text","id":"seoTitle","label":"SEO title","builtIn":true},{"type":"longText","id":"seoDescription","label":"SEO description","builtIn":true}]'
+      )
       on conflict (id) do update
         set name = excluded.name,
             slug = excluded.slug,
+            kind = excluded.kind,
             route_base = excluded.route_base,
             singular_label = excluded.singular_label,
             plural_label = excluded.plural_label,
+            primary_field_id = excluded.primary_field_id,
+            fields_json = excluded.fields_json,
             updated_at = current_timestamp,
             deleted_at = null;
 
-      create table if not exists content_entries (
+      create table if not exists data_rows (
         id text primary key,
-        collection_id text not null references content_collections(id) on delete restrict,
-        title text not null,
-        slug text not null,
+        table_id text not null references data_tables(id) on delete restrict,
+        cells_json text not null default '{}',
+        slug text not null default '',
         status text not null default 'draft',
-        body_markdown text not null default '',
-        featured_media_id text references media_assets(id) on delete set null,
-        seo_title text not null default '',
-        seo_description text not null default '',
+        active_version_id text references data_row_versions(id) on delete set null,
         author_user_id text references users(id) on delete set null,
         created_by_user_id text references users(id) on delete set null,
         updated_by_user_id text references users(id) on delete set null,
@@ -207,35 +229,49 @@ export const sqliteMigrations: Migration[] = [
         updated_at text not null default current_timestamp,
         published_at text,
         deleted_at text,
-        constraint content_entries_status_check check (status in ('draft', 'published', 'unpublished'))
+        constraint data_rows_status_check check (status in ('draft', 'published', 'unpublished'))
       );
 
-      create unique index if not exists content_entries_collection_slug_active_idx
-        on content_entries (collection_id, slug)
+      -- The slug uniqueness predicate excludes empty strings so non-routable
+      -- tables (data-kind, no slug field) can have many rows without slug
+      -- collisions.
+      create unique index if not exists data_rows_table_slug_active_idx
+        on data_rows (table_id, slug)
+        where deleted_at is null and slug <> '';
+
+      create index if not exists data_rows_table_idx
+        on data_rows (table_id, updated_at desc)
         where deleted_at is null;
 
-      create index if not exists content_entries_collection_idx
-        on content_entries (collection_id, updated_at desc)
-        where deleted_at is null;
-
-      create table if not exists content_entry_versions (
+      create table if not exists data_row_versions (
         id text primary key,
-        entry_id text not null references content_entries(id) on delete cascade,
+        row_id text not null references data_rows(id) on delete cascade,
         version_number integer not null,
-        title text not null,
-        slug text not null,
-        body_markdown text not null,
-        featured_media_id text references media_assets(id) on delete set null,
-        seo_title text not null default '',
-        seo_description text not null default '',
+        cells_json text not null default '{}',
+        slug text not null default '',
         published_by_user_id text references users(id) on delete set null,
         published_at text not null default current_timestamp,
         created_at text not null default current_timestamp,
-        unique (entry_id, version_number)
+        unique (row_id, version_number)
       );
 
-      create index if not exists content_entry_versions_entry_latest_idx
-        on content_entry_versions (entry_id, version_number desc);
+      create index if not exists data_row_versions_row_latest_idx
+        on data_row_versions (row_id, version_number desc);
+
+      create table if not exists data_row_redirects (
+        id text primary key,
+        table_id text not null references data_tables(id) on delete cascade,
+        from_route_base text not null,
+        from_slug text not null,
+        target_row_id text not null references data_rows(id) on delete cascade,
+        created_at text not null default current_timestamp
+      );
+
+      create unique index if not exists data_row_redirects_source_idx
+        on data_row_redirects (from_route_base, from_slug);
+
+      create index if not exists data_row_redirects_target_idx
+        on data_row_redirects (target_row_id, created_at desc);
     `,
   },
   {
@@ -294,57 +330,20 @@ export const sqliteMigrations: Migration[] = [
   },
   {
     id: '008_content_collection_route_base',
-    // `route_base` is already present in the `content_collections` CREATE TABLE
-    // in migration 003 — no ADD COLUMN needed. The UPDATE backfills any rows
-    // whose route_base was left empty by older app code; on a fresh DB the INSERT
-    // in 003 already sets route_base = '/posts', so this is a no-op UPDATE.
-    sql: `
-      update content_collections
-      set route_base = '/' || slug,
-          updated_at = current_timestamp
-      where coalesce(route_base, '') = '';
-    `,
+    // Folded into the unified `data_tables` CREATE TABLE in migration 003.
+    // Tracked no-op — see migrations-pg.ts:008.
+    sql: `select 1`,
   },
   {
     id: '009_content_entry_active_version_and_redirects',
-    // SQLite does not support `distinct on`; rewritten using a window function
-    // subquery (SQLite ≥ 3.25, shipped with bun:sqlite).
-    sql: `
-      alter table content_entries
-        add column active_version_id text references content_entry_versions(id) on delete set null;
-
-      update content_entries
-      set active_version_id = (
-        select id from (
-          select id, entry_id,
-                 row_number() over (partition by entry_id order by version_number desc) as rn
-          from content_entry_versions
-        ) where rn = 1 and entry_id = content_entries.id
-      ), updated_at = current_timestamp
-      where active_version_id is null
-        and status = 'published'
-        and deleted_at is null;
-
-      create table if not exists content_entry_redirects (
-        id text primary key,
-        collection_id text not null references content_collections(id) on delete cascade,
-        from_route_base text not null,
-        from_slug text not null,
-        target_entry_id text not null references content_entries(id) on delete cascade,
-        created_at text not null default current_timestamp
-      );
-
-      create unique index if not exists content_entry_redirects_source_idx
-        on content_entry_redirects (from_route_base, from_slug);
-
-      create index if not exists content_entry_redirects_target_idx
-        on content_entry_redirects (target_entry_id, created_at desc);
-    `,
+    // `active_version_id` on `data_rows` and the `data_row_redirects` table
+    // are now created as part of the unified migration 003. Tracked no-op.
+    sql: `select 1`,
   },
   {
     id: '010_content_collection_fields',
-    // `fields_json` is already present in the `content_collections` CREATE TABLE
-    // in migration 003. Tracked no-op — see note on 002 above.
+    // `fields_json` is now created as part of the unified `data_tables` in
+    // migration 003. Tracked no-op — see note on 002 above.
     sql: `select 1`,
   },
   {

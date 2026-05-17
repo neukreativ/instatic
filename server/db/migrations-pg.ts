@@ -142,47 +142,78 @@ export const pgMigrations: Migration[] = [
   },
   {
     id: '003_content_documents',
+    // Originally named after the legacy `content_*` shape; the migration now
+    // creates the unified `data_*` schema that replaced it. All cells live in
+    // `cells_json` keyed by field id; post-type built-ins (title, slug, body,
+    // featuredMedia, seoTitle, seoDescription) are seeded into the 'posts'
+    // table's `fields_json` rather than hardcoded as columns.
     sql: `
-      create table if not exists content_collections (
+      create table if not exists data_tables (
         id text primary key,
         name text not null,
         slug text not null,
+        kind text not null default 'data',
         route_base text not null default '',
         singular_label text not null,
         plural_label text not null,
-        fields_json jsonb not null default '{"builtIn":{"body":true,"featuredMedia":true,"seo":true},"custom":[]}'::jsonb,
+        primary_field_id text not null default 'title',
+        fields_json jsonb not null default '[]'::jsonb,
         created_by_user_id text references users(id) on delete set null,
         updated_by_user_id text references users(id) on delete set null,
         created_at timestamptz not null default now(),
         updated_at timestamptz not null default now(),
-        deleted_at timestamptz
+        deleted_at timestamptz,
+        constraint data_tables_kind_check check (kind in ('postType', 'data'))
       );
 
-      create unique index if not exists content_collections_slug_active_idx
-        on content_collections (slug)
+      create unique index if not exists data_tables_slug_active_idx
+        on data_tables (slug)
         where deleted_at is null;
 
-      insert into content_collections (id, name, slug, route_base, singular_label, plural_label)
-      values ('posts', 'Posts', 'posts', '/posts', 'Post', 'Posts')
+      insert into data_tables (
+        id, name, slug, kind, route_base, singular_label, plural_label,
+        primary_field_id, fields_json
+      )
+      values (
+        'posts',
+        'Posts',
+        'posts',
+        'postType',
+        '/posts',
+        'Post',
+        'Posts',
+        'title',
+        '[
+          {"type":"text","id":"title","label":"Title","required":true,"builtIn":true},
+          {"type":"text","id":"slug","label":"Slug","required":true,"builtIn":true},
+          {"type":"richText","id":"body","label":"Body","format":"markdown","builtIn":true},
+          {"type":"media","id":"featuredMedia","label":"Featured media","mediaKind":"image","builtIn":true},
+          {"type":"text","id":"seoTitle","label":"SEO title","builtIn":true},
+          {"type":"longText","id":"seoDescription","label":"SEO description","builtIn":true}
+        ]'::jsonb
+      )
       on conflict (id) do update
         set name = excluded.name,
             slug = excluded.slug,
+            kind = excluded.kind,
             route_base = excluded.route_base,
             singular_label = excluded.singular_label,
             plural_label = excluded.plural_label,
+            primary_field_id = excluded.primary_field_id,
+            fields_json = excluded.fields_json,
             updated_at = current_timestamp,
             deleted_at = null;
 
-      create table if not exists content_entries (
+      -- Created before data_row_versions so versions.row_id can reference it.
+      -- active_version_id FK to data_row_versions is added as a constraint
+      -- after data_row_versions exists below.
+      create table if not exists data_rows (
         id text primary key,
-        collection_id text not null references content_collections(id) on delete restrict,
-        title text not null,
-        slug text not null,
+        table_id text not null references data_tables(id) on delete restrict,
+        cells_json jsonb not null default '{}'::jsonb,
+        slug text not null default '',
         status text not null default 'draft',
-        body_markdown text not null default '',
-        featured_media_id text references media_assets(id) on delete set null,
-        seo_title text not null default '',
-        seo_description text not null default '',
+        active_version_id text,
         author_user_id text references users(id) on delete set null,
         created_by_user_id text references users(id) on delete set null,
         updated_by_user_id text references users(id) on delete set null,
@@ -191,35 +222,62 @@ export const pgMigrations: Migration[] = [
         updated_at timestamptz not null default now(),
         published_at timestamptz,
         deleted_at timestamptz,
-        constraint content_entries_status_check check (status in ('draft', 'published', 'unpublished'))
+        constraint data_rows_status_check check (status in ('draft', 'published', 'unpublished'))
       );
 
-      create unique index if not exists content_entries_collection_slug_active_idx
-        on content_entries (collection_id, slug)
+      -- The slug uniqueness predicate excludes empty strings so non-routable
+      -- tables (data-kind, no slug field) can have many rows without slug
+      -- collisions. Routable tables always populate slug from cells.slug.
+      create unique index if not exists data_rows_table_slug_active_idx
+        on data_rows (table_id, slug)
+        where deleted_at is null and slug <> '';
+
+      create index if not exists data_rows_table_idx
+        on data_rows (table_id, updated_at desc)
         where deleted_at is null;
 
-      create index if not exists content_entries_collection_idx
-        on content_entries (collection_id, updated_at desc)
-        where deleted_at is null;
-
-      create table if not exists content_entry_versions (
+      create table if not exists data_row_versions (
         id text primary key,
-        entry_id text not null references content_entries(id) on delete cascade,
+        row_id text not null references data_rows(id) on delete cascade,
         version_number integer not null,
-        title text not null,
-        slug text not null,
-        body_markdown text not null,
-        featured_media_id text references media_assets(id) on delete set null,
-        seo_title text not null default '',
-        seo_description text not null default '',
+        cells_json jsonb not null default '{}'::jsonb,
+        slug text not null default '',
         published_by_user_id text references users(id) on delete set null,
         published_at timestamptz not null default now(),
         created_at timestamptz not null default now(),
-        unique (entry_id, version_number)
+        unique (row_id, version_number)
       );
 
-      create index if not exists content_entry_versions_entry_latest_idx
-        on content_entry_versions (entry_id, version_number desc);
+      create index if not exists data_row_versions_row_latest_idx
+        on data_row_versions (row_id, version_number desc);
+
+      -- Add the active-version FK now that both tables exist. Wrapped in a
+      -- DO block so re-applying the migration does not fail with
+      -- "constraint already exists" on idempotent re-runs.
+      do $$ begin
+        if not exists (
+          select 1 from pg_constraint where conname = 'data_rows_active_version_fk'
+        ) then
+          alter table data_rows
+            add constraint data_rows_active_version_fk
+            foreign key (active_version_id) references data_row_versions(id) on delete set null;
+        end if;
+      end $$;
+
+      create table if not exists data_row_redirects (
+        id text primary key,
+        table_id text not null references data_tables(id) on delete cascade,
+        from_route_base text not null,
+        from_slug text not null,
+        target_row_id text not null references data_rows(id) on delete cascade,
+        created_at timestamptz not null default now()
+      );
+
+      create unique index if not exists data_row_redirects_source_idx
+        on data_row_redirects (from_route_base, from_slug);
+
+      create index if not exists data_row_redirects_target_idx
+        on data_row_redirects (target_row_id, created_at desc);
     `,
   },
   {
@@ -274,55 +332,21 @@ export const pgMigrations: Migration[] = [
   },
   {
     id: '008_content_collection_route_base',
-    sql: `
-      alter table content_collections
-        add column if not exists route_base text not null default '';
-
-      update content_collections
-      set route_base = '/' || slug,
-          updated_at = current_timestamp
-      where coalesce(route_base, '') = '';
-    `,
+    // `route_base` is now created as part of the unified `data_tables`
+    // table in migration 003. Tracked no-op that records the schema version
+    // step without touching DDL.
+    sql: `SELECT 1`,
   },
   {
     id: '009_content_entry_active_version_and_redirects',
-    sql: `
-      alter table content_entries
-        add column if not exists active_version_id text references content_entry_versions(id) on delete set null;
-
-      update content_entries
-      set active_version_id = latest_versions.id,
-          updated_at = current_timestamp
-      from (
-        select distinct on (entry_id) id, entry_id
-        from content_entry_versions
-        order by entry_id, version_number desc
-      ) latest_versions
-      where content_entries.id = latest_versions.entry_id
-        and content_entries.active_version_id is null
-        and content_entries.status = 'published'
-        and content_entries.deleted_at is null;
-
-      create table if not exists content_entry_redirects (
-        id text primary key,
-        collection_id text not null references content_collections(id) on delete cascade,
-        from_route_base text not null,
-        from_slug text not null,
-        target_entry_id text not null references content_entries(id) on delete cascade,
-        created_at timestamptz not null default now()
-      );
-
-      create unique index if not exists content_entry_redirects_source_idx
-        on content_entry_redirects (from_route_base, from_slug);
-
-      create index if not exists content_entry_redirects_target_idx
-        on content_entry_redirects (target_entry_id, created_at desc);
-    `,
+    // `active_version_id` on `data_rows` and the `data_row_redirects` table
+    // are now created as part of the unified migration 003. Tracked no-op.
+    sql: `SELECT 1`,
   },
   {
     id: '010_content_collection_fields',
-    // `fields_json` is already present in the `content_collections` CREATE TABLE
-    // in migration 003. Tracked no-op — see note on 006 above.
+    // `fields_json` is now created as part of the unified `data_tables` in
+    // migration 003. Tracked no-op — see note on 006 above.
     sql: `SELECT 1`,
   },
   {
