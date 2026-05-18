@@ -335,53 +335,9 @@
     white-space: nowrap;
 }
 
-.featuredMediaCard {
-    display: grid;
-    grid-template-columns: 44px minmax(0, 1fr);
-    align-items: center;
-    gap: 9px;
-}
-
-.featuredMediaPreview {
-    display: grid;
-    place-items: center;
-    width: 44px;
-    height: 44px;
-    overflow: hidden;
-    border-radius: 7px;
-    background: var(--editor-surface-3);
-    color: var(--editor-text-muted);
-}
-
-.featuredMediaPreview img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.featuredMediaText {
-    display: grid;
-    gap: 3px;
-    min-width: 0;
-}
-
-.featuredMediaText strong,
-.featuredMediaText small {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.featuredMediaText small,
 .featuredMediaField small {
     color: var(--editor-text-muted);
     font-size: 11px;
-}
-
-.featuredMediaActions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
 }
 
 @keyframes pbContentSkeleton {

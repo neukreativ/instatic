@@ -21,6 +21,7 @@ import { ContentDocumentCanvas } from './components/ContentDocumentCanvas/Conten
 import { ContentCollectionCreateDialog } from './components/ContentCollectionCreateDialog/ContentCollectionCreateDialog'
 import { ContentExplorerPanel } from './components/ContentExplorerPanel/ContentExplorerPanel'
 import { ContentSettingsPanel } from './components/ContentSettingsPanel/ContentSettingsPanel'
+import { MediaViewerWindow } from '@admin/pages/media/components/MediaViewerWindow/MediaViewerWindow'
 import { ContentSidebar, type ContentPanelId } from './components/ContentSidebar/ContentSidebar'
 import { ContentToolbar } from './components/ContentToolbar/ContentToolbar'
 // Lazy-load the WordPress-style fullscreen media picker. Pulls in the full
@@ -502,6 +503,11 @@ export function ContentPage() {
             onStatusChange={(status) => void handleStatusChange(status)}
             onChooseFeaturedMedia={() => void mediaPicker.openMediaPicker('featured')}
             onClearFeaturedMedia={() => draft.setFeaturedMediaId(null)}
+            onEditFeaturedMedia={() => {
+              if (mediaPicker.featuredMediaAsset) {
+                mediaPicker.openMediaViewer(mediaPicker.featuredMediaAsset.id)
+              }
+            }}
             canEditEntry={canEditSelectedEntry}
             canPublishEntry={canPublishSelectedEntry}
             canChangeAuthor={canReassignAuthor}
@@ -522,6 +528,13 @@ export function ContentPage() {
           />
         </Suspense>
       )}
+
+      <MediaViewerWindow
+        editor={mediaPicker.viewerEditor}
+        open={mediaPicker.viewerOpen}
+        onClose={mediaPicker.closeMediaViewer}
+      />
+
 
       {collectionDialogOpen && (
         <ContentCollectionCreateDialog

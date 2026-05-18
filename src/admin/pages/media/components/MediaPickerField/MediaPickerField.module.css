@@ -1,0 +1,114 @@
+/*
+ * MediaPickerField — picked-media tile + action buttons.
+ *
+ * Single consistent shape across empty + populated states. The tile is
+ * borderless and sits on `--editor-surface` so it reads as a soft slot
+ * rather than a panel. The clickable variant (rendered as a Button
+ * primitive) overrides Button's defaults so it lines up pixel-for-pixel
+ * with the non-clickable `<div>` tile but gains a hover/focus affordance.
+ */
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+/* Non-interactive tile (rare — used only when the caller wires no
+ * `onBrowse`/`onEdit`, which isn't part of the current callers). Kept for
+ * shape parity with .tileClickable. */
+.tile {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    padding: 8px;
+    border-radius: var(--input-radius);
+    background: var(--editor-surface);
+}
+
+/*
+ * Clickable variant — rendered as the Button primitive so the whole tile
+ * is a click target. In the empty / fallback states it opens the picker
+ * modal; in the populated state it opens the MediaViewerWindow. Overrides
+ * Button's defaults (inline-flex centering, fixed height) so the tile
+ * shape stays consistent across states.
+ */
+.tileClickable {
+    display: flex;
+    width: 100%;
+    height: auto;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    min-width: 0;
+    border-radius: var(--input-radius);
+    background: var(--editor-surface);
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 90ms ease;
+}
+
+.tileClickable:hover,
+.tileClickable:focus-visible {
+    background: var(--editor-surface-2);
+}
+
+.thumb {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+    overflow: hidden;
+    border-radius: calc(var(--input-radius) - 4px);
+    background: var(--editor-surface-2);
+    color: var(--editor-text-muted);
+}
+
+.thumb img,
+.thumb video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.empty {
+    color: var(--editor-text-muted);
+    font-size: 12px;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.name {
+    color: var(--editor-text);
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sub {
+    color: var(--editor-text-muted);
+    font-size: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}

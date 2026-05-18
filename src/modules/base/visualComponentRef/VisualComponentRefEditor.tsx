@@ -23,8 +23,8 @@ import { useEditorStore } from '@site/store/store'
 import { instantiateVCAtRef } from '@core/visualComponents/instantiate'
 import type { BaseNode } from '@core/page-tree/baseNode'
 import { BracesIcon } from 'pixel-art-icons/icons/braces'
+import { CanvasModulePlaceholder } from '@ui/components/CanvasModulePlaceholder'
 import { VCInlineTree } from './VCInlineTree'
-import styles from './VisualComponentRef.module.css'
 
 interface VisualComponentRefProps extends Record<string, unknown> {
   componentId: string
@@ -73,10 +73,12 @@ export const VisualComponentRefEditor: React.FC<ModuleComponentProps<VisualCompo
 
   if (!vc) {
     return (
-      <div className={styles.unknown}>
-        <BracesIcon size={12} color="currentColor" aria-hidden="true" />
-        <span>{componentId ? `Unknown component: ${componentId}` : 'No component selected'}</span>
-      </div>
+      <CanvasModulePlaceholder
+        className={mcClassName}
+        variant="inline"
+        icon={<BracesIcon size={12} color="currentColor" />}
+        label={componentId ? `Unknown component: ${componentId}` : 'No component selected'}
+      />
     )
   }
 

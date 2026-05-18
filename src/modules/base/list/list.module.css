@@ -4,8 +4,11 @@
  * unless the user attaches a class.
  */
 
-/* Editor-only placeholder when no items are configured */
+/* Editor-only placeholder when no items are configured. Inline text inside
+ * the user's `<li>` so it reads naturally as list content — full-block
+ * `CanvasModulePlaceholder` would visually disconnect from the parent
+ * `<ul>` / `<ol>` and confuse the editor preview. */
 .placeholder {
-  color: #94a3b8;
+  color: var(--editor-text-muted);
   margin-bottom: 6px;
 }

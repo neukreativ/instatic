@@ -1,0 +1,94 @@
+/*
+ * CanvasModulePlaceholder — module canvas-preview empty state.
+ *
+ * Strictly achromatic (Constraint #376): the diagonal-stripe pattern and
+ * the surface tint are both derived from --editor-text-muted via
+ * color-mix() so they render the same neutral gray on any canvas
+ * background (light or dark). No hex / rgb / hsl literals.
+ *
+ * Stripe geometry: 45°, 6 px lit + 6 px empty. Low enough contrast (~6 %)
+ * to read as "placeholder pattern" rather than competing with real
+ * content above/below. The base surface tint underneath the stripes
+ * (~4 %) guarantees the slot is visible even on very light or very dark
+ * backgrounds.
+ */
+
+.root {
+    display: flex;
+    box-sizing: border-box;
+    min-width: 0;
+    border-radius: var(--editor-radius);
+    background: var(--canvas-placeholder-bg);
+    color: var(--editor-text-muted);
+    font-size: 12px;
+    line-height: 1.4;
+    user-select: none;
+}
+
+/* ── variant: block (image / video / content / loop) ───────────────────────
+ * Fills the module's width with a visible minimum height so empty layers
+ * are easy to find on the canvas. Icon + label + (optional) description
+ * stack vertically and center.
+ */
+.variant-block {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    min-height: 100px;
+    padding: 14px;
+    text-align: center;
+}
+
+/* ── variant: inline (slot-outlet marker, unknown VC ref) ───────────────────
+ * One-row strip. Icon + label horizontal. Used when the module is purely
+ * an editor-only marker (the publisher never emits these — slot-outlets
+ * fold into the matching slot-instance content, missing VC refs collapse
+ * to nothing) so a full block of space would be misleading.
+ */
+.variant-inline {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    padding: 6px 10px;
+}
+
+.icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--editor-text-subtle);
+}
+
+.label {
+    color: var(--editor-text-secondary);
+    font-weight: 600;
+}
+
+.variant-inline .label {
+    font-weight: 500;
+}
+
+.description {
+    max-width: 36ch;
+    color: var(--editor-text-muted);
+    font-size: 11px;
+    font-weight: 500;
+}
+
+/* ── action row (block variant) ────────────────────────────────────────────
+ * Optional row beneath the description. Used by placeholders that surface a
+ * one-click affordance (e.g. "Add dependency"). The `actions` container is
+ * marked `data-canvas-interactive="true"` on the React side so clicks reach
+ * the embedded controls instead of being swallowed by the canvas selection
+ * capture in `NodeWrapper`.
+ */
+.actions {
+    display: inline-flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 4px;
+}

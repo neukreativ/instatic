@@ -1,10 +1,9 @@
-import { Button } from '@ui/components/Button'
 import { Input, Textarea } from '@ui/components/Input'
 import { Select } from '@ui/components/Select'
 import { cn } from '@ui/cn'
 import { Settings2SolidIcon } from 'pixel-art-icons/icons/settings-2-solid'
-import { VideoSolidIcon } from 'pixel-art-icons/icons/video-solid'
 import type { CmsMediaAsset } from '@core/persistence'
+import { MediaPickerField } from '@admin/pages/media/components/MediaPickerField'
 import { useEditorStore } from '@site/store/store'
 import { dataTableHasField } from '@core/data/fields'
 import {
@@ -47,6 +46,11 @@ interface ContentSettingsPanelProps {
   onStatusChange: (status: DataRowStatus) => void
   onChooseFeaturedMedia: () => void
   onClearFeaturedMedia: () => void
+  /**
+   * Open the MediaViewerWindow on the currently-picked featured media asset.
+   * Hidden when `featuredMediaAsset` is null (nothing to edit yet).
+   */
+  onEditFeaturedMedia: () => void
 }
 
 function contentAuthor(entry: DataRow): DataUserReference | null {
@@ -97,6 +101,7 @@ export function ContentSettingsPanel({
   onStatusChange,
   onChooseFeaturedMedia,
   onClearFeaturedMedia,
+  onEditFeaturedMedia,
 }: ContentSettingsPanelProps) {
   const setPropertiesPanel = useEditorStore((s) => s.setPropertiesPanel)
   const seoEnabled = selectedCollection ? dataTableHasField(selectedCollection, POST_TYPE_FIELD_SEO_TITLE) : false
@@ -232,44 +237,20 @@ export function ContentSettingsPanel({
             {featuredMediaEnabled && (
               <div className={styles.featuredMediaField}>
                 <span>Featured media</span>
-                {featuredMediaAsset ? (
-                  <div className={styles.featuredMediaCard}>
-                    <span className={styles.featuredMediaPreview} aria-hidden="true">
-                      {featuredMediaAsset.mimeType.startsWith('image/') ? (
-                        <img src={featuredMediaAsset.publicPath} alt="" />
-                      ) : (
-                        <VideoSolidIcon size={16} />
-                      )}
-                    </span>
-                    <span className={styles.featuredMediaText}>
-                      <strong>{featuredMediaAsset.filename}</strong>
-                      <small>{featuredMediaAsset.publicPath}</small>
-                    </span>
-                  </div>
-                ) : (
-                  <strong>{featuredMediaId ?? 'None'}</strong>
-                )}
+                <MediaPickerField
+                  asset={featuredMediaAsset}
+                  hasValue={Boolean(featuredMediaId)}
+                  fallbackLabel={featuredMediaId ?? undefined}
+                  fallbackHint="Saved reference"
+                  mediaKind={featuredMediaAsset?.mimeType.startsWith('video/') ? 'video' : 'image'}
+                  subjectLabel="featured media"
+                  chooseLabel="Choose featured media"
+                  disabled={!canEditSelectedEntry}
+                  onBrowse={onChooseFeaturedMedia}
+                  onEdit={featuredMediaAsset ? onEditFeaturedMedia : undefined}
+                  onClear={featuredMediaId ? onClearFeaturedMedia : undefined}
+                />
                 {mediaError && <p className={styles.error} role="alert">{mediaError}</p>}
-                <div className={styles.featuredMediaActions}>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={!canEditSelectedEntry}
-                    onClick={onChooseFeaturedMedia}
-                  >
-                    {featuredMediaAsset ? 'Change featured media' : 'Choose featured media'}
-                  </Button>
-                  {featuredMediaId && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={!canEditSelectedEntry}
-                      onClick={onClearFeaturedMedia}
-                    >
-                      Clear
-                    </Button>
-                  )}
-                </div>
               </div>
             )}
           </>

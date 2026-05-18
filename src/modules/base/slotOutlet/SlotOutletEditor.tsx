@@ -13,8 +13,8 @@
 import React from 'react'
 import type { ModuleComponentProps } from '@core/module-engine/types'
 import { useEditorStore } from '@site/store/store'
+import { CanvasModulePlaceholder } from '@ui/components/CanvasModulePlaceholder'
 import { TargetSolidIcon } from 'pixel-art-icons/icons/target-solid'
-import styles from './SlotOutlet.module.css'
 
 interface SlotOutletProps extends Record<string, unknown> {
   slotName: string
@@ -28,9 +28,10 @@ export const SlotOutletEditor: React.FC<ModuleComponentProps<SlotOutletProps>> =
   const slotName = typeof props.slotName === 'string' && props.slotName ? props.slotName : 'children'
 
   return (
-    <div className={styles.placeholder}>
-      <TargetSolidIcon size={12} color="currentColor" aria-hidden="true" />
-      <span className={styles.label}>Slot: {slotName}</span>
-    </div>
+    <CanvasModulePlaceholder
+      variant="inline"
+      icon={<TargetSolidIcon size={12} color="currentColor" />}
+      label={`Slot: ${slotName}`}
+    />
   )
 }

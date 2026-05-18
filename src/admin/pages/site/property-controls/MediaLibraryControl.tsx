@@ -2,11 +2,12 @@
  * MediaLibraryControl — the property-panel control for `<img>` and `<video>`
  * `src` props. Two modes:
  *
- *   1. Library — click "Browse library…" to open the WordPress-style
- *      `MediaPickerModal` (a fullscreen Media-page modal). The control
- *      surface itself only renders a tiny preview of the currently picked
- *      asset + filename. No inline grid, no inline upload — those live
- *      inside the modal.
+ *   1. Library — the picked-media affordance is the shared
+ *      `MediaPickerField` (tile + Change / Edit / Clear actions). Clicking
+ *      "Change …" opens the fullscreen `MediaPickerModal` (folder tree +
+ *      canvas grid + upload queue). Clicking the populated tile or the
+ *      "Edit" button opens the `MediaViewerWindow` for editing alt text,
+ *      caption, tags, replacing the file, etc.
  *
  *   2. URL — manual entry for external assets (CDN, third-party hosts).
  *      Plain `<Input type="url">` with a small inline preview.
@@ -25,13 +26,10 @@ import { isValidImageUrl } from '@core/utils/urlValidation'
 import type { ControlProps } from './shared'
 import { ControlRow } from '@ui/components/ControlRow'
 import controlRowStyles from '@ui/components/ControlRow/ControlRow.module.css'
-import { Button } from '@ui/components/Button'
 import { Input } from '@ui/components/Input'
 import { SegmentedControl } from '@ui/components/SegmentedControl'
-import { ImagesSolidIcon } from 'pixel-art-icons/icons/images-solid'
-import { EditSolidIcon } from 'pixel-art-icons/icons/edit-solid'
 import { VideoSolidIcon } from 'pixel-art-icons/icons/video-solid'
-import { blurHashToDataUrl, pickVariantUrl } from '@admin/pages/media/utils/variants'
+import { MediaPickerField } from '@admin/pages/media/components/MediaPickerField'
 import { MediaViewerWindow } from '@admin/pages/media/components/MediaViewerWindow/MediaViewerWindow'
 import { useStandaloneMediaEditor } from '@admin/pages/media/hooks/useStandaloneMediaEditor'
 import styles from './controls.module.css'
@@ -86,13 +84,6 @@ function isValidMediaUrl(value: string, mediaKind: MediaKind): boolean {
 
 function startsInUrlMode(value: string): boolean {
   return Boolean(value) && !value.startsWith('/uploads/')
-}
-
-function formatBytes(sizeBytes: number): string {
-  if (!Number.isFinite(sizeBytes) || sizeBytes <= 0) return ''
-  if (sizeBytes < 1024) return `${sizeBytes} B`
-  if (sizeBytes < 1024 * 1024) return `${Math.round(sizeBytes / 102.4) / 10} KB`
-  return `${Math.round(sizeBytes / 1024 / 102.4) / 10} MB`
 }
 
 export function MediaLibraryControl({
@@ -192,6 +183,10 @@ export function MediaLibraryControl({
     onChange(propKey, '')
   }
 
+  // Fallback filename when we have a saved path but the asset row hasn't
+  // matched yet (loading or deleted).
+  const fallbackFilename = currentValue ? currentValue.split('/').pop() ?? currentValue : undefined
+
   return (
     <ControlRow
       propKey={propKey}
@@ -218,53 +213,23 @@ export function MediaLibraryControl({
         />
 
         {mode === 'library' ? (
-          <div className={styles.mediaLibraryBody}>
-            <CurrentPickedTile
+          <>
+            <MediaPickerField
               asset={currentAsset}
+              hasValue={Boolean(currentValue)}
+              fallbackLabel={fallbackFilename}
+              fallbackHint="Saved path"
               mediaKind={mediaKind}
-              currentValue={currentValue}
-              onOpenViewer={currentAsset ? openViewer : null}
+              subjectLabel={modeLabel}
+              disabled={disabled}
+              onBrowse={() => setPickerOpen(true)}
+              onEdit={currentAsset ? openViewer : undefined}
+              onClear={currentValue ? handleClear : undefined}
             />
-            <div className={styles.mediaPickerActions}>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={disabled}
-                onClick={() => setPickerOpen(true)}
-                aria-label={`Browse ${modeLabel} library`}
-              >
-                <ImagesSolidIcon size={13} />
-                <span>{currentAsset ? `Change ${modeLabel}` : `Browse library…`}</span>
-              </Button>
-              {currentAsset && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={disabled}
-                  onClick={openViewer}
-                  aria-label={`Edit ${modeLabel} in viewer`}
-                  tooltip="Edit asset (alt text, caption, tags…)"
-                >
-                  <EditSolidIcon size={13} />
-                  <span>Edit</span>
-                </Button>
-              )}
-              {currentValue && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={disabled}
-                  onClick={handleClear}
-                  aria-label={`Clear ${modeLabel}`}
-                >
-                  Clear
-                </Button>
-              )}
-            </div>
             {libraryError && (
               <p className={styles.mediaStatus} role="alert">{libraryError}</p>
             )}
-          </div>
+          </>
         ) : (
           <div className={styles.mediaUrlBody}>
             {showUrlPreview && mediaKind === 'image' && (
@@ -317,104 +282,4 @@ export function MediaLibraryControl({
       />
     </ControlRow>
   )
-}
-
-interface CurrentPickedTileProps {
-  asset: CmsMediaAsset | null
-  mediaKind: MediaKind
-  currentValue: string
-  /**
-   * Called when the user clicks the tile. Only wired when an asset is
-   * loaded — the tile renders as a non-interactive `<div>` for empty /
-   * unresolved states so it doesn't pretend to be clickable when the
-   * viewer has nothing to show.
-   */
-  onOpenViewer: (() => void) | null
-}
-
-function CurrentPickedTile({ asset, mediaKind, currentValue, onOpenViewer }: CurrentPickedTileProps) {
-  // The "currently picked" affordance gets a proper thumbnail + filename so
-  // the user can never guess what's saved on the field. Three states:
-  //   1. asset matched in the library → real thumb + blurhash bg, clickable
-  //      (opens the MediaViewerWindow for editing alt text, caption, tags,
-  //      replace file…)
-  //   2. publicPath set but library hasn't matched yet (loading / stale) →
-  //      filename derived from the path, non-interactive
-  //   3. nothing saved → empty hint, non-interactive
-  if (!asset && !currentValue) {
-    return (
-      <div className={styles.mediaCurrentEmpty}>
-        <span className={styles.mediaCurrentEmptyIcon} aria-hidden="true">
-          {mediaKind === 'image' ? <ImagesSolidIcon size={18} /> : <VideoSolidIcon size={18} />}
-        </span>
-        <span>No {mediaKind} selected</span>
-      </div>
-    )
-  }
-
-  if (!asset) {
-    // We have a saved URL but no matched asset (probably a /uploads/ path
-    // that got deleted, or the library is still loading).
-    const filename = currentValue.split('/').pop() ?? currentValue
-    return (
-      <div className={styles.mediaCurrent}>
-        <span className={styles.mediaCurrentThumb} aria-hidden="true">
-          {mediaKind === 'image' ? <ImagesSolidIcon size={18} /> : <VideoSolidIcon size={18} />}
-        </span>
-        <span className={styles.mediaCurrentMeta}>
-          <span className={styles.mediaCurrentName}>{filename}</span>
-          <span className={styles.mediaCurrentSub}>Saved path</span>
-        </span>
-      </div>
-    )
-  }
-
-  const thumbUrl = mediaKind === 'image' ? pickVariantUrl(asset, 48) : null
-  const blurUrl = mediaKind === 'image' ? blurHashToDataUrl(asset.blurHash) : null
-  const thumbStyle = blurUrl
-    ? ({ backgroundImage: `url(${blurUrl})`, backgroundSize: 'cover' } as React.CSSProperties)
-    : undefined
-  const dimensions = asset.width && asset.height ? `${asset.width} × ${asset.height}` : null
-  const subParts = [
-    asset.mimeType,
-    formatBytes(asset.sizeBytes),
-    dimensions,
-  ].filter(Boolean).join(' · ')
-
-  // Tile body content — same shape whether it renders inside a Button
-  // primitive or a plain <div>. Pulled out so we don't duplicate the JSX.
-  const body = (
-    <>
-      <span className={styles.mediaCurrentThumb} aria-hidden="true" style={thumbStyle}>
-        {mediaKind === 'image' && thumbUrl ? (
-          <img src={thumbUrl} alt="" loading="lazy" decoding="async" />
-        ) : (
-          <VideoSolidIcon size={18} />
-        )}
-      </span>
-      <span className={styles.mediaCurrentMeta}>
-        <span className={styles.mediaCurrentName}>{asset.filename}</span>
-        {subParts && <span className={styles.mediaCurrentSub}>{subParts}</span>}
-      </span>
-    </>
-  )
-
-  if (onOpenViewer) {
-    return (
-      <Button
-        variant="ghost"
-        size="sm"
-        shape="flush"
-        align="start"
-        className={styles.mediaCurrentClickable}
-        onClick={onOpenViewer}
-        aria-label={`Edit ${asset.filename} in viewer`}
-        tooltip="Click to edit this asset (alt text, caption, tags…)"
-      >
-        {body}
-      </Button>
-    )
-  }
-
-  return <div className={styles.mediaCurrent}>{body}</div>
 }

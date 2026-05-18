@@ -187,6 +187,12 @@
 }
 
 /* ── MediaLibraryControl ─────────────────────────────────────────────────── */
+/*
+ * Picked-media affordance (tile + Change/Edit/Clear actions) lives in
+ * `MediaPickerField.module.css` and is shared with the Content page's
+ * featured-media field. Only the URL-mode preview wrappers and the library
+ * status banner remain here.
+ */
 .mediaPicker {
     display: flex;
     flex-direction: column;
@@ -194,20 +200,11 @@
     min-width: 0;
 }
 
-.mediaLibraryBody,
 .mediaUrlBody {
     display: flex;
     flex-direction: column;
     gap: 6px;
     min-width: 0;
-}
-
-.mediaSearch {
-    min-height: 28px;
-    padding: 0 8px;
-    border: 1px solid var(--editor-border);
-    border-radius: var(--editor-radius);
-    background: var(--editor-surface);
 }
 
 .mediaStatus {
@@ -220,216 +217,10 @@
     font-size: 11px;
 }
 
-/* ── Current pick affordance (replaces the cramped inline list) ────────── */
-
-.mediaCurrent {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px;
-    background: var(--editor-surface);
-    border: 1px solid var(--editor-border);
-    border-radius: var(--editor-radius);
-    min-width: 0;
-}
-
-/*
- * Clickable variant of .mediaCurrent — rendered as the Button primitive so
- * it can open the MediaViewerWindow when clicked. Overrides Button's default
- * inline-flex centering / height so the tile keeps the same shape as the
- * non-clickable .mediaCurrent <div> but gains a hover/focus affordance.
- */
-.mediaCurrentClickable {
-    display: flex;
-    width: 100%;
-    height: auto;
-    align-items: center;
-    gap: 10px;
-    padding: 4px;
-    background: var(--editor-surface);
-    border-radius: var(--input-radius);
-    min-width: 0;
-    text-align: left;
-    cursor: pointer;
-    transition:
-        border-color 90ms ease,
-        background-color 90ms ease;
-}
-
-.mediaCurrentClickable:hover,
-.mediaCurrentClickable:focus-visible {
-    border-color: var(--input-border-focus);
-    background: var(--editor-surface-2);
-}
-
-.mediaCurrentEmpty {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px;
-    background: var(--editor-surface);
-    border: 1px dashed var(--editor-border);
-    border-radius: var(--editor-radius);
-    color: var(--editor-text-muted);
-    font-size: 11px;
-}
-
-.mediaCurrentEmptyIcon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: var(--editor-radius-sm);
-    background: var(--editor-surface-2);
-    color: var(--editor-text-muted);
-    flex: 0 0 32px;
-}
-
-.mediaCurrentThumb {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 48px;
-    height: 48px;
-    flex: 0 0 48px;
-    overflow: hidden;
-    border-radius: calc(var(--input-radius) - 4px);
-    background: var(--editor-surface-2);
-    color: var(--editor-text-muted);
-}
-
-.mediaCurrentThumb img,
-.mediaCurrentThumb video {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.mediaCurrentMeta {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-}
-
-.mediaCurrentName {
-    font-size: 12px;
-    color: var(--editor-text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.mediaCurrentSub {
-    font-size: 10px;
-    color: var(--editor-text-muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.mediaCurrentAlt {
-    margin-top: 4px;
-    padding: 4px 6px;
-    background: var(--editor-surface-2);
-    border-radius: var(--editor-radius-sm);
-    font-size: 10px;
-    color: var(--editor-text-secondary);
-    line-height: 1.35;
-    word-break: break-word;
-}
-
-.mediaCurrentAlt strong {
-    color: var(--editor-text);
-    font-weight: 600;
-}
-
-.mediaCurrentAlt em {
-    color: var(--editor-text-muted);
-    font-style: italic;
-}
-
-.mediaPickerActions {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-}
-
-.mediaAssetList {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    max-height: 176px;
-    overflow: auto;
-}
-
-.mediaAssetButton {
-    height: auto;
-    min-height: 46px;
-    padding: 5px;
-    border-radius: var(--editor-radius);
-}
-
-.mediaAssetButtonContent {
-    display: grid;
-    grid-template-columns: 36px minmax(0, 1fr);
-    gap: 8px;
-    align-items: center;
-    width: 100%;
-    min-width: 0;
-}
-
-.mediaThumb {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    overflow: hidden;
-    border: 1px solid var(--editor-border);
-    border-radius: 6px;
-    background: var(--editor-surface-2);
-    color: var(--editor-text-subtle);
-}
-
-.mediaThumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.mediaAssetText {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-}
-
-.mediaAssetName,
-.mediaAssetMeta,
-.mediaSelectedPath,
 .videoPreview span {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-
-.mediaAssetName {
-    color: var(--editor-text);
-    font-size: 11px;
-    font-weight: 650;
-}
-
-.mediaAssetMeta,
-.mediaSelectedPath {
-    color: var(--editor-text-subtle);
-    font-size: 10px;
-    font-weight: 500;
-}
-
-.mediaSelectedPath {
-    min-width: 0;
 }
 
 /* ── DynamicBindingControl ───────────────────────────────────────────────── */
@@ -442,8 +233,7 @@
     min-width: 0;
     min-height: 34px;
     padding: 0 10px;
-    border: 1px solid var(--editor-border);
-    border-radius: var(--editor-radius);
+    border-radius: var(--input-radius);
     background: var(--editor-surface);
     color: var(--editor-text-subtle);
     font-size: 11px;

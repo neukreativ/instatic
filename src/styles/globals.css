@@ -144,6 +144,21 @@
        there's no drift. */
     --canvas-selection-ring-color: #39ff14;
     --canvas-hover-ring-color: #ff2bd6;
+    /* Shared diagonal-stripe pattern used by every module's canvas empty
+       state (image, video, content, loop, container, slot-outlet, VC ref
+       placeholders). Strictly achromatic — colours derived from
+       --editor-text-muted via color-mix so it reads neutral on any canvas
+       background. Stripe geometry: 45°, 6 px lit + 6 px empty, ~6 %
+       contrast over a ~4 % surface tint. Edit here to retune the pattern
+       across every module placeholder at once. */
+    --canvas-placeholder-bg:
+        repeating-linear-gradient(
+            -45deg,
+            color-mix(in srgb, var(--editor-text-muted) 6%, transparent) 0
+                6px,
+            transparent 6px 12px
+        ),
+        color-mix(in srgb, var(--editor-text-muted) 4%, transparent);
 
     /* ─── Z-index layers ─────────────────────────────────────────────────── */
     --z-dropdown: 20;

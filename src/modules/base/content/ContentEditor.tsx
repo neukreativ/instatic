@@ -6,8 +6,8 @@
  */
 import React from 'react'
 import type { ModuleComponentProps } from '@core/module-engine/types'
-import { cn } from '@ui/cn'
-import styles from './content.module.css'
+import { CanvasModulePlaceholder } from '@ui/components/CanvasModulePlaceholder'
+import { TextPlusIcon } from 'pixel-art-icons/icons/text-plus'
 
 interface ContentProps extends Record<string, unknown> {
   html: string
@@ -15,7 +15,13 @@ interface ContentProps extends Record<string, unknown> {
 
 export const ContentEditor: React.FC<ModuleComponentProps<ContentProps>> = ({ props, mcClassName }) => {
   if (!props.html) {
-    return <div className={cn(styles.placeholder, mcClassName)}>Content body</div>
+    return (
+      <CanvasModulePlaceholder
+        className={mcClassName}
+        icon={<TextPlusIcon size={16} />}
+        label="Content body"
+      />
+    )
   }
 
   return (

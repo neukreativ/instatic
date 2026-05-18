@@ -1505,8 +1505,11 @@ describe('ContentPage', () => {
       </AdminTestProviders>,
     )
 
+    // The shared MediaPickerField tile renders filename + a metadata line
+    // (mime · size · dimensions) instead of the saved publicPath — same
+    // shape used by the property panel's media controls.
     expect(await screen.findByText(imageAsset.filename)).toBeDefined()
-    expect(screen.getByText(imageAsset.publicPath)).toBeDefined()
+    expect(screen.getByText(new RegExp(imageAsset.mimeType.replace('/', '\\/')))).toBeDefined()
     expect(screen.queryByText(imageAsset.id)).toBeNull()
   })
 

@@ -15,14 +15,14 @@
  */
 import React, { useMemo } from 'react'
 import type { ModuleComponentProps } from '@core/module-engine/types'
-import { cn } from '@ui/cn'
 import {
   blurHashToDataUrl,
   buildVariantSrcset,
   pickVariantUrl,
 } from '@admin/pages/media/utils/variants'
 import { useCmsMediaAssetByPath } from '@admin/pages/media/hooks/useCmsMediaAssetByPath'
-import styles from './image.module.css'
+import { CanvasModulePlaceholder } from '@ui/components/CanvasModulePlaceholder'
+import { ImageSolidIcon } from 'pixel-art-icons/icons/image-solid'
 
 interface ImageProps extends Record<string, unknown> {
   src: string
@@ -55,7 +55,13 @@ export const ImageEditor: React.FC<ModuleComponentProps<ImageProps>> = ({ props,
   }, [asset])
 
   if (!props.src) {
-    return <div className={cn(styles.placeholder, mcClassName)}>No image selected</div>
+    return (
+      <CanvasModulePlaceholder
+        className={mcClassName}
+        icon={<ImageSolidIcon size={16} />}
+        label="No image selected"
+      />
+    )
   }
 
   // Alt text: library asset is the single source of truth. Matches the

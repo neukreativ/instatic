@@ -8,6 +8,8 @@ import type { ContentBlock } from '@core/markdown/blockModel'
 import { readFeaturedMediaCell } from '@core/data/cells'
 import type { DataRow } from '@core/data/schemas'
 import { mediaTypeFromAsset } from '@content/utils/contentEntryUtils'
+import { useStandaloneMediaEditor } from '@admin/pages/media/hooks/useStandaloneMediaEditor'
+import type { MediaAssetEditor } from '@admin/pages/media/components/MediaViewerWindow/MediaViewerWindow'
 
 export type MediaPickerKind = 'media' | 'featured'
 
@@ -48,6 +50,11 @@ export function useContentMediaPicker({
   const [mediaAssetsLoaded, setMediaAssetsLoaded] = useState(false)
   const [mediaError, setMediaError] = useState<string | null>(null)
   const [mediaPicker, setMediaPicker] = useState<MediaPickerState | null>(null)
+  // MediaViewerWindow state: when set, the viewer opens with this asset so
+  // authors can edit alt text, caption, tags, replace the file — same window
+  // the Media page uses, mounted here so the featured-media field's "Edit"
+  // affordance works without leaving the Content page.
+  const [viewerAssetId, setViewerAssetId] = useState<string | null>(null)
 
   const assetsById = useMemo(() => {
     const map = new Map<string, CmsMediaAsset>()
@@ -107,6 +114,30 @@ export function useContentMediaPicker({
     setMediaPicker(null)
   }, [])
 
+  const openMediaViewer = useCallback((assetId: string) => {
+    setViewerAssetId(assetId)
+  }, [])
+
+  const closeMediaViewer = useCallback(() => {
+    setViewerAssetId(null)
+  }, [])
+
+  const viewerAsset = useMemo(
+    () => (viewerAssetId ? mediaAssets.find((asset) => asset.id === viewerAssetId) ?? null : null),
+    [mediaAssets, viewerAssetId],
+  )
+
+  const viewerEditor: MediaAssetEditor | null = useStandaloneMediaEditor({
+    asset: viewerAsset,
+    assets: mediaAssets,
+    onAssetChanged: (asset) =>
+      setMediaAssets((current) => current.map((item) => (item.id === asset.id ? asset : item))),
+    onAssetRemoved: (id) => {
+      setMediaAssets((current) => current.filter((item) => item.id !== id))
+      if (viewerAssetId === id) setViewerAssetId(null)
+    },
+  })
+
   const pickMedia = useCallback((asset: CmsMediaAsset) => {
     if (!mediaPicker) return
 
@@ -155,5 +186,11 @@ export function useContentMediaPicker({
     openMediaPicker,
     closeMediaPicker,
     pickMedia,
+    // MediaViewerWindow plumbing — exposed so the Content page can mount the
+    // viewer once at the root and the settings panel can request edits.
+    viewerEditor,
+    viewerOpen: viewerAsset !== null,
+    openMediaViewer,
+    closeMediaViewer,
   }
 }
