@@ -1,0 +1,275 @@
+/**
+ * `PluginCard` — a single row in the installed-plugins list on the
+ * Plugins admin page. Renders the plugin's identity (icon, name, version,
+ * status), its action row (Settings, Schedules, Re-sync pack, Restart,
+ * Enable/Disable, Remove), and its body (description, attribution links,
+ * error message, crash log).
+ *
+ * All actions are delegated to the parent page via callbacks — the card
+ * does not own any of the lifecycle state itself. The parent is the one
+ * place that runs step-up auth, hits the server, and updates the plugins
+ * payload; the card just shows the result and reports button clicks.
+ */
+import { Link } from '@admin/lib/routing'
+import { Button } from '@ui/components/Button'
+import { PowerIcon } from 'pixel-art-icons/icons/power'
+import { PowerOffIcon } from 'pixel-art-icons/icons/power-off'
+import { ReloadIcon } from 'pixel-art-icons/icons/reload'
+import { TrashSolidIcon } from 'pixel-art-icons/icons/trash-solid'
+import type { InstalledPlugin } from '@core/plugin-sdk'
+import { safeUrl } from '@core/plugin-sdk'
+import styles from './PluginCard.module.css'
+
+interface PluginStatusBadge {
+  label: string
+  status: string
+}
+
+/**
+ * Resolve the badge text + data attribute for a plugin's current state.
+ * Active and disabled are derived from `enabled`; `error` and `installed`
+ * come straight from the host's `lifecycleStatus`.
+ */
+function pluginStatus(plugin: InstalledPlugin): PluginStatusBadge {
+  const status = plugin.lifecycleStatus ?? (plugin.enabled ? 'active' : 'disabled')
+  if (status === 'error') return { label: 'Error', status }
+  if (status === 'installed') return { label: 'Installed', status }
+  if (status === 'disabled' || !plugin.enabled) return { label: 'Disabled', status: 'disabled' }
+  return { label: 'Active', status: 'active' }
+}
+
+interface PluginCardProps {
+  plugin: InstalledPlugin
+  /**
+   * Disables every action button on this card while a lifecycle request
+   * is in flight (toggle/restart/install-pack/remove). The parent sets
+   * this to `true` for whichever plugin id is currently busy.
+   */
+  busy: boolean
+  /**
+   * Editor-side activation failure surfaced alongside the server-side
+   * `plugin.lastError`. The two have different origins (server vs.
+   * editor canvas) so they're rendered as separate lines.
+   */
+  editorActivationError?: string
+  onOpenSettings: (plugin: InstalledPlugin) => void
+  onOpenSchedules: (plugin: InstalledPlugin) => void
+  onInstallPack: (plugin: InstalledPlugin) => void
+  onRestart: (plugin: InstalledPlugin) => void
+  onToggle: (plugin: InstalledPlugin) => void
+  onRemove: (plugin: InstalledPlugin) => void
+}
+
+export function PluginCard({
+  plugin,
+  busy,
+  editorActivationError,
+  onOpenSettings,
+  onOpenSchedules,
+  onInstallPack,
+  onRestart,
+  onToggle,
+  onRemove,
+}: PluginCardProps) {
+  const status = pluginStatus(plugin)
+  const iconSrc =
+    plugin.manifest.icon && plugin.manifest.assetBasePath
+      ? `${plugin.manifest.assetBasePath.replace(/\/+$/, '')}/${plugin.manifest.icon}`
+      : null
+  const { author, homepage, repository, license } = plugin.manifest
+  const hasLinksRow =
+    Boolean(author || homepage || repository || license) ||
+    plugin.manifest.adminPages.length > 0
+
+  return (
+    <article className={styles.pluginCard}>
+      <header className={styles.pluginHeader}>
+        <div className={styles.pluginHeaderInfo}>
+          {iconSrc && (
+            <img
+              src={iconSrc}
+              alt=""
+              className={styles.pluginIcon}
+              width={36}
+              height={36}
+              loading="lazy"
+            />
+          )}
+          <div className={styles.pluginHeaderTitle}>
+            <h2>{plugin.name}</h2>
+            <span
+              className={styles.pluginVersionPill}
+              aria-label={`Version ${plugin.version}`}
+            >
+              v{plugin.version}
+            </span>
+            <span className={styles.pluginStatusPill} data-status={status.status}>
+              {status.label}
+            </span>
+          </div>
+        </div>
+
+        <div className={styles.pluginActions}>
+          {plugin.manifest.settings && plugin.manifest.settings.length > 0 && (
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={busy}
+              onClick={() => onOpenSettings(plugin)}
+              aria-label={`Edit settings for ${plugin.name}`}
+            >
+              <span>Settings</span>
+            </Button>
+          )}
+          {plugin.grantedPermissions.includes('cms.schedule') && (
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={busy}
+              onClick={() => onOpenSchedules(plugin)}
+              aria-label={`View schedules for ${plugin.name}`}
+            >
+              <span>Schedules</span>
+            </Button>
+          )}
+          {plugin.manifest.pack &&
+            plugin.grantedPermissions.includes('visualComponents.register') &&
+            // Re-syncing a disabled plugin's pack would inject
+            // its VCs / pages / classes into the user's site —
+            // the opposite of what "disabled" should mean.
+            // Hide the button and gate the server endpoint
+            // (server returns 400 if called directly on a
+            // disabled plugin).
+            plugin.enabled && (
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={busy}
+                onClick={() => onInstallPack(plugin)}
+                aria-label={`Re-sync ${plugin.name} pack from the plugin's latest version`}
+              >
+                <span>Re-sync pack</span>
+              </Button>
+            )}
+          {plugin.enabled && plugin.lifecycleStatus === 'error' && (
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={busy}
+              onClick={() => onRestart(plugin)}
+              aria-label={`Restart ${plugin.name}`}
+            >
+              <ReloadIcon size={14} aria-hidden="true" />
+              <span>Restart</span>
+            </Button>
+          )}
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={busy}
+            onClick={() => onToggle(plugin)}
+            aria-label={`${plugin.enabled ? 'Disable' : 'Enable'} ${plugin.name}`}
+          >
+            {plugin.enabled ? (
+              <PowerOffIcon size={14} aria-hidden="true" />
+            ) : (
+              <PowerIcon size={14} aria-hidden="true" />
+            )}
+            <span>{plugin.enabled ? 'Disable' : 'Enable'}</span>
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={busy}
+            onClick={() => onRemove(plugin)}
+            aria-label={`Remove ${plugin.name}`}
+          >
+            <TrashSolidIcon size={14} aria-hidden="true" />
+            <span>Remove</span>
+          </Button>
+        </div>
+      </header>
+
+      <div className={styles.pluginBody}>
+        <p className={styles.pluginDescription}>
+          {plugin.manifest.description ?? `${plugin.id} v${plugin.version}`}
+        </p>
+        {hasLinksRow && (
+          <div className={styles.pluginLinksRow}>
+            <div className={styles.pluginLinksLeft}>
+              {license && (
+                <span className={styles.pluginAttributionItem}>
+                  <span className={styles.pluginLicenseBadge}>{license}</span>
+                </span>
+              )}
+              {homepage && (
+                <a
+                  className={styles.pluginAttributionItem}
+                  href={safeUrl(homepage)}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                >
+                  Homepage
+                </a>
+              )}
+              {repository && (
+                <a
+                  className={styles.pluginAttributionItem}
+                  href={safeUrl(repository)}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                >
+                  Source
+                </a>
+              )}
+              {plugin.manifest.adminPages.map((page) => (
+                <Link
+                  key={page.id}
+                  className={styles.pluginPageLink}
+                  to={page.route ?? `/admin/plugins/${plugin.id}/${page.id}`}
+                >
+                  {page.navLabel ?? page.title}
+                </Link>
+              ))}
+            </div>
+            {author && (
+              <span className={styles.pluginAuthor}>
+                by{' '}
+                {author.url ? (
+                  <a
+                    href={safeUrl(author.url)}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                  >
+                    {author.name}
+                  </a>
+                ) : (
+                  author.name
+                )}
+              </span>
+            )}
+          </div>
+        )}
+        {plugin.lastError && <p className={styles.pluginError}>{plugin.lastError}</p>}
+        {editorActivationError && (
+          <p className={styles.pluginError}>Editor: {editorActivationError}</p>
+        )}
+        {plugin.recentCrashes && plugin.recentCrashes.length > 0 && (
+          <details className={styles.pluginCrashLog}>
+            <summary>Recent issues ({plugin.recentCrashes.length})</summary>
+            <ul>
+              {plugin.recentCrashes.map((crash) => (
+                <li key={crash.id}>
+                  <time dateTime={crash.occurredAt}>
+                    {new Date(crash.occurredAt).toLocaleString()}
+                  </time>
+                  <span> — {crash.reason}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </div>
+    </article>
+  )
+}

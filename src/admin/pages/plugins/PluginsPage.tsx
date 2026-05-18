@@ -1,11 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { consumePendingAction } from "@admin/spotlight/pendingAction";
 import type { ChangeEvent } from "react";
-import { Link } from "@admin/lib/routing";
 import { Button } from "@ui/components/Button";
-import { PowerIcon } from "pixel-art-icons/icons/power";
-import { PowerOffIcon } from "pixel-art-icons/icons/power-off";
-import { TrashSolidIcon } from "pixel-art-icons/icons/trash-solid";
 import { UploadIcon } from "pixel-art-icons/icons/upload";
 import {
   getEditorActivationErrors,
@@ -22,7 +18,7 @@ import {
   collectEnabledAdminPages,
   parsePluginManifest,
 } from "@core/plugins/manifest";
-import { safeUrl } from "@core/plugin-sdk";
+import { PluginCard } from "./components/PluginCard/PluginCard";
 import { PluginRemoveDialog } from "./components/PluginRemoveDialog/PluginRemoveDialog";
 import { PermissionReviewSection } from "./components/PermissionReviewSection";
 import {
@@ -35,7 +31,6 @@ import {
   restartCmsPlugin,
   setCmsPluginEnabled,
 } from "@core/persistence";
-import { ReloadIcon } from "pixel-art-icons/icons/reload";
 import { AdminPageLayout } from "@admin/layouts";
 import { notifyCmsPluginsChanged } from "./utils/pluginEvents";
 import { CMS_SITE_RELOAD_EVENT } from "@site/hooks/usePersistence";
@@ -108,19 +103,6 @@ function updatePlugin(
         );
   const adminPages = collectEnabledAdminPages(plugins);
   return { plugins, adminPages };
-}
-
-function pluginStatus(plugin: InstalledPlugin): {
-  label: string;
-  status: string;
-} {
-  const status =
-    plugin.lifecycleStatus ?? (plugin.enabled ? "active" : "disabled");
-  if (status === "error") return { label: "Error", status };
-  if (status === "installed") return { label: "Installed", status };
-  if (status === "disabled" || !plugin.enabled)
-    return { label: "Disabled", status: "disabled" };
-  return { label: "Active", status: "active" };
 }
 
 export function PluginsPage() {
@@ -460,222 +442,20 @@ export function PluginsPage() {
               ) : payload.plugins.length === 0 ? (
                 <p className={styles.emptyState}>No plugins installed yet.</p>
               ) : (
-                payload.plugins.map((plugin) => {
-                  const status = pluginStatus(plugin);
-                  const iconSrc =
-                    plugin.manifest.icon && plugin.manifest.assetBasePath
-                      ? `${plugin.manifest.assetBasePath.replace(/\/+$/, "")}/${plugin.manifest.icon}`
-                      : null;
-                  const author = plugin.manifest.author;
-                  const homepage = plugin.manifest.homepage;
-                  const repository = plugin.manifest.repository;
-                  const license = plugin.manifest.license;
-                  return (
-                    <article key={plugin.id} className={styles.pluginCard}>
-                      <header className={styles.pluginHeader}>
-                        <div className={styles.pluginHeaderInfo}>
-                          {iconSrc && (
-                            <img
-                              src={iconSrc}
-                              alt=""
-                              className={styles.pluginIcon}
-                              width={36}
-                              height={36}
-                              loading="lazy"
-                            />
-                          )}
-                          <div className={styles.pluginHeaderTitle}>
-                            <h2>{plugin.name}</h2>
-                            <span
-                              className={styles.pluginVersionPill}
-                              aria-label={`Version ${plugin.version}`}
-                            >
-                              v{plugin.version}
-                            </span>
-                            <span
-                              className={styles.pluginStatusPill}
-                              data-status={status.status}
-                            >
-                              {status.label}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className={styles.pluginActions}>
-                          {plugin.manifest.settings && plugin.manifest.settings.length > 0 && (
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              disabled={busyPluginId === plugin.id}
-                              onClick={() => setSettingsPluginId(plugin.id)}
-                              aria-label={`Edit settings for ${plugin.name}`}
-                            >
-                              <span>Settings</span>
-                            </Button>
-                          )}
-                          {plugin.grantedPermissions.includes("cms.schedule") && (
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              disabled={busyPluginId === plugin.id}
-                              onClick={() => setSchedulesPluginId(plugin.id)}
-                              aria-label={`View schedules for ${plugin.name}`}
-                            >
-                              <span>Schedules</span>
-                            </Button>
-                          )}
-                          {plugin.manifest.pack &&
-                            plugin.grantedPermissions.includes("visualComponents.register") &&
-                            // Re-syncing a disabled plugin's pack would inject
-                            // its VCs / pages / classes into the user's site —
-                            // the opposite of what "disabled" should mean.
-                            // Hide the button and gate the server endpoint
-                            // (server returns 400 if called directly on a
-                            // disabled plugin).
-                            plugin.enabled && (
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                disabled={busyPluginId === plugin.id}
-                                onClick={() => void installPluginPack(plugin)}
-                                aria-label={`Re-sync ${plugin.name} pack from the plugin's latest version`}
-                              >
-                                <span>Re-sync pack</span>
-                              </Button>
-                            )}
-                          {plugin.enabled && plugin.lifecycleStatus === "error" && (
-                            <Button
-                              variant="primary"
-                              size="sm"
-                              disabled={busyPluginId === plugin.id}
-                              onClick={() => void restartPlugin(plugin)}
-                              aria-label={`Restart ${plugin.name}`}
-                            >
-                              <ReloadIcon size={14} aria-hidden="true" />
-                              <span>Restart</span>
-                            </Button>
-                          )}
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            disabled={busyPluginId === plugin.id}
-                            onClick={() => void togglePlugin(plugin)}
-                            aria-label={`${plugin.enabled ? "Disable" : "Enable"} ${plugin.name}`}
-                          >
-                            {plugin.enabled ? (
-                              <PowerOffIcon size={14} aria-hidden="true" />
-                            ) : (
-                              <PowerIcon size={14} aria-hidden="true" />
-                            )}
-                            <span>{plugin.enabled ? "Disable" : "Enable"}</span>
-                          </Button>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            disabled={busyPluginId === plugin.id}
-                            onClick={() => setPendingRemove(plugin)}
-                            aria-label={`Remove ${plugin.name}`}
-                          >
-                            <TrashSolidIcon size={14} aria-hidden="true" />
-                            <span>Remove</span>
-                          </Button>
-                        </div>
-                      </header>
-
-                      <div className={styles.pluginBody}>
-                        <p className={styles.pluginDescription}>
-                          {plugin.manifest.description ??
-                            `${plugin.id} v${plugin.version}`}
-                        </p>
-                        {(author || homepage || repository || license || plugin.manifest.adminPages.length > 0) && (
-                          <div className={styles.pluginLinksRow}>
-                            <div className={styles.pluginLinksLeft}>
-                              {license && (
-                                <span className={styles.pluginAttributionItem}>
-                                  <span className={styles.pluginLicenseBadge}>
-                                    {license}
-                                  </span>
-                                </span>
-                              )}
-                              {homepage && (
-                                <a
-                                  className={styles.pluginAttributionItem}
-                                  href={safeUrl(homepage)}
-                                  target="_blank"
-                                  rel="noreferrer noopener"
-                                >
-                                  Homepage
-                                </a>
-                              )}
-                              {repository && (
-                                <a
-                                  className={styles.pluginAttributionItem}
-                                  href={safeUrl(repository)}
-                                  target="_blank"
-                                  rel="noreferrer noopener"
-                                >
-                                  Source
-                                </a>
-                              )}
-                              {plugin.manifest.adminPages.map((page) => (
-                                <Link
-                                  key={page.id}
-                                  className={styles.pluginPageLink}
-                                  to={page.route ?? `/admin/plugins/${plugin.id}/${page.id}`}
-                                >
-                                  {page.navLabel ?? page.title}
-                                </Link>
-                              ))}
-                            </div>
-                            {author && (
-                              <span className={styles.pluginAuthor}>
-                                by{" "}
-                                {author.url ? (
-                                  <a
-                                    href={safeUrl(author.url)}
-                                    target="_blank"
-                                    rel="noreferrer noopener"
-                                  >
-                                    {author.name}
-                                  </a>
-                                ) : (
-                                  author.name
-                                )}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                        {plugin.lastError && (
-                          <p className={styles.pluginError}>
-                            {plugin.lastError}
-                          </p>
-                        )}
-                        {editorActivationErrors[plugin.id] && (
-                          <p className={styles.pluginError}>
-                            Editor: {editorActivationErrors[plugin.id]}
-                          </p>
-                        )}
-                        {plugin.recentCrashes && plugin.recentCrashes.length > 0 && (
-                          <details className={styles.pluginCrashLog}>
-                            <summary>
-                              Recent issues ({plugin.recentCrashes.length})
-                            </summary>
-                            <ul>
-                              {plugin.recentCrashes.map((crash) => (
-                                <li key={crash.id}>
-                                  <time dateTime={crash.occurredAt}>
-                                    {new Date(crash.occurredAt).toLocaleString()}
-                                  </time>
-                                  <span> — {crash.reason}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </details>
-                        )}
-                      </div>
-                    </article>
-                  );
-                })
+                payload.plugins.map((plugin) => (
+                  <PluginCard
+                    key={plugin.id}
+                    plugin={plugin}
+                    busy={busyPluginId === plugin.id}
+                    editorActivationError={editorActivationErrors[plugin.id]}
+                    onOpenSettings={(p) => setSettingsPluginId(p.id)}
+                    onOpenSchedules={(p) => setSchedulesPluginId(p.id)}
+                    onInstallPack={(p) => void installPluginPack(p)}
+                    onRestart={(p) => void restartPlugin(p)}
+                    onToggle={(p) => void togglePlugin(p)}
+                    onRemove={(p) => setPendingRemove(p)}
+                  />
+                ))
               )}
             </div>
 
