@@ -131,13 +131,24 @@ export async function handleHoleRequest(
     async () => {
       // Render the node subtree with no dynamicNodeIds — inside the hole
       // endpoint we render fully (the node is already the dynamic boundary).
+      //
+      // `viewer` stays `null` here: admin session cookies are scoped to
+      // `Path=/admin` (see `server/auth/security.ts`) and don't flow to the
+      // public-path `/_pb/hole/*` namespace. The visitor side of the product
+      // is intentionally anonymous — there's no public-visitor auth yet.
+      // Templates referencing `{viewer.*}` therefore resolve to empty on the
+      // public site. The canvas (`useTemplatePreviewContext`) DOES populate
+      // viewer from the editor's admin session, so authors see live values
+      // while authoring. Wiring public-visitor `viewer.*` would require a
+      // separate visitor-session concept and is out of scope for the
+      // publishing-architecture work.
       const renderCtx: RenderContext = {
         page: foundPage,
         site: snapshot.site,
         registry,
         breakpointId: undefined,
         cssMap: new Map(),
-        templateContext: { entryStack: [] },
+        templateContext: { entryStack: [], viewer: null },
         // No dynamicNodeIds: inside a hole endpoint, we render the full subtree.
         // No holeNodeIds: not needed — this is a fragment render, not a page render.
       }
