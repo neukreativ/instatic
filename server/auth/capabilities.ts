@@ -37,6 +37,13 @@ const CoreCapabilitySchema = Type.Union([
   Type.Literal('users.manage'),
   Type.Literal('roles.manage'),
   Type.Literal('audit.read'),
+  // AI runtime — see docs/plans/2026-05-26-ai-runtime-rewrite.md
+  //   ai.use               Invoke any AI surface (chat, tools), read own conversations
+  //   ai.providers.manage  Create/update/delete API-key credentials + per-scope defaults
+  //   ai.audit.read        Read site-wide AI usage / cost / errors (other users included)
+  Type.Literal('ai.use'),
+  Type.Literal('ai.providers.manage'),
+  Type.Literal('ai.audit.read'),
 ])
 
 export type CoreCapability = Static<typeof CoreCapabilitySchema>
@@ -61,6 +68,9 @@ const CORE_CAPABILITIES: CoreCapability[] = [
   'users.manage',
   'roles.manage',
   'audit.read',
+  'ai.use',
+  'ai.providers.manage',
+  'ai.audit.read',
 ]
 
 /**

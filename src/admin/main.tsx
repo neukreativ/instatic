@@ -150,6 +150,7 @@ if (typeof window !== 'undefined' && (window as unknown as { __pbAuthed?: number
     if (pathname.startsWith('/admin/plugins/')) return import('./pages/plugins/PluginPage')
     if (pathname.startsWith('/admin/plugins')) return import('./pages/plugins/PluginsPage')
     if (pathname.startsWith('/admin/users')) return import('./pages/users/UsersPage')
+    if (pathname.startsWith('/admin/ai')) return import('./pages/ai/AiPage')
     if (pathname.startsWith('/admin/account')) return import('./pages/account/AccountPage')
     // `/admin/` or `/admin` redirect to `/admin/dashboard` — preload dashboard.
     return import('./pages/dashboard/DashboardPage')

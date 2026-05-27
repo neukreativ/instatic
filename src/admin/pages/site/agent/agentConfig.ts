@@ -1,29 +1,32 @@
 /**
- * Agent network configuration.
+ * Site-editor agent network configuration.
  *
- * Centralises the Vite proxy path so that agentSlice.ts, vite.config.ts, and
- * any future transport adapters all reference one authoritative constant rather
- * than scattered string literals.
+ * As of Phase 3 the site editor talks to the new AI runtime at
+ * `/admin/api/ai/chat/site` (provider-agnostic, multi-driver). The browser
+ * still POSTs tool results to `/admin/api/ai/tool-result`.
  *
- * Phase 8 note: when the Convex backend is added this constant (or a companion
- * export) should be updated to reflect the production endpoint, keeping the
- * transport layer decoupled from the state slice.
- *
- * The endpoints live under `/admin/api/agent` so the session cookie (scoped
- * to `Path=/admin` for cookie-isolation from the public site) is sent by
- * the browser. Outside `/admin`, the cookie wouldn't be carried and the
- * `requireCapability('pages.edit')` gate would 401 every request.
- *
- * @see Constraint #385 — No API key / endpoint configuration required (ambient credentials)
+ * Endpoints live under `/admin/api/` so the session cookie scoped to
+ * `Path=/admin` is sent by the browser. Outside `/admin/`, the cookie
+ * wouldn't be carried and the `requireCapability('ai.use')` gate would
+ * 401 every request.
  */
 
-/** Vite dev-proxy path for the agent API. The proxy forwards to the local Bun server. */
-export const AGENT_API_PATH = '/admin/api/agent' as const
+/** Streaming chat endpoint — POSTs `{ conversationId, prompt, snapshot }`. */
+export const AGENT_API_PATH = '/admin/api/ai/chat/site' as const
 
 /**
- * Browser-bridge response endpoint. The browser POSTs `{ bridgeId, requestId,
- * result }` here after applying a write tool against the editor store; the
- * server resolves the in-flight MCP tool-call promise so Claude receives the
- * tool_result and continues the agent loop.
+ * Browser-bridge response endpoint. POSTed by the browser after applying a
+ * write tool against the editor store; resolves the in-flight pending tool
+ * waiter in `server/ai/runtime/transport.ts` so the driver loop continues.
+ *
+ * Body: `{ bridgeId, requestId, result: AiToolOutput }` where AiToolOutput
+ * is `{ ok: boolean, data?: unknown, error?: string }`.
  */
-export const AGENT_TOOL_RESULT_PATH = '/admin/api/agent/tool-result' as const
+export const AGENT_TOOL_RESULT_PATH = '/admin/api/ai/tool-result' as const
+
+/** Per-scope defaults endpoint — read at panel open to discover the active
+    credential + model for new conversations. */
+export const AI_DEFAULTS_PATH = '/admin/api/ai/defaults' as const
+
+/** Conversations endpoint root — POST to create, GET list with `?scope=site`. */
+export const AI_CONVERSATIONS_PATH = '/admin/api/ai/conversations' as const

@@ -59,6 +59,14 @@ export interface AgentRenderSnapshotPayload {
 
 // ---------------------------------------------------------------------------
 // Server → Browser stream events (NDJSON wire format)
+//
+// As of Phase 3 the wire shape mirrors `AiStreamEvent` from
+// `server/ai/runtime/types.ts`. Notable changes from the legacy shape:
+//   - `toolRequest.name` → `toolRequest.toolName`
+//   - The single `toolStatus` (pending|success|error) event is split into a
+//     `toolCall` (pending) + `toolResult` (ok/error) pair.
+//   - New `usage` event reports per-turn token counts (also persisted on
+//     the conversation row server-side).
 // ---------------------------------------------------------------------------
 
 /** A chunk of text from the assistant's message. */
@@ -70,8 +78,8 @@ interface TextEvent {
 /**
  * Bridge handshake: the server has accepted the request and assigned a bridge
  * id. The browser uses this id when POSTing tool-result responses to
- * /admin/api/agent/tool-result so the server can correlate the response with the
- * pending MCP tool call.
+ * `/admin/api/ai/tool-result` so the server can correlate the response with the
+ * pending tool waiter inside the driver.
  */
 interface BridgeReadyEvent {
   type: 'bridgeReady'
@@ -79,18 +87,14 @@ interface BridgeReadyEvent {
 }
 
 /**
- * The server-side MCP write tool needs the browser to apply a mutation
- * against the live editor store. The browser executes it, then POSTs the
- * result to /admin/api/agent/tool-result with `{ bridgeId, requestId, result }`.
- *
- * `name` is the tool name without the `mcp__page_builder__` prefix
- * (e.g. `insertNode`, `insertTree`, `createClass`). `input` is the tool's
- * input object as Claude produced it.
+ * The server-side driver needs the browser to apply a write tool against
+ * the editor store. The browser executes it, then POSTs the result to
+ * `/admin/api/ai/tool-result` with `{ bridgeId, requestId, result }`.
  */
 interface ToolRequestEvent {
   type: 'toolRequest'
   requestId: string
-  name: string
+  toolName: string
   input: unknown
 }
 
@@ -105,28 +109,52 @@ interface ErrorEvent {
   message: string
 }
 
-/** Status update for SDK/MCP tools used by Claude before page-builder actions. */
-interface ToolStatusEvent {
-  type: 'toolStatus'
+/**
+ * The driver has issued a tool call. Status is always 'pending' on this
+ * event — a paired `toolResult` lands once the tool completes.
+ */
+interface ToolCallEvent {
+  type: 'toolCall'
   toolCallId: string
-  name: string
-  status: 'pending' | 'success' | 'error'
-  input?: unknown
+  toolName: string
+  input: unknown
+  status: 'pending'
+}
+
+/**
+ * A previously-issued tool call has completed. `ok` is the success flag;
+ * `error` carries the failure message when ok=false.
+ */
+interface ToolResultEvent {
+  type: 'toolResult'
+  toolCallId: string
+  toolName: string
+  ok: boolean
   error?: string
 }
 
-/** Current Claude Agent SDK session ID for follow-up resume calls. */
+/** Provider session id (e.g. Claude Agent SDK resume token). */
 interface SessionEvent {
   type: 'session'
   sessionId: string
+}
+
+/** Aggregated token usage for the entire turn — emitted just before `done`. */
+interface UsageEvent {
+  type: 'usage'
+  promptTokens: number
+  completionTokens: number
+  costUsd?: number
 }
 
 export type ServerStreamEvent =
   | TextEvent
   | BridgeReadyEvent
   | ToolRequestEvent
-  | ToolStatusEvent
+  | ToolCallEvent
+  | ToolResultEvent
   | SessionEvent
+  | UsageEvent
   | DoneEvent
   | ErrorEvent
 
@@ -168,15 +196,16 @@ export interface AgentMessage {
 // ---------------------------------------------------------------------------
 
 export interface AgentRequestBody {
+  /** Per-conversation id; the chat handler loads its credential + history. */
+  conversationId: string
   /** The user's new message. */
   prompt: string
-  /** Claude Agent SDK session ID to resume for follow-up turns. */
-  sessionId?: string
   /**
-   * Snapshot of the current page tree injected into the system prompt.
-   * Lets the server give Claude accurate context without a separate read call.
+   * Snapshot of the current page tree handed to the site-scope read tools
+   * via `ToolContext.snapshot`. The chat handler attaches it to the
+   * Anthropic + OpenAI drivers' shared snapshot binding.
    */
-  pageContext: PageContext
+  snapshot: PageContext
 }
 
 interface AgentModulePropOptionContext {

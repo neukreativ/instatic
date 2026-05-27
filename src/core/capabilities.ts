@@ -31,6 +31,12 @@ export const CORE_CAPABILITIES = [
   'users.manage',
   'roles.manage',
   'audit.read',
+  // AI runtime — mirror of the server-side list in
+  // `server/auth/capabilities.ts`. See
+  // `docs/plans/2026-05-26-ai-runtime-rewrite.md` for the semantics.
+  'ai.use',
+  'ai.providers.manage',
+  'ai.audit.read',
 ] as const
 
 export type CoreCapability = typeof CORE_CAPABILITIES[number]

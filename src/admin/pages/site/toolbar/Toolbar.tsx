@@ -30,6 +30,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArticleSolidIcon } from 'pixel-art-icons/icons/article-solid'
+import { AiBoxSolidIcon } from 'pixel-art-icons/icons/ai-box-solid'
 import { DashboardSolidIcon } from 'pixel-art-icons/icons/dashboard-solid'
 import { DatabaseSolidIcon } from 'pixel-art-icons/icons/database-solid'
 import { ImagesSolidIcon } from 'pixel-art-icons/icons/images-solid'
@@ -299,6 +300,12 @@ function DefaultAdminNavigation({ section }: { section: AdminWorkspace }) {
         icon={<PackageSolidIcon size={NAV_ICON_SIZE} aria-hidden="true" />}
         label="Plugins"
         active={section === 'plugins'}
+      />
+      <DefaultNavSlot
+        href="/admin/ai"
+        icon={<AiBoxSolidIcon size={NAV_ICON_SIZE} aria-hidden="true" />}
+        label="AI"
+        active={section === 'ai'}
       />
     </>
   )

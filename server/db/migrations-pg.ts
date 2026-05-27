@@ -57,8 +57,8 @@ export const pgMigrations: Migration[] = [
       -- boot only - subsequent edits via the admin UI are preserved.
       insert into roles (id, slug, name, description, is_system, capabilities_json)
       values
-        ('owner', 'owner', 'Owner', 'Permanent installation owner with full system access.', true, '["dashboard.read","site.read","site.structure.edit","site.content.edit","site.style.edit","pages.edit","pages.publish","content.create","content.edit.own","content.edit.any","content.publish.own","content.publish.any","content.manage","media.manage","runtime.manage","plugins.manage","users.manage","roles.manage","audit.read"]'::jsonb),
-        ('admin', 'admin', 'Admin', 'Full admin access (cannot manage roles).', true, '["dashboard.read","site.read","site.structure.edit","site.content.edit","site.style.edit","pages.edit","pages.publish","content.create","content.edit.own","content.edit.any","content.publish.own","content.publish.any","content.manage","media.manage","runtime.manage","plugins.manage","users.manage","audit.read"]'::jsonb),
+        ('owner', 'owner', 'Owner', 'Permanent installation owner with full system access.', true, '["dashboard.read","site.read","site.structure.edit","site.content.edit","site.style.edit","pages.edit","pages.publish","content.create","content.edit.own","content.edit.any","content.publish.own","content.publish.any","content.manage","media.manage","runtime.manage","plugins.manage","users.manage","roles.manage","audit.read","ai.use","ai.providers.manage","ai.audit.read"]'::jsonb),
+        ('admin', 'admin', 'Admin', 'Full admin access (cannot manage roles).', true, '["dashboard.read","site.read","site.structure.edit","site.content.edit","site.style.edit","pages.edit","pages.publish","content.create","content.edit.own","content.edit.any","content.publish.own","content.publish.any","content.manage","media.manage","runtime.manage","plugins.manage","users.manage","audit.read","ai.use","ai.providers.manage","ai.audit.read"]'::jsonb),
         ('client', 'client', 'Client', 'Can edit page copy (text, images, links) but not structure or styles.', true, '["dashboard.read","site.read","site.content.edit"]'::jsonb),
         ('member', 'member', 'Member', 'Public-facing member account — no admin access by default.', true, '[]'::jsonb)
       on conflict (id) do update
@@ -670,6 +670,123 @@ export const pgMigrations: Migration[] = [
       create index if not exists data_rows_scheduled_publish_idx
         on data_rows (scheduled_publish_at)
         where status = 'scheduled' and deleted_at is null;
+    `,
+  },
+  {
+    id: '007_ai_runtime',
+    sql: `
+      -- ─── AI runtime: providers, credentials, defaults, conversations ──────
+      --
+      -- Phase 1 of docs/plans/2026-05-26-ai-runtime-rewrite.md.
+      --
+      -- One driver per provider; each provider supports multiple auth modes
+      -- (ambient = no key, apiKey = encrypted user key, baseUrl = endpoint
+      -- override). The auth_mode check + ai_creds_apikey_shape_check enforce
+      -- column-shape consistency at the DB layer so repository code can trust
+      -- the row shape.
+
+      create table if not exists ai_provider_credentials (
+        id text primary key,
+        user_id text not null references users(id) on delete cascade,
+        provider_id text not null,
+        auth_mode text not null,
+        display_label text not null,
+        ciphertext bytea,
+        iv bytea,
+        base_url text,
+        key_fingerprint text,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now(),
+        last_used_at timestamptz,
+        constraint ai_creds_provider_check
+          check (provider_id in ('anthropic', 'openai', 'ollama')),
+        constraint ai_creds_authmode_check
+          check (auth_mode in ('apiKey', 'baseUrl')),
+        constraint ai_creds_apikey_shape_check
+          check (
+            (auth_mode = 'apiKey'  and ciphertext is not null and iv is not null and base_url is null) or
+            (auth_mode = 'baseUrl' and base_url is not null)
+          )
+      );
+
+      create unique index if not exists ai_creds_user_label_idx
+        on ai_provider_credentials (user_id, provider_id, display_label);
+
+      -- Per-scope site-wide default credential + model. credential_id is
+      -- restricted-on-delete: the UI nudges users to reassign before removing
+      -- a credential that's the current default for any scope.
+      create table if not exists ai_defaults (
+        scope text primary key,
+        credential_id text not null references ai_provider_credentials(id) on delete restrict,
+        model_id text not null,
+        updated_at timestamptz not null default now(),
+        updated_by text references users(id) on delete set null,
+        constraint ai_defaults_scope_check
+          check (scope in ('site', 'content', 'data', 'plugin'))
+      );
+
+      -- Persistent conversations per (user, scope). context_json captures the
+      -- snapshot the chat started with (pageId, postId, tableId, ...) so a
+      -- reopened conversation can still reason about its original target even
+      -- if the user has navigated elsewhere.
+      create table if not exists ai_conversations (
+        id text primary key,
+        user_id text not null references users(id) on delete cascade,
+        scope text not null,
+        title text not null,
+        credential_id text references ai_provider_credentials(id) on delete set null,
+        model_id text not null,
+        session_id text,
+        context_json text,
+        prompt_tokens_total bigint not null default 0,
+        completion_tokens_total bigint not null default 0,
+        cost_usd_total numeric(10, 6) not null default 0,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now(),
+        deleted_at timestamptz,
+        constraint ai_conv_scope_check
+          check (scope in ('site', 'content', 'data', 'plugin'))
+      );
+
+      -- "My recent chats" query path. Partial index — soft-deleted rows drop
+      -- out automatically.
+      create index if not exists ai_conv_user_scope_idx
+        on ai_conversations (user_id, scope, updated_at desc)
+        where deleted_at is null;
+
+      -- Hard-purge driver: the nightly job picks rows older than 30 days.
+      create index if not exists ai_conv_deleted_idx
+        on ai_conversations (deleted_at)
+        where deleted_at is not null;
+
+      create table if not exists ai_messages (
+        id text primary key,
+        conversation_id text not null references ai_conversations(id) on delete cascade,
+        position integer not null,
+        role text not null,
+        content_json text not null,
+        tool_call_id text,
+        tool_name text,
+        prompt_tokens integer not null default 0,
+        completion_tokens integer not null default 0,
+        cost_usd numeric(10, 6) not null default 0,
+        created_at timestamptz not null default now(),
+        constraint ai_msg_role_check
+          check (role in ('user', 'assistant', 'tool'))
+      );
+
+      create unique index if not exists ai_msg_conv_position_idx
+        on ai_messages (conversation_id, position);
+    `,
+  },
+  {
+    id: '008_ai_drop_ambient_credentials',
+    sql: `
+      -- Credentials whose auth_mode is no longer supported are pruned so the
+      -- credentials list endpoint can parse the wire shape (the client now
+      -- expects only 'apiKey' or 'baseUrl').
+      delete from ai_provider_credentials
+      where auth_mode = 'ambient';
     `,
   },
 ]

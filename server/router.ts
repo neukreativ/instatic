@@ -1,4 +1,4 @@
-import { handleAgentRequest, handleAgentToolResult } from './handlers/agent'
+import { tryHandleAi } from './ai/handlers'
 import { handleCmsRequest } from './handlers/cms'
 import type { DbClient } from './db/client'
 import { renderPublicResolution } from './publish/publicRouter'
@@ -56,8 +56,10 @@ type RouteHandler = (
  */
 const routes: readonly RouteHandler[] = [
   tryServeHealth,
-  tryServeAgent,
-  tryServeAgentToolResult,
+  // AI runtime — `/admin/api/ai/*`. The legacy `/admin/api/agent` and
+  // `/admin/api/agent/tool-result` were deleted in Phase 3 of the AI
+  // runtime rewrite. The site editor now POSTs `/admin/api/ai/chat/site`.
+  tryServeAi,
   tryServeCmsApi,
   tryServeLoopRuntimeAsset,
   tryServeLoop,
@@ -102,27 +104,20 @@ function tryServeHealth(_req: Request, _runtime: ServerRuntime, _url: URL, pathn
 }
 
 /**
- * Agent endpoints live under `/admin/api/agent[/...]` (not their own
- * `/api/agent` prefix) so the admin session cookie — scoped to
- * `Path=/admin` to keep it off the public site — is actually carried to
- * them. Without that, the capability gate inside the handlers would 401
- * every request. Matched before the broader `/admin/api/cms/` route
- * because the agent paths don't include `cms` and must not be swallowed
- * by the CMS dispatcher.
+ * AI runtime — provider-agnostic stack at `/admin/api/ai/*`. Handles chat
+ * streams, browser bridge, credentials CRUD, conversation history,
+ * defaults, and model discovery. See `server/ai/handlers/index.ts` for the
+ * full route table; the dispatcher there is the source of truth for
+ * which paths are owned by this namespace.
  *
- * The F-0008 architecture gate (`agent-endpoint-auth.test.ts`) scans this
- * file for the literal calls `handleAgentRequest(req, runtime.db)` and
- * `handleAgentToolResult(req, runtime.db)` to ensure the `DbClient` flows
- * into the handlers' auth checks. Keep those literals here.
+ * Endpoints live under `/admin/api/` so the admin session cookie — scoped
+ * to `Path=/admin` to keep it off the public site — is carried to them.
+ * Without that, the `requireCapability('ai.use' / 'ai.providers.manage')`
+ * gate would 401 every request. Matched before the broader `/admin/api/cms/`
+ * route so the AI paths don't get swallowed by the CMS dispatcher.
  */
-function tryServeAgent(req: Request, runtime: ServerRuntime, _url: URL, pathname: string): Promise<Response> | null {
-  if (pathname !== '/admin/api/agent') return null
-  return handleAgentRequest(req, runtime.db)
-}
-
-function tryServeAgentToolResult(req: Request, runtime: ServerRuntime, _url: URL, pathname: string): Promise<Response> | null {
-  if (pathname !== '/admin/api/agent/tool-result') return null
-  return handleAgentToolResult(req, runtime.db)
+function tryServeAi(req: Request, runtime: ServerRuntime, url: URL, _pathname: string): Promise<Response> | null {
+  return tryHandleAi(req, runtime.db, url)
 }
 
 function tryServeCmsApi(req: Request, runtime: ServerRuntime, _url: URL, pathname: string): Promise<Response> | null {

@@ -38,6 +38,9 @@ import { EmptyState } from '@ui/components/EmptyState'
 import { Textarea } from '@ui/components/Input'
 import { useDraggablePanel } from '@site/hooks/useDraggablePanel'
 import { cn } from '@ui/cn'
+import { NoCredentialBanner } from './NoCredentialBanner'
+import { ModelPicker } from './ModelPicker'
+import { ConversationHistory } from './ConversationHistory'
 import styles from './AgentPanel.module.css'
 
 const PANEL_WIDTH = 320
@@ -161,7 +164,9 @@ export const AgentPanel = memo(function AgentPanel({ variant = 'floating' }: { v
         onClose={closeAgent}
         dragHandleProps={variant === 'floating' ? headerDragProps : undefined}
       >
-        {/* Extra: "clear conversation" button shown when there are messages */}
+        {/* History popover — list past chats, start a new one, delete. */}
+        <ConversationHistory />
+        {/* "Clear conversation" — shown when there are messages */}
         {messages.length > 0 && (
           <Button
             variant="ghost"
@@ -193,14 +198,21 @@ export const AgentPanel = memo(function AgentPanel({ variant = 'floating' }: { v
         aria-busy={isStreaming}
         className={styles.thread}
       >
+        {/* No-provider banner with deep-link to /admin/ai (shown above the
+            thread so the user always sees how to fix it). */}
+        {agentError?.startsWith('No AI provider configured') && (
+          <NoCredentialBanner message={agentError} />
+        )}
+
         {messages.length === 0 ? (
           <AgentEmptyState />
         ) : (
           messages.map((msg) => <MessageBubble key={msg.id} msg={msg} />)
         )}
 
-        {/* Error banner */}
-        {agentError && (
+        {/* Generic error banner — only show when it's NOT the dedicated
+            no-credential message (which renders via NoCredentialBanner above). */}
+        {agentError && !agentError.startsWith('No AI provider configured') && (
           <div role="alert" className={styles.errorBanner}>
             {agentError}
           </div>
@@ -209,6 +221,12 @@ export const AgentPanel = memo(function AgentPanel({ variant = 'floating' }: { v
 
       {/* ── Input bar ───────────────────────────────────────────────────────── */}
       <div className={styles.inputBar}>
+        {/* Model picker lives here (instead of the header) so it stays
+            close to the message input — the typical "what should I send
+            this with" decision point. */}
+        <div className={styles.inputBarMeta}>
+          <ModelPicker />
+        </div>
         {isStreaming ? (
           <Button
             variant="destructive"

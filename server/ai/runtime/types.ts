@@ -1,0 +1,167 @@
+/**
+ * Canonical AI runtime types — the vocabulary shared by drivers, the runner,
+ * handlers, and (via NDJSON) the browser.
+ *
+ * These types are provider-agnostic. Drivers translate from their SDK's
+ * native shapes (Anthropic MessageStreamEvent, OpenAI ResponseStream,
+ * Ollama JSON) into these types so the rest of the system doesn't need to
+ * care which provider answered.
+ *
+ * Wire shape: `AiStreamEvent` is JSON-serialised one-per-line as NDJSON.
+ * Mirrors the discriminated union convention used elsewhere in the repo
+ * (e.g. `ServerStreamEvent` from `src/admin/pages/site/agent/types.ts`,
+ * which this replaces).
+ *
+ * @see docs/plans/2026-05-26-ai-runtime-rewrite.md
+ */
+
+import type { TSchema } from '@sinclair/typebox'
+
+// ---------------------------------------------------------------------------
+// Provider identity + auth modes
+// ---------------------------------------------------------------------------
+
+export type AiProviderId = 'anthropic' | 'openai' | 'ollama'
+/**
+ * Credential auth modes.
+ *
+ *   - `apiKey`   — encrypted user-supplied key (Anthropic, OpenAI).
+ *   - `baseUrl`  — OpenAI-compatible local endpoint (Ollama). Optional
+ *                  bearer token may be stored alongside the URL.
+ */
+export type AiAuthMode = 'apiKey' | 'baseUrl'
+
+// One AI surface in the admin. Each scope has its own toolset + system prompt.
+export type ToolScope = 'site' | 'content' | 'data' | 'plugin'
+
+// ---------------------------------------------------------------------------
+// Messages
+// ---------------------------------------------------------------------------
+
+export type AiContentBlock =
+  | { kind: 'text'; text: string }
+  | { kind: 'image'; mimeType: string; data: string /* base64 */ }
+  | { kind: 'toolCall'; toolCallId: string; toolName: string; input: unknown }
+
+export interface AiToolOutput {
+  ok: boolean
+  data?: unknown
+  error?: string
+}
+
+export type AiMessage =
+  | { role: 'system'; content: string }
+  | { role: 'user'; content: AiContentBlock[] }
+  | { role: 'assistant'; content: AiContentBlock[] }
+  | { role: 'tool'; toolCallId: string; output: AiToolOutput }
+
+// ---------------------------------------------------------------------------
+// Tools
+// ---------------------------------------------------------------------------
+
+/**
+ * Tool execution mode.
+ *
+ *  - `server`: runner calls `handler(input, ctx)` directly server-side; the
+ *    result feeds back into the model in the same loop.
+ *  - `browser`: runner emits `toolRequest` and awaits a `tool-result` POST
+ *    from the browser. Use for any tool that mutates an in-browser store
+ *    (the live editor) or requires DOM access (render_snapshot).
+ */
+export type ToolExecution = 'server' | 'browser'
+
+/**
+ * One tool, defined once. Drivers translate `inputSchema` (TypeBox) into
+ * their SDK's native tool format (Anthropic input_schema, OpenAI parameters
+ * JSON Schema, Ollama JSON Schema).
+ *
+ * Tools are defined as plain values (not classes) so the registry stays a
+ * simple discoverable list — see `server/ai/tools/index.ts`.
+ *
+ * Note: the handler input is typed `unknown`. Each tool internally narrows
+ * via `parseValue(InputSchema, input)` (or a cast to `Static<typeof
+ * InputSchema>` once the schema has validated the value). Generic
+ * narrowing on AiTool itself doesn't survive into an `AiTool[]` array
+ * because of TypeScript variance rules — kept simple here.
+ */
+export interface AiTool {
+  readonly name: string
+  readonly description: string
+  readonly scope: ToolScope | 'shared'
+  readonly execution: ToolExecution
+  readonly inputSchema: TSchema
+  /**
+   * Server-side handler. Required when `execution === 'server'`; ignored when
+   * `execution === 'browser'` (the browser bridge runs the tool instead).
+   */
+  handler?: (input: unknown, ctx: ToolContext) => Promise<unknown>
+}
+
+/**
+ * Context passed to server-side tool handlers. Carries the per-request
+ * snapshot (page tree, posts list, table schemas, …) the tool reads from,
+ * plus the active credential for tools that may want to call the model
+ * recursively. Per-scope tools cast `snapshot` to their own narrow type at
+ * the top of their handler — the runtime is scope-agnostic.
+ */
+export interface ToolContext {
+  readonly userId: string
+  readonly scope: ToolScope
+  readonly conversationId: string
+  readonly snapshot: unknown
+  readonly signal: AbortSignal
+}
+
+// ---------------------------------------------------------------------------
+// Stream events — wire shape (NDJSON, one event per line)
+// ---------------------------------------------------------------------------
+
+export type AiStreamEvent =
+  /** First event of every stream — carries the bridge id for tool-result POSTs. */
+  | { type: 'bridgeReady'; bridgeId: string }
+  /** Provider's session id, if any (Anthropic resume token, OpenAI thread id). */
+  | { type: 'session'; sessionId: string }
+  /** Streaming text delta from the assistant. */
+  | { type: 'text'; text: string }
+  /** A tool call has been issued by the model. `status: 'pending'` until completion. */
+  | { type: 'toolCall'; toolCallId: string; toolName: string; input: unknown; status: 'pending' }
+  /** A tool call has completed (server-resolved or browser-bridged). */
+  | { type: 'toolResult'; toolCallId: string; toolName: string; ok: boolean; error?: string }
+  /** Server asks the browser to apply a write tool against its store. */
+  | { type: 'toolRequest'; requestId: string; toolName: string; input: unknown }
+  /** Aggregated token usage for the entire stream — emitted just before `done`. */
+  | { type: 'usage'; promptTokens: number; completionTokens: number; costUsd?: number }
+  /** Terminal error — stream is about to end abnormally. */
+  | { type: 'error'; message: string }
+  /** Stream ended cleanly. */
+  | { type: 'done' }
+
+// ---------------------------------------------------------------------------
+// Browser bridge — the runtime hands one of these to each driver so write
+// tools can yield a `toolRequest` and await the browser POST.
+// ---------------------------------------------------------------------------
+
+export interface AiBrowserBridge {
+  /**
+   * Forward a `toolRequest` to the browser and resolve with whatever the
+   * browser POSTs back to /admin/api/ai/tool-result. Rejects if the stream
+   * closes before a result arrives (browser disconnected, stream aborted).
+   */
+  callBrowser(toolName: string, input: unknown): Promise<AiToolOutput>
+}
+
+// ---------------------------------------------------------------------------
+// Aggregated usage — drivers report token counts so the handler can persist
+// per-message + per-conversation totals and compute cost from pricing.ts.
+// ---------------------------------------------------------------------------
+
+export interface AiUsage {
+  promptTokens: number
+  completionTokens: number
+  /**
+   * Optional cache reads/writes (Anthropic). Drivers that don't support
+   * prompt cache leave these undefined.
+   */
+  cacheReadTokens?: number
+  cacheWriteTokens?: number
+}

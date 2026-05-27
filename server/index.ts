@@ -4,6 +4,7 @@ import { syncSystemRoles } from './repositories/roles'
 import { backfillDefaultEntryTemplates } from './repositories/data'
 import { readServerConfig } from './config'
 import { DEV_ORIGIN_ALLOWLIST, stampSocketIp } from './auth/security'
+import { startConversationPurgeTick } from './ai/boot'
 
 await import('./domEnvironment')
 const { handleServerRequest } = await import('./router')
@@ -28,6 +29,9 @@ await backfillDefaultEntryTemplates(db)
 // always the fallback for unset roles. See `mediaStorageRegistry.ts`.
 mediaStorageRegistry.configureLocalDisk({ uploadsDir: config.uploadsDir })
 await activateInstalledServerPlugins(db, config.uploadsDir)
+// AI runtime: start the nightly conversation-purge tick. Operators add
+// their own provider credentials via /admin/ai/providers on first install.
+startConversationPurgeTick(db)
 
 /**
  * Build the CORS response headers for an incoming request.

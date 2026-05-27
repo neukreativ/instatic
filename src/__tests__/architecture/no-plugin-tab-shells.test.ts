@@ -85,7 +85,7 @@ function collectAllFiles(): string[] {
 /** §T.0 — every file under the Tabs primitive directory is allowed. */
 const TABS_PRIMITIVE_DIR = join(PROJECT_ROOT, 'src/ui/components/Tabs')
 
-/** §T.1–§T.3 — pre-existing custom tablist implementations. */
+/** §T.1–§T.4 — pre-existing custom tablist implementations. */
 const EXACT_ALLOWLIST = new Set<string>([
   // §T.1 — capability-gated Button row in UsersPage predates the Tabs primitive.
   join(PROJECT_ROOT, 'src/admin/pages/users/UsersPage.tsx'),
@@ -94,6 +94,8 @@ const EXACT_ALLOWLIST = new Set<string>([
   // §T.3 — icon-only design/preview toggle; compact fixed layout incompatible
   // with the full-width underline-indicator Tabs style.
   join(PROJECT_ROOT, 'src/admin/pages/site/canvas/CanvasModeToggle.tsx'),
+  // §T.4 — AiPage uses the same capability-gated Button row pattern as UsersPage.
+  join(PROJECT_ROOT, 'src/admin/pages/ai/AiPage.tsx'),
 ])
 
 function isAllowlisted(file: string): boolean {

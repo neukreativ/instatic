@@ -15,6 +15,10 @@
  * can access their own. The avatar dropdown in the toolbar is the primary
  * entry point.
  */
+/**
+ * `'ai'` is the AI provider settings + defaults workspace. Gated by
+ * `ai.providers.manage` (or `ai.audit.read` for the read-only audit tab).
+ */
 export type AdminWorkspace =
   | 'dashboard'
   | 'site'
@@ -23,5 +27,6 @@ export type AdminWorkspace =
   | 'media'
   | 'plugins'
   | 'users'
+  | 'ai'
   | 'pluginPage'
   | 'account'

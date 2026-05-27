@@ -102,6 +102,17 @@
   padding: 12px;
   border-top: 1px solid var(--panel-border);
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Thin meta row above the textarea — currently hosts the ModelPicker so the
+   "what model is this going to" decision sits next to the input. */
+.inputBarMeta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
 }
 
 .inputForm {
@@ -296,3 +307,117 @@
   opacity: 0.70;
 }
 
+
+/* ── NoCredentialBanner ─────────────────────────────────────────────────── */
+
+.noCredentialBanner {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  margin: 0 0 8px;
+  background: var(--editor-warning-bg);
+  border: 1px solid var(--editor-warning-border);
+  border-radius: var(--editor-radius);
+  color: var(--editor-warning-text);
+}
+
+.noCredentialBannerText {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.noCredentialBannerLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--editor-warning-text);
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.noCredentialBannerLink:hover {
+  text-decoration: underline;
+}
+
+/* ── ModelPicker (trigger + inline label only — dropdown chrome comes
+   from the shared ContextMenu primitive) ─────────────────────────────── */
+
+.modelPickerButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 200px;
+}
+
+.modelPickerLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+}
+
+.modelPickerGroupHeader {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--editor-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.modelPickerProvider {
+  color: var(--editor-text-subtle);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.modelPickerTier {
+  color: var(--editor-text-subtle);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-inline-start: auto;
+}
+
+/* ── Conversation history (inline children only — dropdown chrome comes
+   from the shared ContextMenu primitive) ────────────────────────────── */
+
+.historyItemTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.historyItemMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-inline-start: auto;
+}
+
+.historyItemTime {
+  color: var(--editor-text-subtle);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.historyItemDelete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  background: transparent;
+  border: 0;
+  border-radius: var(--editor-radius-sm);
+  color: var(--editor-text-muted);
+  cursor: pointer;
+}
+
+.historyItemDelete:hover {
+  color: var(--editor-danger);
+  background: var(--editor-surface);
+}

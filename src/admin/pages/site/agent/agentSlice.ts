@@ -36,7 +36,12 @@ import type {
 import { Type } from '@core/utils/typeboxHelpers'
 import type { Page } from '@core/page-tree'
 import { executeAgentTool } from './executor'
-import { AGENT_API_PATH, AGENT_TOOL_RESULT_PATH } from './agentConfig'
+import {
+  AGENT_API_PATH,
+  AGENT_TOOL_RESULT_PATH,
+  AI_CONVERSATIONS_PATH,
+  AI_DEFAULTS_PATH,
+} from './agentConfig'
 import { safeParseJson } from '@core/utils/jsonValidate'
 import type {
   AgentActionResult,
@@ -69,18 +74,30 @@ const ServerStreamEventSchema = Type.Union([
   Type.Object({
     type: Type.Literal('toolRequest'),
     requestId: Type.String(),
-    name: Type.String(),
+    toolName: Type.String(),
     input: Type.Unknown(),
   }),
   Type.Object({
-    type: Type.Literal('toolStatus'),
+    type: Type.Literal('toolCall'),
     toolCallId: Type.String(),
-    name: Type.String(),
-    status: Type.Union([Type.Literal('pending'), Type.Literal('success'), Type.Literal('error')]),
-    input: Type.Optional(Type.Unknown()),
+    toolName: Type.String(),
+    input: Type.Unknown(),
+    status: Type.Literal('pending'),
+  }),
+  Type.Object({
+    type: Type.Literal('toolResult'),
+    toolCallId: Type.String(),
+    toolName: Type.String(),
+    ok: Type.Boolean(),
     error: Type.Optional(Type.String()),
   }),
   Type.Object({ type: Type.Literal('session'), sessionId: Type.String() }),
+  Type.Object({
+    type: Type.Literal('usage'),
+    promptTokens: Type.Number(),
+    completionTokens: Type.Number(),
+    costUsd: Type.Optional(Type.Number()),
+  }),
   Type.Object({ type: Type.Literal('done') }),
   Type.Object({ type: Type.Literal('error'), message: Type.String() }),
 ])
@@ -89,6 +106,45 @@ const ServerStreamEventSchema = Type.Union([
 // Slice interface
 // ---------------------------------------------------------------------------
 
+/**
+ * Summary view of a conversation as shown in the history popover. Wire shape
+ * mirrors `ConversationView` from `server/ai/conversations/types.ts`.
+ */
+export interface AgentConversationSummary {
+  id: string
+  title: string
+  credentialId: string | null
+  modelId: string
+  updatedAt: string
+}
+
+/**
+ * Wire shape returned by `GET /admin/api/ai/conversations/:id`. Used by
+ * `loadAgentConversation` to hydrate the visible thread when the user opens
+ * a past chat.
+ */
+interface ConversationDetailWire {
+  id: string
+  title: string
+  credentialId: string | null
+  modelId: string
+  promptTokensTotal: number
+  completionTokensTotal: number
+  costUsdTotal: number
+  createdAt: string
+  updatedAt: string
+  contextJson: string | null
+  messages: Array<{
+    id: string
+    position: number
+    role: 'user' | 'assistant' | 'tool'
+    content: Array<{ kind: 'text'; text: string } | { kind: 'image'; mimeType: string; data: string } | { kind: 'toolCall'; toolCallId: string; toolName: string; input: unknown }>
+    toolCallId: string | null
+    toolName: string | null
+    createdAt: string
+  }>
+}
+
 export interface AgentSlice {
   // ── UI state ───────────────────────────────────────────────────────────────
   isAgentOpen: boolean
@@ -96,6 +152,18 @@ export interface AgentSlice {
   agentMessages: AgentMessage[]
   agentError: string | null
   agentSessionId: string | null
+  /**
+   * Active conversation row id in `ai_conversations`. Created lazily on the
+   * first sendAgentMessage call (uses the site default credential/model);
+   * persisted across messages in this editor session. Reset by
+   * clearAgentMessages or startNewAgentConversation.
+   */
+  agentConversationId: string | null
+  /** Currently-active (credentialId, modelId) — surfaced by the model picker. */
+  agentActiveCredentialId: string | null
+  agentActiveModelId: string | null
+  /** Conversation summaries for the history popover. */
+  agentConversations: AgentConversationSummary[]
 
   // ── Actions ────────────────────────────────────────────────────────────────
   openAgent(): void
@@ -104,16 +172,45 @@ export interface AgentSlice {
 
   /**
    * Send a user message and stream the assistant response.
-   * Routes via the Vite proxy `/admin/api/agent` → local Bun server → Claude Agent SDK.
-   * No endpoint configuration required (Constraint #385).
+   * Routes via the Vite proxy `/admin/api/ai/chat/site` → local Bun server →
+   * driver resolved from the conversation's credential.
+   *
+   * Creates the conversation row on first call using the site default. If no
+   * default is configured server-side, surfaces a "set up a provider" error.
    */
   sendAgentMessage(content: string): Promise<void>
 
   /** Abort an in-progress streaming request. */
   abortAgent(): void
 
-  /** Clear all messages and reset error state. */
+  /** Clear all messages, reset error state, and forget the active conversation. */
   clearAgentMessages(): void
+
+  /** Fetch the latest conversation list (site scope) for the history popover. */
+  loadAgentConversations(): Promise<void>
+
+  /** Load an existing conversation: hydrate messages and set it as active. */
+  loadAgentConversation(id: string): Promise<void>
+
+  /**
+   * Start a brand-new conversation thread. Same as clearAgentMessages but
+   * surfaces a distinct intent: the user wants to start a new chat (the
+   * next sendAgentMessage will create a fresh conversation row).
+   */
+  startNewAgentConversation(): void
+
+  /**
+   * Soft-delete a conversation. Clears the active one if it matches.
+   */
+  deleteAgentConversation(id: string): Promise<void>
+
+  /**
+   * Change which credential + model the current conversation uses. If a
+   * conversation row exists, PUTs the change so the next send uses the new
+   * provider. If no current conversation, stages the values for the next
+   * conversation-create call.
+   */
+  setAgentProvider(credentialId: string, modelId: string): Promise<void>
 }
 
 type EditorStoreSet = Parameters<EditorStoreSliceCreator<AgentSlice>>[0]
@@ -146,6 +243,28 @@ export interface AgentTextStreamSink {
   flush(): void
 }
 
+/**
+ * Convert the legacy `AgentActionResult` (carries `success`, `nodeId`,
+ * `snapshot`) into the new `AiToolOutput` shape (`{ ok, data?, error? }`).
+ * The Phase 1 server expects the canonical shape; the executor returns the
+ * legacy shape for now to minimise blast radius. Adapter lives here.
+ */
+function toAiToolOutput(result: AgentActionResult): {
+  ok: boolean
+  data?: unknown
+  error?: string
+} {
+  if (!result.success) {
+    return { ok: false, error: result.error ?? 'Tool call failed.' }
+  }
+  // Pack the legacy ancillary fields into `data` so the driver can see them.
+  // Drivers translate `data` straight into the model's tool_result content.
+  const data: Record<string, unknown> = {}
+  if (result.nodeId !== undefined) data.nodeId = result.nodeId
+  if (result.snapshot !== undefined) data.snapshot = result.snapshot
+  return { ok: true, data }
+}
+
 async function postToolResult(
   bridgeId: string,
   requestId: string,
@@ -156,7 +275,11 @@ async function postToolResult(
     const res = await fetch(AGENT_TOOL_RESULT_PATH, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bridgeId, requestId, result }),
+      body: JSON.stringify({
+        bridgeId,
+        requestId,
+        result: toAiToolOutput(result),
+      }),
       signal: signal ?? undefined,
     })
     if (!res.ok) {
@@ -175,6 +298,127 @@ async function postToolResult(
     if (err instanceof Error && err.name === 'AbortError') return
     console.error('[AgentSlice] Failed to post tool-result:', err)
   }
+}
+
+// ---------------------------------------------------------------------------
+// Conversation bootstrap
+//
+// On first send we POST to /admin/api/ai/conversations to create a row, then
+// reuse its id for every subsequent send in this session. The conversation
+// row carries `(credentialId, modelId)`; the chat handler reads them from
+// the row.
+//
+// If no site default exists yet, conversation creation will 400 — the panel
+// renders a "no credential configured" banner in that case.
+// ---------------------------------------------------------------------------
+
+/**
+ * Translate persisted MessageRecord rows back into the in-memory AgentMessage
+ * shape (text + toolCall blocks; tool-result messages are folded back into the
+ * preceding tool-call block's `result` so the UI renders the same way fresh
+ * messages would).
+ */
+function rehydrateMessages(
+  records: ConversationDetailWire['messages'],
+): AgentMessage[] {
+  const out: AgentMessage[] = []
+  const toolCallIndex = new Map<string, AgentToolCall>() // toolCallId → block
+
+  for (const rec of records) {
+    if (rec.role === 'tool' && rec.toolCallId) {
+      // Fold into the matching tool-call block.
+      const existing = toolCallIndex.get(rec.toolCallId)
+      if (existing) {
+        const errText = rec.content
+          .filter((b): b is { kind: 'text'; text: string } => b.kind === 'text')
+          .map((b) => b.text)
+          .join(' ')
+          .trim()
+        const ok = errText === ''
+        existing.status = ok ? 'success' : 'error'
+        existing.result = { success: ok, error: ok ? undefined : errText }
+      }
+      continue
+    }
+
+    const msg: AgentMessage = {
+      id: rec.id,
+      role: rec.role === 'user' ? 'user' : 'assistant',
+      blocks: [],
+      timestamp: Date.parse(rec.createdAt) || Date.now(),
+    }
+
+    for (const block of rec.content) {
+      if (block.kind === 'text') {
+        msg.blocks.push({ kind: 'text', text: block.text })
+      } else if (block.kind === 'toolCall') {
+        const toolCall: AgentToolCall = {
+          id: nanoid(),
+          externalId: block.toolCallId,
+          actionType: block.toolName,
+          params: (block.input && typeof block.input === 'object'
+            ? (block.input as Record<string, unknown>)
+            : {}),
+          result: null,
+          status: 'pending',
+        }
+        msg.blocks.push({ kind: 'toolCall', toolCall })
+        toolCallIndex.set(block.toolCallId, toolCall)
+      }
+      // image blocks — skip in v1; could render via <img> later.
+    }
+    out.push(msg)
+  }
+
+  return out
+}
+
+interface SiteDefaultEntry {
+  credentialId: string
+  modelId: string
+}
+
+async function fetchSiteDefault(): Promise<SiteDefaultEntry | null> {
+  try {
+    const res = await fetch(AI_DEFAULTS_PATH)
+    if (!res.ok) return null
+    const body = await res.json() as { defaults?: Record<string, SiteDefaultEntry> }
+    return body.defaults?.site ?? null
+  } catch (err) {
+    console.error('[AgentSlice] Failed to fetch site default:', err)
+    return null
+  }
+}
+
+interface CreatedConversation {
+  id: string
+}
+
+async function createSiteConversation(
+  credentialId: string,
+  modelId: string,
+  contextJson: string | undefined,
+): Promise<CreatedConversation> {
+  const res = await fetch(AI_CONVERSATIONS_PATH, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      scope: 'site',
+      credentialId,
+      modelId,
+      ...(contextJson ? { contextJson } : {}),
+    }),
+  })
+  if (!res.ok) {
+    let detail = `Conversation create failed: ${res.status}`
+    try {
+      const body = await res.json() as { error?: string }
+      if (body?.error) detail = body.error
+    } catch { /* fall through */ }
+    throw new Error(detail)
+  }
+  const body = await res.json() as { conversation: CreatedConversation }
+  return body.conversation
 }
 
 // ---------------------------------------------------------------------------
@@ -251,6 +495,10 @@ export const createAgentSlice: EditorStoreSliceCreator<AgentSlice> = (set, get) 
     agentMessages: [],
     agentError: null,
     agentSessionId: null,
+    agentConversationId: null,
+    agentActiveCredentialId: null,
+    agentActiveModelId: null,
+    agentConversations: [],
 
     // ── UI actions ───────────────────────────────────────────────────────────
     openAgent() {
@@ -276,16 +524,101 @@ export const createAgentSlice: EditorStoreSliceCreator<AgentSlice> = (set, get) 
         agentMessages: [],
         agentError: null,
         agentSessionId: null,
+        agentConversationId: null,
+        agentActiveCredentialId: null,
+        agentActiveModelId: null,
       })
+    },
+
+    startNewAgentConversation() {
+      // Same shape as clearAgentMessages — kept as a separate action for
+      // intent clarity (the UI's "+ New chat" button calls this).
+      set({
+        agentMessages: [],
+        agentError: null,
+        agentSessionId: null,
+        agentConversationId: null,
+        agentActiveCredentialId: null,
+        agentActiveModelId: null,
+      })
+    },
+
+    async loadAgentConversations() {
+      try {
+        const res = await fetch(`${AI_CONVERSATIONS_PATH}?scope=site`)
+        if (!res.ok) return
+        const body = await res.json() as { conversations: AgentConversationSummary[] }
+        set({ agentConversations: body.conversations })
+      } catch (err) {
+        console.error('[AgentSlice] Failed to load conversations:', err)
+      }
+    },
+
+    async loadAgentConversation(id: string) {
+      try {
+        const res = await fetch(`${AI_CONVERSATIONS_PATH}/${encodeURIComponent(id)}`)
+        if (!res.ok) {
+          set({ agentError: 'Conversation not found.' })
+          return
+        }
+        const body = await res.json() as { conversation: ConversationDetailWire }
+        set({
+          agentConversationId: body.conversation.id,
+          agentActiveCredentialId: body.conversation.credentialId,
+          agentActiveModelId: body.conversation.modelId,
+          agentMessages: rehydrateMessages(body.conversation.messages),
+          agentError: null,
+        })
+      } catch (err) {
+        console.error('[AgentSlice] Failed to load conversation:', err)
+        set({ agentError: 'Failed to load conversation.' })
+      }
+    },
+
+    async deleteAgentConversation(id: string) {
+      try {
+        const res = await fetch(`${AI_CONVERSATIONS_PATH}/${encodeURIComponent(id)}`, {
+          method: 'DELETE',
+        })
+        if (!res.ok) return
+        set((state) => {
+          state.agentConversations = state.agentConversations.filter((c) => c.id !== id)
+          if (state.agentConversationId === id) {
+            state.agentConversationId = null
+            state.agentMessages = []
+            state.agentActiveCredentialId = null
+            state.agentActiveModelId = null
+          }
+        })
+      } catch (err) {
+        console.error('[AgentSlice] Failed to delete conversation:', err)
+      }
+    },
+
+    async setAgentProvider(credentialId: string, modelId: string) {
+      const currentId = get().agentConversationId
+      // Always reflect the picker selection locally so the dropdown's
+      // displayed value updates immediately.
+      set({ agentActiveCredentialId: credentialId, agentActiveModelId: modelId })
+      if (!currentId) return  // staged for the next conversation-create call
+      try {
+        const res = await fetch(`${AI_CONVERSATIONS_PATH}/${encodeURIComponent(currentId)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ credentialId, modelId }),
+        })
+        if (!res.ok) {
+          set({ agentError: 'Failed to update conversation provider.' })
+        }
+      } catch (err) {
+        console.error('[AgentSlice] Failed to update provider:', err)
+        set({ agentError: 'Failed to update conversation provider.' })
+      }
     },
 
     // ── sendAgentMessage ─────────────────────────────────────────────────────
     async sendAgentMessage(content) {
       if (get().isAgentStreaming) return // one request at a time
-
-      // Reuse the in-memory session id while this editor session is open.
-      // Reloading the page clears both the visible thread and the SDK session.
-      const resumeSessionId = get().agentSessionId
 
       const userMsg: AgentMessage = {
         id: nanoid(),
@@ -314,10 +647,53 @@ export const createAgentSlice: EditorStoreSliceCreator<AgentSlice> = (set, get) 
 
       try {
         const pageContext = buildCurrentPageContext(get)
+
+        // Ensure we have a conversation row before streaming. Created lazily
+        // from the staged picker values OR the site default. If neither, we
+        // surface a clear actionable error.
+        let conversationId = get().agentConversationId
+        if (!conversationId) {
+          const staged = {
+            credentialId: get().agentActiveCredentialId,
+            modelId: get().agentActiveModelId,
+          }
+          let credentialId = staged.credentialId
+          let modelId = staged.modelId
+          if (!credentialId || !modelId) {
+            const siteDefault = await fetchSiteDefault()
+            if (!siteDefault) {
+              set({
+                agentError:
+                  'No AI provider configured for the site editor. Open /admin/ai/providers to add a credential, then /admin/ai/defaults to pick one for the "site" scope.',
+              })
+              set((state) => {
+                const msg = state.agentMessages.find((m) => m.id === assistantId)
+                if (msg && msg.blocks.length === 0) {
+                  msg.blocks.push({ kind: 'text', text: '_(no AI provider configured)_' })
+                }
+              })
+              return
+            }
+            credentialId = siteDefault.credentialId
+            modelId = siteDefault.modelId
+          }
+          const conv = await createSiteConversation(
+            credentialId,
+            modelId,
+            JSON.stringify(pageContext),
+          )
+          conversationId = conv.id
+          set({
+            agentConversationId: conversationId,
+            agentActiveCredentialId: credentialId,
+            agentActiveModelId: modelId,
+          })
+        }
+
         const body: AgentRequestBody = {
+          conversationId,
           prompt: content,
-          sessionId: resumeSessionId ?? undefined,
-          pageContext,
+          snapshot: pageContext,
         }
         const res = await fetch(AGENT_API_PATH, {
           method: 'POST',
@@ -329,7 +705,7 @@ export const createAgentSlice: EditorStoreSliceCreator<AgentSlice> = (set, get) 
         if (!res.ok) {
           if (res.status === 502) {
             console.error('[AgentSlice] 502 — agent server unreachable')
-            set({ agentError: 'Agent server is not running. Start it with: bun run dev' })
+            set({ agentError: 'AI server is not running. Start it with: bun run dev' })
             set((state) => {
               const msg = state.agentMessages.find((m) => m.id === assistantId)
               if (msg && msg.blocks.length === 0) {
@@ -427,14 +803,14 @@ export async function processStreamEvent(
       // Defensive: executeAgentTool already converts caught throws into
       // `{ success: false, error }`, but if anything ever escapes (or if
       // executor evolves) we still need to ALWAYS POST a result so the
-      // server's bridge resolver fires and Claude sees a tool error rather
-      // than the loop hanging forever.
+      // server's bridge resolver fires and the driver loop sees a tool
+      // error rather than hanging forever.
       let result: AgentActionResult
       try {
-        result = await executeAgentTool(event.name, event.input)
+        result = await executeAgentTool(event.toolName, event.input)
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
-        console.error(`[AgentSlice] tool ${event.name} threw unexpectedly:`, err)
+        console.error(`[AgentSlice] tool ${event.toolName} threw unexpectedly:`, err)
         result = { success: false, error: `Browser exception: ${message}` }
       }
       if (!bridge.bridgeId) {
@@ -445,48 +821,67 @@ export async function processStreamEvent(
       break
     }
 
-    case 'toolStatus': {
-      // Drain any pending text deltas BEFORE adding/updating a tool-call
-      // block so the chronological order text → tool → text is preserved.
+    case 'toolCall': {
+      // Driver issued a tool call (status: pending). Drain any pending text
+      // deltas BEFORE adding the block so the chronological order
+      // text → tool → text is preserved.
       textSink.flush()
-
       set((state) => {
         const msg = state.agentMessages.find((m) => m.id === assistantId)
         if (!msg) return
-
         const inputAsRecord = event.input && typeof event.input === 'object'
           ? (event.input as Record<string, unknown>)
           : null
-        const newResult = event.status === 'pending'
-          ? null
-          : {
-              success: event.status === 'success',
-              error: event.status === 'error' ? event.error ?? 'Tool call failed.' : undefined,
-            }
-
         const existing = msg.blocks.find(
           (block): block is { kind: 'toolCall'; toolCall: AgentToolCall } =>
             block.kind === 'toolCall' && block.toolCall.externalId === event.toolCallId,
         )
         if (existing) {
-          existing.toolCall.status = event.status
+          // Re-emitted (e.g. Anthropic's content_block_start then _stop):
+          // refresh the input but keep the pending status.
           if (inputAsRecord) existing.toolCall.params = inputAsRecord
-          existing.toolCall.result = newResult
           return
         }
-
         msg.blocks.push({
           kind: 'toolCall',
           toolCall: {
             id: nanoid(),
             externalId: event.toolCallId,
-            actionType: event.name,
+            actionType: event.toolName,
             params: inputAsRecord ?? {},
-            result: newResult,
-            status: event.status,
+            result: null,
+            status: 'pending',
           },
         })
       })
+      break
+    }
+
+    case 'toolResult': {
+      // Paired with the preceding `toolCall` (matched by toolCallId).
+      // Flip its status to success/error + attach the result envelope so
+      // the UI can render any failure message inline with the badge.
+      textSink.flush()
+      set((state) => {
+        const msg = state.agentMessages.find((m) => m.id === assistantId)
+        if (!msg) return
+        const block = msg.blocks.find(
+          (b): b is { kind: 'toolCall'; toolCall: AgentToolCall } =>
+            b.kind === 'toolCall' && b.toolCall.externalId === event.toolCallId,
+        )
+        if (!block) return
+        block.toolCall.status = event.ok ? 'success' : 'error'
+        block.toolCall.result = {
+          success: event.ok,
+          error: event.ok ? undefined : event.error ?? 'Tool call failed.',
+        }
+      })
+      break
+    }
+
+    case 'usage': {
+      // Token + cost totals — persisted server-side automatically. Nothing
+      // to do in the UI for now (Phase 6 surfaces these in the audit page).
       break
     }
 
