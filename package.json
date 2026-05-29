@@ -8,6 +8,7 @@
     "dev:agent": "bun run dev:server",
     "dev:server": "bun --watch server/index.ts",
     "dev:vite": "vite",
+    "dev:www": "bun run scripts/dev-www.ts",
     "start": "bun run scripts/start.ts",
     "docker:up": "docker compose -f compose.prod.yml -f compose.build.yml up --build",
     "build": "tsc -b && vite build",
