@@ -9,9 +9,9 @@ The agent runs on a provider-agnostic AI runtime (`server/ai/`) that can drive a
 ## TL;DR
 
 - **Structure via HTML.** `insertHtml` and `replaceNodeHtml` accept semantic HTML strings; the browser executor calls `importHtml` (the same pipeline as the paste-HTML UI) to convert them into first-class, editable `PageNode`s.
-- **Styling via classes.** `createClass` / `updateClassStyles` / `assignClass` manage CSS classes. `<style>` blocks and `style=` attributes inside imported HTML are stripped — all styling lives on classes.
+- **Styling via classes.** `createClass` / `updateClassStyles` / `assignClass` manage CSS classes. CSS classes are the recommended way to style imported HTML. `<style>` blocks inside imported HTML are converted to Selector-panel classes; `style=` attributes land on the node's inline styles. Use the `classes` parameter in `insertHtml`/`replaceNodeHtml` to declare and bind classes atomically.
 - **25 tools total.** 8 server-side read tools (resolved from the snapshot) + 17 browser-bridged write tools.
-- **Two-endpoint bridge.** `POST /admin/api/ai/chat/site` opens an NDJSON stream. When the model calls a write tool, the server emits `toolRequest`; the browser executor applies it to the editor store and POSTs the result to `POST /admin/api/ai/tool-result`.
+- **Two-endpoint bridge.** `POST /admin/api/ai/chat/site` opens an NDJSON stream. When the model calls a write tool, the server emits `toolRequest`; the browser executor applies it to the editor store and POSTs the `AiToolOutput` result to `POST /admin/api/ai/tool-result`.
 - **Provider-agnostic.** The runtime selects a driver (Anthropic, OpenAI, Ollama) from the conversation's configured credential.
 - **Tools defined with TypeBox** (`server/ai/tools/`). Gated by `ai-tools-typebox-only.test.ts`.
 - **Capabilities.** `ai.chat` required to stream; `ai.tools.write` required for write tools. Gated by `ai-handlers-capability-gated.test.ts`.
@@ -21,6 +21,10 @@ The agent runs on a provider-agnostic AI runtime (`server/ai/`) that can drive a
 ## Where the code lives
 
 ```text
+src/core/ai/
+├── toolOutput.ts           — AiToolOutput type + AiToolOutputSchema + aiToolOk / aiToolError
+└── index.ts                — barrel re-export (canonical @core/ai import path)
+
 server/ai/
 ├── handlers/
 │   ├── chat.ts             — POST /admin/api/ai/chat/:scope  (NDJSON stream)
@@ -174,11 +178,13 @@ The handler (`server/ai/handlers/chat.ts`):
 {
   bridgeId:  string
   requestId: string
-  result:    { ok: boolean; data?: unknown; error?: string }
+  result:    AiToolOutput   // { ok: boolean; data?: unknown; error?: string } — from src/core/ai/
 }
 ```
 
 Requires `ai.tools.write`. Calls `resolveBridgeToolResult(bridgeId, requestId, result)` which resolves the pending tool waiter inside the driver loop so streaming continues. If the bridge is gone (stream already closed), returns 404 and the result is silently dropped.
+
+`AiToolOutput` is the canonical result type shared by both sides of the bridge. Constructors: `aiToolOk(data?)` and `aiToolError(message)` from `@core/ai`.
 
 ---
 
@@ -267,11 +273,12 @@ Declared classes are created (or resolved by name if they already exist) **with 
 Drivers that support prompt caching (Anthropic) apply `cache_control` to the static prefix automatically; drivers that don't concatenate the three strings. Content is intentionally static across providers — every observable behaviour comes from the tool definitions, not prompt knobs.
 
 **Static prefix** (full text in `server/ai/tools/site/systemPrompt.ts`):
-- "Structure as HTML, styling as classes": use `insertHtml` / `replaceNodeHtml` for structure; use `createClass` + class references in HTML for styling.
-- `<style>` blocks and `style=` attributes inside imported HTML are stripped and have no effect.
+- Structure as HTML (`insertHtml` / `replaceNodeHtml`); style via CSS classes via `createClass` and `class=` attributes, or the `classes` parameter in the tool call.
+- `<style>` blocks inside imported HTML become Selectors-panel classes (`.foo {}` binds to `class="foo"`). `style=` attributes land on the node's inline styles. These are applied — not stripped. The `classes` parameter is preferred for reusable styles.
 - One `insertHtml` call per logical section (nav, hero, pricing, footer = 4–6 calls); smaller chunks recover better if one fails.
 - Per-breakpoint variation: use `breakpointStyles` on classes, keyed by breakpoint ids **verbatim from the dynamic suffix** — never invent ids like `"mobile"` or `"desktop"`.
 - Page ids come from the dynamic suffix; never invent them.
+- Write-tool success data uses explicit keys: `classId` for `createClass`, `pageId` for `addPage`/`duplicatePage`, `nodeId`/`nodeIds` for `duplicateNode`, `nodeIds` for HTML inserts.
 - Reply rule: 1–2 narrating sentences only. No raw HTML/CSS/JSON in the reply.
 
 **Dynamic suffix** (built per request by `buildDynamicSuffix(snap: SiteSnapshot)`):
@@ -372,7 +379,6 @@ Conversations and their message history are persisted server-side in `ai_convers
 | Importing any provider SDK outside `server/ai/drivers/` | Drivers only. Same gate. |
 | Importing `zod` in `server/ai/tools/**` | TypeBox only. Gated by `ai-tools-typebox-only.test.ts`. |
 | Routing a write tool as a server-side read (resolving from snapshot) | Write tools are `execution: 'browser'` — they must go through the bridge. The editor store is the write authority. |
-| Putting styles inside `<style>` blocks or `style=` attributes in `insertHtml` HTML | They are stripped on import. Put styles on classes via `createClass` or the `classes` parameter. |
 | Using invented breakpoint ids in `breakpointStyles` (`"mobile"`, `"desktop"`, etc.) | Use verbatim ids from the dynamic suffix. Invalid ids are rejected by the executor. |
 | Editing nodes outside the active page | Agent mutations target the active page tree. Cross-page edits require the user to switch pages first. |
 
@@ -385,6 +391,8 @@ Conversations and their message history are persisted server-side in `ai_convers
 - `docs/server.md` — handler routing; `/admin/api/ai/` is matched before `/admin/api/cms/`
 - `docs/features/auth-and-access.md` — capability model (`ai.chat`, `ai.tools.write`)
 - Source-of-truth files:
+  - `src/core/ai/toolOutput.ts` — `AiToolOutput` type, `AiToolOutputSchema`, `aiToolOk`, `aiToolError` (canonical bridge result)
+  - `src/core/ai/index.ts` — barrel re-exporting the above
   - `server/ai/tools/site/writeTools.ts` — 17 browser-bridged write tool definitions (TypeBox schemas)
   - `server/ai/tools/site/readTools.ts` — 8 server-side read tool definitions
   - `server/ai/tools/site/systemPrompt.ts` — HTML-native system prompt

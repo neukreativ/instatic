@@ -2,7 +2,7 @@
 
 `src/core/htmlImport` converts an HTML string into a flat fragment of first-class `PageNode`s that callers splice directly into the live page tree.
 
-The module has two consumers: the paste-HTML UI (Phase 1, shipped) and the AI agent's `insertHtml` tool (Phase 2, not yet shipped). Both call the same `importHtml(source)` entry point — no duplicated mapping logic.
+The module has two consumers: the paste-HTML UI and the AI agent's `insertHtml` / `replaceNodeHtml` tools. Both call the same `importHtml(source)` entry point — no duplicated mapping logic.
 
 ---
 
@@ -195,12 +195,6 @@ The importer preserves CSS across two layers, both gated by `isEmittableProperty
 
 ---
 
-## Phase 2 (not yet shipped)
-
-The same `importHtml` importer powers the AI agent's `insertHtml` tool. The agent writes semantic HTML for structure; the importer converts it to page nodes; the existing class tools (`createClass`, `updateClassStyles`, `assignClass`) handle styling. This replaces the current `insertNode` / `insertTree` tool surface.
-
----
-
 ## Forbidden patterns
 
 | Pattern | Use instead |
@@ -215,7 +209,7 @@ The same `importHtml` importer powers the AI agent's `insertHtml` tool. The agen
 ## Related
 
 - [docs/features/modules.md](modules.md) — module definitions, `base.text`, `base.button`, `base.image`, `base.container`
-- [docs/features/agent.md](agent.md) — AI agent feature; Phase 2 will add `insertHtml` here
+- [docs/features/agent.md](agent.md) — AI agent feature; `insertHtml` and `replaceNodeHtml` run through this pipeline
 - [docs/reference/page-tree.md](../reference/page-tree.md) — `NodeTree<PageNode>`, `createNode`, `ImportFragment` shape
 - Source-of-truth files:
   - `src/core/htmlImport/index.ts` — public barrel + API documentation
