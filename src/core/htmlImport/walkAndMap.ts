@@ -16,16 +16,17 @@
  *   - Node creation uses the canonical factory so every produced node is a
  *     valid PageNode: createNode(moduleId, { ...def.defaults, ...ruleProps }).
  *   - class names from el.classList are preserved verbatim on node.classIds.
- *     This layer is registry-agnostic: it writes *names*, not ids, and does
- *     no inline-style promotion. The store action `insertImportedNodes`
- *     reconciles those names into real registry class ids (creating bare
- *     classes for unknown names) as the fragment enters the live tree.
+ *     This layer is registry-agnostic: it writes *names*, not ids. The store
+ *     action `insertImportedNodes` reconciles those names into real registry
+ *     class ids (linking to <style>-derived rules of the same name, or creating
+ *     bare classes for unknown names) as the fragment enters the live tree.
+ *   - inline `style="…"` declarations are attached to node.inlineStyles (the
+ *     editor's first-class per-node style layer), harvested before stripUnsafe.
  *
- * Consumers:
+ * Consumers (all call importHtml(source) — the single public entry point):
  *   - Paste-HTML modal (browser-side)
- *   - AI agent insertHtml tool (browser-side agent executor)
- *
- * Both consumers call importHtml(source) — the single public entry point.
+ *   - AI agent insertHtml / replaceNodeHtml tools (browser-side agent executor)
+ *   - Full-site Super Import (makeHtmlPagePlan, headless)
  */
 
 import type { PageNode } from '@core/page-tree'
@@ -34,9 +35,9 @@ import { registry } from '@core/module-engine'
 import { HTML_TO_MODULE_RULES } from './rules'
 import type { ImportRule } from './rules'
 import { parseHtml } from './parseHtml'
-import { stripUnsafe } from './stripUnsafe'
+import { stripUnsafe, collectStyleCss } from './stripUnsafe'
 import type { StripReport } from './stripUnsafe'
-import { harvestInlineBackgrounds } from './inlineStyle'
+import { harvestInlineStyles } from './inlineStyle'
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -57,6 +58,13 @@ export interface ImportFragment {
 export interface ImportResult extends ImportFragment {
   /** Counts of constructs stripped by stripUnsafe(). */
   stripped: StripReport
+  /**
+   * Raw concatenated CSS harvested from `<style>` blocks in the source. Empty
+   * when the source had none. The consumer parses it via `cssToStyleRules`
+   * (where the site's breakpoints are available) and commits the resulting
+   * rules to the global class registry / Selectors panel.
+   */
+  styleCss: string
 }
 
 // ---------------------------------------------------------------------------
@@ -72,13 +80,19 @@ const TEXT_NODE = 3
  * Mutable accumulator threaded through the recursive walk.
  *
  * - `nodes` is written as elements are mapped.
- * - `backgrounds` is the read-only harvest of inline background styles keyed by
- *   the source element (see `harvestInlineBackgrounds`), looked up per element
- *   and written onto the produced node's `inlineStyles`.
+ * - `inlineStyles` is the read-only harvest of inline `style="…"` declarations
+ *   keyed by the source element (see `harvestInlineStyles`), looked up per
+ *   element and written onto the produced node's `inlineStyles`.
  */
 interface WalkContext {
   nodes: Record<string, PageNode>
-  backgrounds: Map<Element, Record<string, string>>
+  inlineStyles: Map<Element, Record<string, string>>
+  /**
+   * True inside a `<pre>` subtree, where whitespace (incl. newlines) is
+   * significant and must be preserved verbatim. Outside, whitespace is
+   * collapsed the way normal HTML flow renders it.
+   */
+  preserveWs: boolean
 }
 
 /**
@@ -91,15 +105,6 @@ function matchRule(el: Element): ImportRule {
   }
   // Unreachable: the catch-all '*' rule always matches every element.
   return HTML_TO_MODULE_RULES[HTML_TO_MODULE_RULES.length - 1]!
-}
-
-/**
- * Collapse internal whitespace runs to single spaces and trim the ends. A
- * text node that is only whitespace (indentation/newlines between tags)
- * collapses to '' and is skipped by the caller — it carries no content.
- */
-function normalizeText(raw: string): string {
-  return raw.replace(/\s+/g, ' ').trim()
 }
 
 /**
@@ -126,14 +131,69 @@ function createTextNode(text: string, ctx: WalkContext): string {
  * Mutually recursive with processElement (function declarations are hoisted,
  * so definition order doesn't matter).
  */
+type ChildItem = { kind: 'el'; el: Element } | { kind: 'text'; text: string }
+
 function mapChildNodes(parent: Element, ctx: WalkContext): string[] {
-  const childIds: string[] = []
+  // Inside <pre>: whitespace and newlines are significant — keep every text
+  // node verbatim so terminal/code blocks retain their line structure (the
+  // `white-space: pre` class then renders the newlines).
+  if (ctx.preserveWs) {
+    const ids: string[] = []
+    for (const child of Array.from(parent.childNodes)) {
+      if (child.nodeType === ELEMENT_NODE) {
+        ids.push(processElement(child as Element, ctx))
+      } else if (child.nodeType === TEXT_NODE) {
+        const raw = child.textContent ?? ''
+        if (raw.length > 0) ids.push(createTextNode(raw, ctx))
+      }
+    }
+    return ids
+  }
+
+  // Normal flow: collapse whitespace the way the browser renders it.
+  //   - runs of whitespace → a single space,
+  //   - a whitespace-only node containing a newline = pretty-print indentation
+  //     between block elements → dropped,
+  //   - a whitespace-only node WITHOUT a newline = a significant inline space
+  //     (e.g. `</span> <span>`) → kept as one space,
+  //   - leading/trailing space at the block's edges is insignificant → trimmed.
+  // This keeps inline spacing intact (`Bold <strong>word</strong> here` →
+  // "Bold word here") while not surfacing stray indentation in text fields.
+  const items: ChildItem[] = []
   for (const child of Array.from(parent.childNodes)) {
     if (child.nodeType === ELEMENT_NODE) {
-      childIds.push(processElement(child as Element, ctx))
+      items.push({ kind: 'el', el: child as Element })
     } else if (child.nodeType === TEXT_NODE) {
-      const text = normalizeText(child.textContent ?? '')
-      if (text) childIds.push(createTextNode(text, ctx))
+      const raw = child.textContent ?? ''
+      if (/^\s*$/.test(raw)) {
+        if (/[\n\r]/.test(raw)) continue // indentation between block tags
+        items.push({ kind: 'text', text: ' ' }) // significant inline space
+      } else {
+        items.push({ kind: 'text', text: raw.replace(/\s+/g, ' ') })
+      }
+    }
+  }
+
+  // Trim the block's leading/trailing edge whitespace.
+  const firstIdx = items.findIndex((i) => i.kind === 'text')
+  if (firstIdx !== -1) {
+    const it = items[firstIdx] as { kind: 'text'; text: string }
+    items[firstIdx] = { kind: 'text', text: it.text.replace(/^\s+/, '') }
+  }
+  for (let i = items.length - 1; i >= 0; i--) {
+    if (items[i].kind === 'text') {
+      const it = items[i] as { kind: 'text'; text: string }
+      items[i] = { kind: 'text', text: it.text.replace(/\s+$/, '') }
+      break
+    }
+  }
+
+  const childIds: string[] = []
+  for (const it of items) {
+    if (it.kind === 'el') {
+      childIds.push(processElement(it.el, ctx))
+    } else if (it.text.length > 0) {
+      childIds.push(createTextNode(it.text, ctx))
     }
   }
   return childIds
@@ -161,18 +221,25 @@ function processElement(el: Element, ctx: WalkContext): string {
   // auto-creates bare classes for unknown names) when the fragment is inserted.
   node.classIds = Array.from(el.classList)
 
-  // Attach the element's inline background image (harvested before stripUnsafe
-  // removed the `style` attribute) as the node's inline styles — the editor's
-  // first-class per-node `style=""` layer.
-  const bg = ctx.backgrounds.get(el)
-  if (bg) node.inlineStyles = bg
+  // Attach the element's inline `style="…"` declarations (harvested before
+  // stripUnsafe removed the `style` attribute) as the node's inline styles —
+  // the editor's first-class per-node `style=""` layer.
+  const inline = ctx.inlineStyles.get(el)
+  if (inline) node.inlineStyles = inline
 
-  if (rule.recurse) {
+  const shouldRecurse =
+    typeof rule.recurse === 'function' ? rule.recurse(el) : Boolean(rule.recurse)
+  if (shouldRecurse) {
     // Walk childNodes (not just children) so direct text is preserved in
     // document order. Without this, `<div class="num">98%</div>` and
     // `<li>Buy milk</li>` import as empty containers because their text
     // content isn't an element.
-    node.children = mapChildNodes(el, ctx)
+    // Entering a <pre> switches the subtree to whitespace-preserving mode.
+    const childCtx =
+      ctx.preserveWs || el.tagName.toLowerCase() === 'pre'
+        ? { ...ctx, preserveWs: true }
+        : ctx
+    node.children = mapChildNodes(el, childCtx)
   }
 
   ctx.nodes[node.id] = node
@@ -194,9 +261,9 @@ function processElement(el: Element, ctx: WalkContext): string {
  */
 export function walkAndMap(
   doc: Document,
-  backgrounds: Map<Element, Record<string, string>> = new Map(),
+  inlineStyles: Map<Element, Record<string, string>> = new Map(),
 ): ImportFragment {
-  const ctx: WalkContext = { nodes: {}, backgrounds }
+  const ctx: WalkContext = { nodes: {}, inlineStyles, preserveWs: false }
 
   if (!doc.body) return { nodes: ctx.nodes, rootIds: [] }
 
@@ -206,23 +273,27 @@ export function walkAndMap(
 }
 
 /**
- * The single entry point for both consumers: parse → strip → walk.
+ * The single entry point for every consumer: parse → harvest → strip → walk.
  *
  * 1. parseHtml  — DOMParser.parseFromString (global, browser or test polyfill)
- * 2. harvestInlineBackgrounds — capture each element's inline background image
- *    BEFORE step 3 removes the `style` attribute
- * 3. stripUnsafe — removes <script>, <style>, inline event handlers, style=""
- * 4. walkAndMap  — maps every element to a PageNode via HTML_TO_MODULE_RULES,
- *    attaching the harvested background to its node's `inlineStyles`
+ * 2. harvestInlineStyles — capture each element's inline `style="…"` bag, and
+ *    collectStyleCss — capture every `<style>` block's CSS, BOTH before step 4
+ *    removes the `style` attribute and the `<style>` elements
+ * 3. (within walkAndMap) attach the harvested inline bag to each node
+ * 4. stripUnsafe — removes <script>, <style>, inline event handlers, style=""
+ * 5. walkAndMap  — maps every element to a PageNode via HTML_TO_MODULE_RULES,
+ *    attaching the harvested inline styles to its node's `inlineStyles`
  *
- * Returns an ImportResult that merges the fragment with the StripReport so
- * callers can surface a "Stripped: N scripts, M handlers" toast.
+ * Returns an ImportResult that merges the fragment with the StripReport and the
+ * raw `<style>` CSS, so callers can parse the CSS into registry rules and
+ * surface a "Stripped: N scripts, M handlers" toast.
  */
 export function importHtml(source: string): ImportResult {
   const doc = parseHtml(source)
-  // Harvest inline background images before stripUnsafe drops `style` attrs.
-  const backgrounds = harvestInlineBackgrounds(doc)
+  // Harvest inline styles + <style> CSS before stripUnsafe drops them.
+  const inlineStyles = harvestInlineStyles(doc)
+  const styleCss = collectStyleCss(doc)
   const stripped = stripUnsafe(doc)
-  const fragment = walkAndMap(doc, backgrounds)
-  return { ...fragment, stripped }
+  const fragment = walkAndMap(doc, inlineStyles)
+  return { ...fragment, stripped, styleCss }
 }

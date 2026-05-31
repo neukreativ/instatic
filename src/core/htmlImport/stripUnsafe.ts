@@ -1,23 +1,39 @@
 /**
- * Strip dangerous / out-of-scope constructs from a parsed HTML Document,
- * mutating it in place.
+ * Strip dangerous constructs from a parsed HTML Document, mutating it in place,
+ * and collect the CSS that the importer re-homes instead of dropping.
  *
- * What is stripped:
+ * What is stripped (and counted in StripReport):
  *   - <script> elements               → counted as `scripts`
- *   - <style> elements                → counted as `styles`
  *   - Inline event-handler attributes → counted as `inlineHandlers`
  *     (any attribute whose name begins with "on", e.g. onclick, onload)
- *   - Inline style="…" attributes    → counted as `inlineStyles`
- *   - HTML comments and processing instructions (no count — silently removed)
  *
- * CSS is entirely out of scope. No CSS is parsed or preserved.
+ * What is removed from the DOM but NOT dropped from the import:
+ *   - <style> elements   → their CSS is harvested by `collectStyleCss` (parsed
+ *     into editor StyleRules / Selectors-panel entries by the consumer).
+ *   - Inline style="…"   → harvested by `harvestInlineStyles` into the node's
+ *     first-class `inlineStyles` bag before this removal runs.
+ *
+ * HTML comments and processing instructions are removed silently.
  */
 
 export interface StripReport {
   scripts: number
-  styles: number
   inlineHandlers: number
-  inlineStyles: number
+}
+
+/**
+ * Concatenate the text content of every `<style>` element in `doc`. Call this
+ * BEFORE `stripUnsafe` removes the `<style>` elements. Empty/whitespace-only
+ * blocks are skipped. The consumer parses the result via `cssToStyleRules` so
+ * the rules land in the global class registry / Selectors panel.
+ */
+export function collectStyleCss(doc: Document): string {
+  const parts: string[] = []
+  for (const el of Array.from(doc.querySelectorAll('style'))) {
+    const css = el.textContent ?? ''
+    if (css.trim().length > 0) parts.push(css)
+  }
+  return parts.join('\n')
 }
 
 /**
@@ -44,12 +60,13 @@ function removeCommentsAndPIs(node: Node): void {
 }
 
 /**
- * Strip unsafe constructs from `doc` in place and return counts of what
- * was removed. The caller (importHtml) surfaces these counts in a toast so
- * the user knows what was dropped.
+ * Strip unsafe constructs from `doc` in place and return counts of what was
+ * removed. `<style>` elements and inline `style` attributes are removed too,
+ * but their CSS is harvested beforehand (see `collectStyleCss` /
+ * `harvestInlineStyles`) so it is preserved, not dropped.
  */
 export function stripUnsafe(doc: Document): StripReport {
-  const report: StripReport = { scripts: 0, styles: 0, inlineHandlers: 0, inlineStyles: 0 }
+  const report: StripReport = { scripts: 0, inlineHandlers: 0 }
 
   // Remove <script> elements first so their content cannot be accessed.
   for (const el of Array.from(doc.querySelectorAll('script'))) {
@@ -57,13 +74,13 @@ export function stripUnsafe(doc: Document): StripReport {
     report.scripts++
   }
 
-  // Remove <style> elements — CSS is out of scope for the importer.
+  // Remove <style> elements — their CSS was already harvested by collectStyleCss.
   for (const el of Array.from(doc.querySelectorAll('style'))) {
     el.remove()
-    report.styles++
   }
 
-  // Strip dangerous attributes from every remaining element.
+  // Strip event-handler attributes (counted) and the now-harvested inline
+  // `style` attribute (not counted — its declarations live on node.inlineStyles).
   // Collect attribute names before removing to avoid NamedNodeMap mutation
   // issues while iterating.
   for (const el of Array.from(doc.querySelectorAll('*'))) {
@@ -74,7 +91,6 @@ export function stripUnsafe(doc: Document): StripReport {
         report.inlineHandlers++
       } else if (attr.name === 'style') {
         toRemove.push(attr.name)
-        report.inlineStyles++
       }
     }
     for (const name of toRemove) {

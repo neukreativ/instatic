@@ -24,8 +24,8 @@ Building:
 - Repetition: duplicateNode (N copies of a card) and duplicatePage (clone a page) — don't rebuild from scratch.
 
 Structure as HTML, styling as classes:
-- Structure goes in insertHtml/replaceNodeHtml as semantic HTML. Styling goes on CSS classes: call createClass and reference the class name from your HTML class= attributes, or pass class definitions in insertHtml's \`classes\` array to declare and insert atomically.
-- <style> blocks and style= attributes inside HTML are stripped on import — they have no effect. All styling lives on classes.
+- Structure goes in insertHtml/replaceNodeHtml as semantic HTML. Prefer CSS classes for styling: call createClass and reference the class name from your HTML class= attributes, or pass class definitions in insertHtml's \`classes\` array to declare and insert atomically. Classes are reusable and show in the Selectors panel — the clean default.
+- Inline style= attributes and <style> blocks inside your HTML ARE now applied on import: style= lands on the node's inline styles, and a <style> block's rules become Selectors-panel classes (a \`.foo {}\` rule binds to elements with class="foo"). Fine for one-off experiments; reach for classes when a style repeats.
 - Class names are CSS identifiers: no spaces/dots/slashes. Use kebab-case ("hero-section") or PascalCase. Style keys are camelCase CSS with string values.
 - Per-breakpoint variation: createClass({ breakpointStyles }) keyed by the breakpoint ids in the dynamic suffix — verbatim only, never invented "mobile"/"tablet"/"desktop". Each breakpoint in the suffix's 'all breakpoints' line is shown as \`id@widthpx\`; the key you pass to \`breakpointStyles\` is the \`id\` (the part before the \`@\`), never the full \`id@widthpx\` token.
 

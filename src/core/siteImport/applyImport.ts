@@ -29,6 +29,8 @@ import { classifyFiles } from './classifyFiles'
 import { makeHtmlPagePlan } from './htmlPagePlan'
 import { buildAssetPlan, type CssFileResult } from './assetPlan'
 import { scopeCollidingClasses } from './scopeClasses'
+import { rewriteInternalLinks } from './linkRewrite'
+import { nanoid } from 'nanoid'
 import { applyAssetRewrites } from './applyAssetRewrites'
 import { detectConflicts } from './conflicts'
 import type {
@@ -84,13 +86,16 @@ export function buildImportPlan({ fileMap, currentSite, options }: BuildImportPl
 
   const rawPagePlans = []
   const allLinkedCssPaths = new Set<string>()
+  // Per-page CSS harvested from `<style>` blocks, keyed by pagePlan.source.
+  const inlineCssByPage = new Map<string, string>()
 
   for (const f of classified) {
     if (f.role !== 'html') continue
     const htmlSource = decodeUtf8(f.bytes)
-    const { pagePlan, warnings: pageWarnings } = makeHtmlPagePlan(f.path, htmlSource, fileMap)
+    const { pagePlan, warnings: pageWarnings, inlineCss } = makeHtmlPagePlan(f.path, htmlSource, fileMap)
     warnings.push(...pageWarnings)
     rawPagePlans.push(pagePlan)
+    if (inlineCss.trim().length > 0) inlineCssByPage.set(pagePlan.source, inlineCss)
     for (const cssPath of pagePlan.linkedCssPaths) allLinkedCssPaths.add(cssPath)
   }
 
@@ -132,6 +137,33 @@ export function buildImportPlan({ fileMap, currentSite, options }: BuildImportPl
     }
 
     cssFileResults.push({ cssPath: f.path, rules: rulesAfterColors, assetRefs, fontFaces })
+  }
+
+  // 4a-inline. Fold each page's `<style>` CSS in as a synthetic per-page source.
+  //   The synthetic cssPath `<htmlPath>::inline` keeps `url(...)` resolution
+  //   relative to the HTML file's directory (dirname() drops the suffix) and is
+  //   appended LAST to the page's linked paths so an inline `<style>` wins the
+  //   cascade over external sheets for a shared class name. Routed through the
+  //   exact same parse → colour-token → scope → asset → conflict pipeline.
+  for (const plan of rawPagePlans) {
+    const inlineCss = inlineCssByPage.get(plan.source)
+    if (!inlineCss) continue
+    const syntheticPath = `${plan.source}::inline`
+    const { rules, warnings: cssWarnings, assetRefs, conditions: cssConditions, fontFaces } =
+      cssToStyleRules(inlineCss, { breakpoints: breakpointHints, mediaTolerance })
+    warnings.push(...cssWarnings)
+    for (const def of cssConditions) {
+      if (!conditionsById.has(def.id)) conditionsById.set(def.id, def)
+    }
+    for (const w of cssWarnings) {
+      if (w.kind === 'dropped-at-rule' && w.source) droppedAtRules.push(w.source)
+    }
+    const { rules: rulesAfterColors, colorTokens } = extractRootColorTokens(rules)
+    for (const token of colorTokens) {
+      if (!colorsBySlug.has(token.slug)) colorsBySlug.set(token.slug, token)
+    }
+    cssFileResults.push({ cssPath: syntheticPath, rules: rulesAfterColors, assetRefs, fontFaces })
+    plan.linkedCssPaths = [...plan.linkedCssPaths, syntheticPath]
   }
 
   // 4b. Scope class names that are defined differently across stylesheets.
@@ -251,6 +283,23 @@ export async function commitImportPlan(
     rewrittenPlan.conflicts.rules.map((c) => [c.desiredName, c]),
   )
 
+  // Pre-mint a stable page id for every page we're about to commit, keyed by
+  // its source FileMap path. Overwritten pages reuse the existing id; added
+  // pages get a fresh one. This lets `rewriteInternalLinks` turn intra-site
+  // `<a href="club.html">` links into `cms:page:<id>` references BEFORE the
+  // pages are committed, so they survive future slug renames. The same id is
+  // then passed to `tx.addPage` so the ref resolves to the real page.
+  const pageIdBySource = new Map<string, string>()
+  for (const page of rewrittenPlan.pages) {
+    const conflict = pageConflictsBySource.get(page.source)
+    const resolution = conflict?.defaultResolution
+    if (resolution?.action === 'skip') continue
+    const id =
+      resolution?.action === 'overwrite' && conflict ? conflict.existingPageId : nanoid()
+    pageIdBySource.set(page.source, id)
+  }
+  const linkedPages = rewriteInternalLinks(rewrittenPlan.pages, pageIdBySource)
+
   await adapter.commit((tx) => {
     // Merge reusable conditions first so rule contextStyles keys resolve.
     if ((rewrittenPlan.conditions ?? []).length > 0) {
@@ -301,12 +350,15 @@ export async function commitImportPlan(
       resultRules.push({ id, selector: rule.selector, kind: rule.kind })
     }
 
-    // Commit pages
-    for (const page of rewrittenPlan.pages) {
+    // Commit pages (with internal links already rewritten to page refs).
+    for (const page of linkedPages) {
       const conflict = pageConflictsBySource.get(page.source)
       const resolution = conflict?.defaultResolution
 
       if (resolution?.action === 'skip') continue
+
+      // The pre-minted id this page's links were rewritten against.
+      const mintedId = pageIdBySource.get(page.source)
 
       let id: string
       if (resolution?.action === 'overwrite' && conflict) {
@@ -318,6 +370,7 @@ export async function commitImportPlan(
         id = conflict.existingPageId
       } else {
         id = tx.addPage({
+          id: mintedId,
           title: page.title,
           slug: resolution?.resolvedSlug ?? page.slug,
           nodeFragment: page.nodeFragment,

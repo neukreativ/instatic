@@ -79,13 +79,26 @@ describe('base.text — headings h1-h6', () => {
     expect(singleProps('<h6>Tiny heading</h6>').tag).toBe('h6')
   })
 
-  it('heading with nested markup — textContent is flattened', () => {
-    const node = single('<h2>Bold <strong>word</strong> here</h2>')
-    expect(node.moduleId).toBe('base.text')
-    expect(node.props.tag).toBe('h2')
-    // textContent includes all descendant text
-    expect(String(node.props.text)).toContain('Bold')
-    expect(String(node.props.text)).toContain('word')
+  it('heading with nested markup recurses, preserving the inline structure + spacing', () => {
+    // A heading that wraps element children (e.g. <strong>, <br>) becomes a
+    // container so the nested markup survives instead of being flattened into
+    // one merged string. The inline space around the <strong> is preserved.
+    const result = single('<h2>Bold <strong>word</strong> here</h2>')
+    expect(result.moduleId).toBe('base.container')
+    expect(result.props.customTag).toBe('h2')
+  })
+
+  it('heading nested markup — child text keeps the spaces around inline elements', () => {
+    const result = importHtml('<h2>Bold <strong>word</strong> here</h2>')
+    const h2 = result.nodes[result.rootIds[0]!]!
+    const texts = h2.children
+      .map((id) => result.nodes[id]!)
+      .filter((n) => n.moduleId === 'base.text')
+      .map((n) => n.props.text)
+    // "Bold " (trailing space kept) and " here" (leading space kept) so the
+    // rendered heading reads "Bold word here", not "Boldwordhere".
+    expect(texts).toContain('Bold ')
+    expect(texts).toContain(' here')
   })
 })
 
@@ -612,7 +625,8 @@ describe('catch-all guarantee — exotic / unknown tags', () => {
 })
 
 // ---------------------------------------------------------------------------
-// 9. Strip safety — <script>, <style>, inline event handlers, inline style=""
+// 9. Strip safety — <script> + inline event handlers dropped; <style> CSS
+//    harvested to styleCss; inline style="" preserved on node.inlineStyles
 // ---------------------------------------------------------------------------
 
 describe('stripUnsafe — <script> elements', () => {
@@ -632,18 +646,25 @@ describe('stripUnsafe — <script> elements', () => {
   })
 })
 
-describe('stripUnsafe — <style> elements', () => {
-  it('<style> is stripped and stripped.styles incremented', () => {
+describe('collectStyleCss — <style> elements', () => {
+  it('<style> CSS is harvested into result.styleCss (not dropped)', () => {
     const result = imported('<style>body { color: red; }</style><p>Text</p>')
-    expect(result.stripped.styles).toBe(1)
+    expect(result.styleCss).toContain('color: red')
+    // The <style> element itself is removed from the node tree.
     expect(result.rootIds).toHaveLength(1)
     expect(result.nodes[result.rootIds[0]!]!.moduleId).toBe('base.text')
   })
 
-  it('multiple <style> tags are all stripped and counted', () => {
-    const result = imported('<style>.a{}</style><style>.b{}</style><h1>Title</h1>')
-    expect(result.stripped.styles).toBe(2)
+  it('multiple <style> tags are concatenated into styleCss', () => {
+    const result = imported('<style>.a{color:red}</style><style>.b{color:blue}</style><h1>Title</h1>')
+    expect(result.styleCss).toContain('.a')
+    expect(result.styleCss).toContain('.b')
     expect(result.rootIds).toHaveLength(1)
+  })
+
+  it('styleCss is empty when the source has no <style> blocks', () => {
+    const result = imported('<p>No styles here</p>')
+    expect(result.styleCss).toBe('')
   })
 })
 
@@ -670,45 +691,32 @@ describe('stripUnsafe — inline event handlers (on*)', () => {
   })
 })
 
-describe('stripUnsafe — inline style="" attributes', () => {
-  it('style="" on an element → stripped.inlineStyles incremented', () => {
-    const result = imported('<div style="color:red;font-size:12px"></div>')
-    expect(result.stripped.inlineStyles).toBe(1)
-    // The div node still exists
-    expect(result.rootIds).toHaveLength(1)
-  })
-
-  it('style on a leaf element (p) is stripped', () => {
-    const result = imported('<p style="margin:0">Content</p>')
-    expect(result.stripped.inlineStyles).toBe(1)
-    // The p still produces a base.text node
-    expect(result.nodes[result.rootIds[0]!]!.moduleId).toBe('base.text')
-  })
-
-  it('style on multiple elements are all counted', () => {
-    const result = imported('<p style="a:b">One</p><p style="c:d">Two</p>')
-    expect(result.stripped.inlineStyles).toBe(2)
-  })
-})
-
 // ---------------------------------------------------------------------------
-// Inline background-image harvesting (the one inline-CSS exception)
+// Inline style="" → node.inlineStyles (preserved, security-gated)
 // ---------------------------------------------------------------------------
 
-describe('inline background images → node.inlineStyles', () => {
-  it('captures background-image longhand onto the matching node', () => {
+describe('inline style="" → node.inlineStyles', () => {
+  it('preserves every declaration as a camelCase bag on the node', () => {
+    const node = single('<div style="color:red;font-size:12px"></div>')
+    expect(node.inlineStyles?.color).toBe('red')
+    expect(node.inlineStyles?.fontSize).toBe('12px')
+  })
+
+  it('preserves inline styles on a leaf element (p) too', () => {
+    const node = single('<p style="margin:0">Content</p>')
+    expect(node.moduleId).toBe('base.text')
+    // The `margin` shorthand expands to longhands in the CSSOM enumeration.
+    expect(node.inlineStyles?.marginTop).toBe('0px')
+  })
+
+  it('captures background-image alongside other declarations', () => {
     const node = single(`<div style="background-image: url('img/bg.png'); padding: 20px">Hi</div>`)
     expect(node.inlineStyles?.backgroundImage).toContain('img/bg.png')
-    // The non-background inline declaration (padding) is NOT captured.
-    expect(node.inlineStyles).not.toHaveProperty('padding')
+    // Non-background declarations are now preserved too (full inline styles).
+    expect(node.inlineStyles?.paddingTop).toBe('20px')
   })
 
-  it('still reports the raw inline style attribute as stripped', () => {
-    const result = importHtml(`<div style="background-image: url('img/bg.png')">Hi</div>`)
-    expect(result.stripped.inlineStyles).toBe(1)
-  })
-
-  it('captures the url() and companions from a background shorthand', () => {
+  it('canonicalises a url() from a background shorthand', () => {
     const node = single(
       `<section style="background: url(hero.jpg) no-repeat center / cover">x</section>`,
     )
@@ -716,19 +724,21 @@ describe('inline background images → node.inlineStyles', () => {
     expect(node.inlineStyles?.backgroundRepeat).toBe('no-repeat')
   })
 
-  it('does NOT capture a colour-only background (no url image)', () => {
+  it('captures a colour-only background (now in scope)', () => {
     const node = single(`<div style="background: #fff; color: red">x</div>`)
-    expect(node.inlineStyles).toBeUndefined()
+    expect(node.inlineStyles?.color).toBe('red')
+    // The background shorthand (or its expanded longhands) is retained.
+    expect(Object.keys(node.inlineStyles ?? {}).length).toBeGreaterThan(0)
   })
 
-  it('leaves nodes without an inline background image free of inlineStyles', () => {
+  it('leaves nodes without inline styles free of inlineStyles', () => {
     const result = importHtml('<div><p>Plain</p></div>')
     for (const node of Object.values(result.nodes)) {
       expect(node.inlineStyles).toBeUndefined()
     }
   })
 
-  it('attaches each captured background to its own node', () => {
+  it('attaches each element’s inline styles to its own node', () => {
     const result = importHtml(
       `<div style="background-image:url(a.png)"></div><div style="background-image:url(b.png)"></div>`,
     )
@@ -922,11 +932,13 @@ describe('direct text in containers → synthesized base.text', () => {
 
     const [first, second, third] = divNode.children.map((id) => result.nodes[id]!)
     expect(first.moduleId).toBe('base.text')
-    expect(first.props.text).toBe('Intro')
+    // The space between "Intro" and the inline <a> is significant and kept, so
+    // the rendered output reads "Intro link outro" rather than "Introlinkoutro".
+    expect(first.props.text).toBe('Intro ')
     expect(second.moduleId).toBe('base.link')
     expect(second.props.href).toBe('/x')
     expect(third.moduleId).toBe('base.text')
-    expect(third.props.text).toBe('outro')
+    expect(third.props.text).toBe(' outro')
   })
 
   it('whitespace-only text between elements is ignored (no spurious text nodes)', () => {
@@ -1016,11 +1028,10 @@ describe('edge cases', () => {
     expect(result.rootIds).toHaveLength(0)
   })
 
-  it('stripped.scripts + stripped.styles start at 0 when none are present', () => {
+  it('stripped counts start at 0 and styleCss is empty when nothing is present', () => {
     const result = importHtml('<p>Clean</p>')
     expect(result.stripped.scripts).toBe(0)
-    expect(result.stripped.styles).toBe(0)
     expect(result.stripped.inlineHandlers).toBe(0)
-    expect(result.stripped.inlineStyles).toBe(0)
+    expect(result.styleCss).toBe('')
   })
 })

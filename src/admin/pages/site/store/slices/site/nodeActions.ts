@@ -33,7 +33,7 @@ import {
 import type { NodeTree, PageNode, SiteDocument } from '@core/page-tree'
 import { wouldCreateCycle, syncSlotInstances, applySlotSyncResult } from '@core/visualComponents'
 import { depthInTree } from './helpers'
-import { indexStyleRulesByName, linkImportedClassNames } from './importLinking'
+import { indexStyleRulesByName, linkImportedClassNames, mergeImportedStyleRules } from './importLinking'
 import type { SiteSlice, SiteSliceHelpers } from './types'
 
 export type NodeActions = Pick<
@@ -129,7 +129,7 @@ export function createNodeActions(helpers: SiteSliceHelpers): NodeActions {
       return newNode.id
     },
 
-    insertImportedNodes: (parentId, fragment, index) => {
+    insertImportedNodes: (parentId, fragment, opts) => {
       if (fragment.rootIds.length === 0) return []
       const insertedRootIds: string[] = []
       mutateActiveTreeAndSite((tree, site) => {
@@ -150,9 +150,29 @@ export function createNodeActions(helpers: SiteSliceHelpers): NodeActions {
         // Nodes already carry fresh nanoid IDs from createNode — no collision
         // risk on the node map.
         const classesByName = indexStyleRulesByName(site.styleRules)
+
+        // Commit rules parsed from <style> blocks BEFORE linking class names so
+        // a node's `class="foo"` token binds to the just-added `.foo {}` rule
+        // (rather than auto-creating a bare class). These show in the Selectors
+        // panel like any other rule.
+        if (opts?.styleRules?.length) {
+          mergeImportedStyleRules(opts.styleRules, site.styleRules, classesByName)
+        }
+        // Register any reusable conditions (custom @media / @container /
+        // @supports) the <style> rules reference via contextStyles keys.
+        if (opts?.conditions?.length) {
+          if (!site.conditions) site.conditions = []
+          const existing = new Set(site.conditions.map((c) => c.id))
+          for (const def of opts.conditions) {
+            if (existing.has(def.id)) continue
+            existing.add(def.id)
+            site.conditions.push(def)
+          }
+        }
+
         for (const [id, node] of Object.entries(fragment.nodes)) {
-          // `node.inlineStyles` (e.g. an imported inline background) rides
-          // along on the `...node` spread — it is a first-class node field.
+          // `node.inlineStyles` (imported inline `style="…"`) rides along on
+          // the `...node` spread — it is a first-class node field.
           tree.nodes[id] = {
             ...node,
             classIds: linkImportedClassNames(node.classIds, site.styleRules, classesByName),
@@ -160,7 +180,7 @@ export function createNodeActions(helpers: SiteSliceHelpers): NodeActions {
         }
 
         // Wire the imported root nodes as children of the target parent.
-        const insertAt = index ?? parent.children.length
+        const insertAt = opts?.index ?? parent.children.length
         parent.children.splice(insertAt, 0, ...fragment.rootIds)
         insertedRootIds.push(...fragment.rootIds)
         return true

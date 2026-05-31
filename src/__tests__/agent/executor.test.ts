@@ -939,6 +939,63 @@ describe('executeAgentTool — insertHtml unsafe HTML stripping (Constraint #299
 })
 
 // ---------------------------------------------------------------------------
+// insertHtml — inline style="" and <style> blocks are now applied on import
+// ---------------------------------------------------------------------------
+
+describe('executeAgentTool — insertHtml inline styles + <style> blocks', () => {
+  it('preserves inline style="" onto the node inlineStyles bag', async () => {
+    const { rootId } = freshStore()
+    const result = await executeAgentTool('insertHtml', {
+      parentId: rootId,
+      html: '<section style="padding:40px;color:rebeccapurple"><h1>Hi</h1></section>',
+    })
+    expect(result.success).toBe(true)
+
+    const page = useEditorStore.getState().site!.pages[0]
+    const sectionNode = page.nodes[result.nodeIds![0]]
+    expect(sectionNode.inlineStyles?.color).toBe('rebeccapurple')
+    // The `padding` shorthand expands to longhands in the CSSOM enumeration.
+    expect(sectionNode.inlineStyles?.paddingTop).toBe('40px')
+  })
+
+  it('parses a <style> block into a registry class and binds it to a matching class= token', async () => {
+    const { rootId } = freshStore()
+    const result = await executeAgentTool('insertHtml', {
+      parentId: rootId,
+      html: '<style>.promo { color: tomato; font-weight: 700; }</style><div class="promo">Sale</div>',
+    })
+    expect(result.success).toBe(true)
+
+    const site = useEditorStore.getState().site!
+    // The .promo rule landed in the registry (Selectors panel) WITH its styles.
+    const promo = Object.values(site.styleRules).find((c) => c.name === 'promo')
+    expect(promo).toBeDefined()
+    expect(promo!.styles.color).toBe('tomato')
+
+    // The <div class="promo"> node links to that rule by id (not the bare name),
+    // so the parsed styles actually resolve at render time.
+    const divNode = site.pages[0].nodes[result.nodeIds![0]]
+    expect(divNode.classIds).toContain(promo!.id)
+    expect(classNamesForClassIds(site.styleRules, divNode.classIds)).toContain('promo')
+  })
+
+  it('registers an ambient <style> selector (body, a:hover, …) as a global rule', async () => {
+    const { rootId } = freshStore()
+    const result = await executeAgentTool('insertHtml', {
+      parentId: rootId,
+      html: '<style>a:hover { text-decoration: underline; }</style><a href="/">Home</a>',
+    })
+    expect(result.success).toBe(true)
+
+    const site = useEditorStore.getState().site!
+    const ambient = Object.values(site.styleRules).find(
+      (c) => c.kind === 'ambient' && c.selector === 'a:hover',
+    )
+    expect(ambient).toBeDefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Unknown tool names
 // ---------------------------------------------------------------------------
 

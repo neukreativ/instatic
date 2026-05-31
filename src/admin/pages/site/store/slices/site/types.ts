@@ -50,7 +50,7 @@ export interface SuperImportHelpers {
    * bare classes for unknown names), exactly as `insertImportedNodes` does.
    * @returns The new page's generated id.
    */
-  addPage(input: { title: string; slug: string; nodeFragment: ImportFragment }): string
+  addPage(input: { id?: string; title: string; slug: string; nodeFragment: ImportFragment }): string
 
   /**
    * Add a new style rule to the global registry.
@@ -184,10 +184,19 @@ export interface SiteSlice {
   /**
    * Insert a fragment of imported HTML nodes into the active tree under `parentId`.
    * Merges all `fragment.nodes` into the tree and wires `fragment.rootIds` as children
-   * of `parentId` at `index` (appended when omitted). One undo step.
+   * of `parentId` at `opts.index` (appended when omitted). One undo step.
    * Returns the inserted root IDs, or an empty array when the parent does not accept children.
+   *
+   * `opts.styleRules` / `opts.conditions` are rules parsed from `<style>` blocks
+   * in the imported HTML (via `cssToStyleRules`); they are committed into the
+   * registry (Selectors panel) and bound to matching `class=` tokens in the
+   * same undo step.
    */
-  insertImportedNodes: (parentId: string, fragment: ImportFragment, index?: number) => string[]
+  insertImportedNodes: (
+    parentId: string,
+    fragment: ImportFragment,
+    opts?: { index?: number; styleRules?: NewStyleRule[]; conditions?: ConditionDef[] },
+  ) => string[]
 
   /**
    * Insert a `base.visual-component-ref` node into the active document.

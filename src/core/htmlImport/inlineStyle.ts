@@ -1,85 +1,85 @@
 /**
- * Harvest the background-image subset of inline `style="…"` attributes.
+ * Harvest inline `style="…"` declarations into a per-node CSS bag.
  *
- * CSS is otherwise out of scope for the HTML importer (`stripUnsafe` removes
- * every inline `style` attribute). The single exception is a background IMAGE:
- * a `style="background-image: url(…)"` (or a `background:` shorthand carrying a
- * `url(…)`) is the common way exported sites attach a hero/section background
- * to an element. Dropping it silently used to lose the asset reference even
- * though the bytes still landed in the media library.
+ * The editor models a first-class per-node inline-style layer (`node.inlineStyles`,
+ * a camelCase CSS property bag the publisher emits as `style="…"`). The importer
+ * preserves an element's inline `style` attribute straight onto that layer so a
+ * pasted / agent-authored / imported element keeps the exact look it was given,
+ * editable afterwards in the canvas like any other inline style.
  *
- * This module extracts ONLY the image-bearing background longhands —
- * `background-image` plus its companions `background-size`,
- * `background-position`, `background-repeat` — and only when an actual
- * `url(…)` image is present. Colours, gradients-without-url, and every other
- * inline declaration stay out of scope.
+ * Every declaration is preserved EXCEPT names rejected by `isEmittableProperty`
+ * (the publisher's security denylist — the same gate `cssToStyleRules` uses for
+ * imported stylesheets). Background `url(...)` images are canonicalised to the
+ * `url('payload')` form so the Super Import asset rewriter and the editor's
+ * media picker both recognise them.
  *
  * The harvest runs BEFORE `stripUnsafe` removes the `style` attribute, keyed by
- * the live `Element` so `walkAndMap` can attach the captured bag to the
- * PageNode it mints for that element. The result is materialised into a
- * node-scoped "module-style" StyleRule downstream (see `importLinking.ts`), so
- * the editor's `BackgroundImageControl` picks the image straight out of the
- * media library after a Super Import.
+ * the live `Element` so `walkAndMap` can attach the captured bag to the PageNode
+ * it mints for that element.
  */
 
-// ---------------------------------------------------------------------------
-// Allowlisted image-background longhands (kebab → camel)
-// ---------------------------------------------------------------------------
-
-const BG_COMPANIONS: ReadonlyArray<readonly [kebab: string, camel: string]> = [
-  ['background-size', 'backgroundSize'],
-  ['background-position', 'backgroundPosition'],
-  ['background-repeat', 'backgroundRepeat'],
-]
+import { isEmittableProperty } from '@core/publisher'
 
 /** Match the first `url(...)` payload in a CSS value (quoted or bare). */
 const URL_PAYLOAD_RE = /url\(\s*(['"]?)([^'")\n]+)\1\s*\)/i
 
 /**
- * Pull the image-background subset out of one element's inline style
- * declaration. Returns `{}` when the element has no `url(...)` background image
- * — colours, plain gradients, and unrelated declarations are intentionally not
- * captured.
- *
- * `backgroundImage` is normalised to the canonical `url('payload')` form so the
- * downstream asset rewriter and the editor's picker both recognise it.
+ * Convert a kebab-case CSS property name to camelCase, the form the editor's
+ * inline-style bag and the publisher both use. Custom properties (`--brand`)
+ * are case-sensitive and pass through unchanged.
  */
-export function extractBackgroundStyles(style: CSSStyleDeclaration): Record<string, string> {
-  // Prefer the longhand; fall back to extracting the url() from the shorthand
-  // when the inline style used `background: url(...) …` and the environment
-  // didn't expand it into longhands.
-  let backgroundImage = style.getPropertyValue('background-image').trim()
-  if (!backgroundImage || backgroundImage.toLowerCase() === 'none') {
-    const shorthand = style.getPropertyValue('background').trim()
-    const m = shorthand.match(URL_PAYLOAD_RE)
-    backgroundImage = m ? `url('${m[2].trim()}')` : ''
-  }
+function kebabToCamel(prop: string): string {
+  if (prop.startsWith('--')) return prop
+  return prop.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())
+}
 
-  // Only an actual url() image is in scope — gradients/colours stay dropped.
-  if (!URL_PAYLOAD_RE.test(backgroundImage)) return {}
-
-  const out: Record<string, string> = { backgroundImage }
-  for (const [kebab, camel] of BG_COMPANIONS) {
-    const v = style.getPropertyValue(kebab).trim()
-    if (v) out[camel] = v
+/**
+ * Canonicalise a background `url(...)` image onto `out.backgroundImage` in the
+ * `url('payload')` form, whether it arrived as the `background-image` longhand
+ * or inside a `background:` shorthand the environment didn't expand. No-op when
+ * the element has no url() background (colours / gradients stay as captured).
+ */
+function normalizeBackgroundImage(style: CSSStyleDeclaration, out: Record<string, string>): void {
+  let raw = typeof out.backgroundImage === 'string' ? out.backgroundImage.trim() : ''
+  if (!raw || raw.toLowerCase() === 'none') {
+    raw = (typeof out.background === 'string' ? out.background : style.getPropertyValue('background')).trim()
   }
+  const m = raw.match(URL_PAYLOAD_RE)
+  if (m) out.backgroundImage = `url('${m[2].trim()}')`
+}
+
+/**
+ * Pull every inline declaration out of one element's parsed `style` attribute
+ * into a camelCase CSS bag, dropping only the security-denied property names.
+ * Returns `{}` when the element has no usable inline declarations.
+ */
+export function extractInlineStyles(style: CSSStyleDeclaration): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (let i = 0; i < style.length; i++) {
+    const kebab = style[i]
+    const value = style.getPropertyValue(kebab).trim()
+    if (!value) continue
+    const camel = kebabToCamel(kebab)
+    if (!isEmittableProperty(camel)) continue
+    out[camel] = value
+  }
+  normalizeBackgroundImage(style, out)
   return out
 }
 
 /**
- * Walk every element in `doc` and harvest its inline image-background subset
- * into a `Map` keyed by the element. Call this BEFORE `stripUnsafe` (which
- * removes the `style` attribute). Elements with no `url(...)` background are
- * absent from the map.
+ * Walk every element in `doc` and harvest its inline `style` declarations into a
+ * `Map` keyed by the element. Call this BEFORE `stripUnsafe` (which removes the
+ * `style` attribute). Elements with no usable inline declarations are absent.
  */
-export function harvestInlineBackgrounds(doc: Document): Map<Element, Record<string, string>> {
+export function harvestInlineStyles(doc: Document): Map<Element, Record<string, string>> {
   const result = new Map<Element, Record<string, string>>()
   for (const el of Array.from(doc.querySelectorAll('*'))) {
     // `el.style` is the parsed inline-style declaration. Reading it avoids a
     // hand-rolled CSS parser and matches the engine the publisher trusts.
     const styledEl = el as Element & { style?: CSSStyleDeclaration }
     if (!styledEl.style || !el.hasAttribute('style')) continue
-    const bag = extractBackgroundStyles(styledEl.style)
+    const bag = extractInlineStyles(styledEl.style)
     if (Object.keys(bag).length > 0) result.set(el, bag)
   }
   return result

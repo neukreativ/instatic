@@ -8,11 +8,12 @@ The module has two consumers: the paste-HTML UI (Phase 1, shipped) and the AI ag
 
 ## TL;DR
 
-- Single entry point: `importHtml(source)` → `{ nodes, rootIds, stripped }`.
-- Pipeline: `parseHtml` → `stripUnsafe` → `walkAndMap`.
+- Single entry point: `importHtml(source)` → `{ nodes, rootIds, stripped, styleCss }`.
+- Pipeline: `parseHtml` → `harvestInlineStyles` + `collectStyleCss` → `stripUnsafe` → `walkAndMap`.
 - Mapping is rule-driven (`HTML_TO_MODULE_RULES`). The catch-all `*` rule guarantees every element produces a node — nothing falls through.
 - Every produced node is a real `PageNode`: selectable, draggable, deletable, and re-styleable in the canvas.
-- HTML class names ride onto `node.classIds` during the pure walk; `insertImportedNodes` then links each name to a real registry class id (reusing a same-named class or auto-creating a bare one) so the class renders and is editable. No CSS rules are parsed or preserved.
+- HTML class names ride onto `node.classIds` during the pure walk; `insertImportedNodes` then links each name to a real registry class id (reusing a same-named class, binding to a parsed `<style>` rule of that name, or auto-creating a bare one) so the class renders and is editable.
+- **CSS is preserved.** Inline `style="…"` lands on `node.inlineStyles` (the editor's per-node style layer); `<style>` blocks are returned as raw `styleCss`, which consumers parse via `cssToStyleRules` into registry rules shown in the Selectors panel. Only the security-denied property names are dropped.
 - UX entry points: Spotlight **Import HTML** command and right-click **Paste HTML here…** on any container node.
 
 ---
@@ -23,8 +24,8 @@ The module has two consumers: the paste-HTML UI (Phase 1, shipped) and the AI ag
 src/core/htmlImport/
 ├── index.ts           — public barrel; all exports below go through here
 ├── parseHtml.ts       — DOMParser.parseFromString wrapper (browser-only; tests polyfill via happy-dom)
-├── stripUnsafe.ts     — removes <script>, <style>, on* attrs, style= attrs; returns StripReport
-├── inlineStyle.ts     — harvests the background-image subset of inline style="" before it is stripped
+├── stripUnsafe.ts     — removes <script>, on* attrs (counted), <style>+style= (harvested first); collectStyleCss returns the <style> CSS
+├── inlineStyle.ts     — harvests the full inline style="" bag (security-gated) before it is stripped
 ├── rules.ts           — HTML_TO_MODULE_RULES declarative mapping table
 └── walkAndMap.ts      — DOM walker + importHtml() entry point
 
@@ -41,21 +42,23 @@ src/__tests__/htmlImport/mapping.test.ts    — 95 per-rule unit tests
 
 ## The pipeline
 
-`importHtml(source)` runs four steps in sequence:
+`importHtml(source)` runs these steps in sequence:
 
 ```text
 importHtml(source: string)
   1. parseHtml(source)            — new DOMParser().parseFromString(source, 'text/html')
                                     Returns a DOM Document. Uses the global DOMParser;
                                     no server-side DOM library is imported.
-  2. harvestInlineBackgrounds(doc)— captures each element's inline background image
-                                    (style="background-image: url(…)") BEFORE step 3
-                                    removes the style attribute. Keyed by Element.
+  2. harvestInlineStyles(doc)     — captures each element's full inline style="" bag
+                                    (camelCase, security-gated) BEFORE step 4 removes
+                                    the style attribute. Keyed by Element.
+     collectStyleCss(doc)         — concatenates every <style> block's CSS BEFORE
+                                    step 4 removes the <style> elements.
   3. stripUnsafe(doc)             — mutates doc in place; returns StripReport
-  4. walkAndMap(doc, backgrounds) — maps doc.body element children to PageNodes,
-                                    attaching each harvested background to its
+  4. walkAndMap(doc, inlineStyles)— maps doc.body element children to PageNodes,
+                                    attaching each harvested inline bag to its
                                     node's `inlineStyles`. Returns { nodes, rootIds }
-→ { nodes, rootIds, stripped }   (ImportResult)
+→ { nodes, rootIds, stripped, styleCss }   (ImportResult)
 ```
 
 ### Return type
@@ -63,16 +66,20 @@ importHtml(source: string)
 ```ts
 interface ImportResult {
   /** All produced nodes, keyed by id. A node may carry `inlineStyles` (the
-   *  per-node `style=""` layer) — e.g. a harvested inline background image. */
+   *  per-node `style=""` layer) populated from its inline style attribute. */
   nodes: Record<string, PageNode>
   /** IDs of the top-level nodes (direct children of doc.body), in document order. */
   rootIds: string[]
-  /** Counts of constructs removed by stripUnsafe. */
+  /** Counts of constructs removed by stripUnsafe (scripts, inline handlers). */
   stripped: StripReport
+  /** Raw concatenated CSS from <style> blocks. Empty when the source had none. */
+  styleCss: string
 }
 ```
 
-Callers splice the fragment into the page tree via `insertImportedNodes(parentId, fragment)` in the editor store — one `mutateActiveTree` call, one undo step. Any `node.inlineStyles` set during the walk rides along on the node verbatim (it is a first-class node field), so the publisher emits it as a `style="…"` attribute and the editor's inline-style layer (and `BackgroundImageControl`) shows the imported image. The whole-site Super Import path (`mutateAllPagesAndSite`) preserves it the same way; the Super Import asset pipeline additionally uploads the referenced image and rewrites the `url(…)` to its media URL.
+Callers splice the fragment into the page tree via `insertImportedNodes(parentId, fragment, opts?)` in the editor store — one `mutateActiveTreeAndSite` call, one undo step. Any `node.inlineStyles` set during the walk rides along on the node verbatim (it is a first-class node field), so the publisher emits it as a `style="…"` attribute and the editor's inline-style layer (and `BackgroundImageControl`) shows it.
+
+**`<style>` blocks → Selectors panel.** `importHtml` does NOT parse CSS itself (that would couple `@core/htmlImport` to `@core/siteImport` and lose the site's breakpoint context). Instead it returns the raw `styleCss`; each consumer parses it with `cssToStyleRules(styleCss, { breakpoints })` and passes the resulting `{ styleRules, conditions }` to `insertImportedNodes(parentId, fragment, { styleRules, conditions })`. Class rules whose name matches a node's `class=` token bind to that node (the merge runs before class-name linking); ambient rules (`body`, `a:hover`, …) register globally. All appear in the Selectors panel. The whole-site Super Import path folds each page's `<style>` CSS in as a synthetic per-page source (`<htmlPath>::inline`) so it scopes, resolves `url(…)` assets, and detects conflicts exactly like a linked stylesheet.
 
 ---
 
@@ -104,21 +111,21 @@ Callers splice the fragment into the page tree via `insertImportedNodes(parentId
 
 ---
 
-## What gets stripped
+## What gets stripped vs. preserved
 
-`stripUnsafe` (`src/core/htmlImport/stripUnsafe.ts`) mutates the parsed document before the walker runs:
+`stripUnsafe` (`src/core/htmlImport/stripUnsafe.ts`) mutates the parsed document before the walker runs. CSS is harvested first (see the pipeline above), so `<style>` and `style="…"` are removed from the DOM but **not dropped from the import**:
 
-| Removed | Counted as |
+| Construct | Treatment |
 |---|---|
-| `<script>` elements | `stripped.scripts` |
-| `<style>` elements | `stripped.styles` |
-| Inline `on*` attributes (`onclick`, `onload`, …) | `stripped.inlineHandlers` |
-| `style="…"` attributes | `stripped.inlineStyles` |
-| HTML comments and processing instructions | (silent — no count) |
+| `<script>` elements | Stripped — counted as `stripped.scripts` |
+| Inline `on*` attributes (`onclick`, `onload`, …) | Stripped — counted as `stripped.inlineHandlers` |
+| `<style>` elements | CSS harvested into `result.styleCss` (then parsed into registry rules); the element is removed |
+| `style="…"` attributes | Declarations harvested onto `node.inlineStyles`; the attribute is removed |
+| HTML comments and processing instructions | Stripped silently — no count |
 
-After insert, `ImportHtmlModal` builds a toast body from non-zero counts, e.g. `"Stripped: 2 <script>, 3 inline handlers"`. If nothing was stripped, the toast shows only the node count.
+After insert, `ImportHtmlModal` builds a toast body from the added-selector count plus the non-zero stripped counts, e.g. `"3 CSS selectors, stripped 2 <script>"`. If nothing notable happened, the toast shows only the node count.
 
-**The one inline-CSS exception — background images.** Before `stripUnsafe` removes a `style` attribute, `harvestInlineBackgrounds` (`inlineStyle.ts`) extracts the image-bearing background subset — `background-image` plus `background-size` / `background-position` / `background-repeat`, and the `url(…)` out of a `background:` shorthand — but **only when an actual `url(…)` image is present**. Colours, plain gradients, and every other inline declaration are still dropped (and the raw attribute is still counted in `stripped.inlineStyles`). The captured subset is attached to the produced node as `node.inlineStyles` — the editor's first-class per-node `style=""` layer — which the publisher emits verbatim and the user can edit via the Properties panel's inline-style mode. In Super Import the `url(…)` is uploaded to the media library and rewritten exactly like a CSS-rule background.
+**Inline `style="…"` → `node.inlineStyles`.** Before `stripUnsafe` removes a `style` attribute, `harvestInlineStyles` (`inlineStyle.ts`) reads the element's parsed CSSOM declaration and copies **every** declaration into a camelCase bag, dropping only property names rejected by `isEmittableProperty` (the publisher's security denylist — the same gate `cssToStyleRules` uses). A `url(…)` background is canonicalised to `url('payload')` form so the Super Import asset rewriter and the editor's `BackgroundImageControl` recognise it. The bag is attached to the produced node as `node.inlineStyles` — the editor's first-class per-node `style=""` layer — which the publisher emits verbatim and the user edits via the Properties panel's inline-style mode. In Super Import any `url(…)` is uploaded to the media library and rewritten to its media URL.
 
 ---
 
@@ -176,13 +183,15 @@ The result: imported markup renders its `class` attribute, the classes show up i
 
 > Skipping this linking step is the bug that made HTML-authored styles silently never apply: names on `classIds` never matched the id-keyed registry, so the renderer dropped them. Regression-gated by `src/__tests__/agent/executor.test.ts`.
 
-## CSS is out of scope
+## CSS handling
 
-The importer never parses or preserves CSS **rules**. This is intentional:
+The importer preserves CSS across two layers, both gated by `isEmittableProperty`:
 
-- `<style>` blocks are stripped.
-- `style="…"` inline attributes are stripped.
-- Class **names** survive (linked to real registry classes per [Class linking](#class-linking-name--id)), but their **declarations** are not — an auto-created class starts style-less until styled in the editor or by the agent.
+- **Inline `style="…"`** → the node's `inlineStyles` bag (per-node `style=""` layer). Full declarations, not just backgrounds.
+- **`<style>` blocks** → parsed by the consumer (`cssToStyleRules`) into registry `StyleRule`s shown in the Selectors panel. A `.foo {}` rule binds to nodes carrying `class="foo"`; ambient selectors (`body`, `a:hover`, `.a .b`) register globally. First-wins on name/selector collisions with existing rules.
+- **Class names without a matching `<style>` rule** still survive — `insertImportedNodes` auto-creates a bare (style-less) class for the name (see [Class linking](#class-linking-name--id)), styleable afterwards in the editor or by the agent.
+
+`importHtml` itself stays CSS-agnostic: it returns raw `styleCss` and the consumer (which has the site's breakpoints and may import `@core/siteImport`) does the parsing. This avoids an `htmlImport → siteImport` import cycle and lets `@media` fold into the site's real breakpoints.
 
 ---
 

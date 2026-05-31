@@ -22,6 +22,9 @@ import type { EditorStore } from '@site/store/types'
 import { registry } from '@core/module-engine'
 import { sanitizeRichtext, isRichtextPropKey } from '@core/sanitize'
 import { importHtml } from '@core/htmlImport'
+import { cssToStyleRules } from '@core/siteImport'
+import type { NewStyleRule } from '@core/siteImport'
+import type { ConditionDef } from '@core/page-tree'
 import { renderNode } from '@core/publisher'
 import type { RenderContext } from '@core/publisher'
 import { getAgentStoreApi } from './storeRef'
@@ -31,6 +34,24 @@ import type { AgentActionResult } from './types'
 // Live access to the editor store. Routed through `./storeRef` so this module
 // has no static import edge back into `editor-store/store.ts`.
 const getStoreState = (): EditorStore => getAgentStoreApi<EditorStore>().getState()
+
+/**
+ * Parse the CSS harvested from `<style>` blocks in an agent-supplied HTML
+ * snippet into registry rules. Uses the live site's breakpoints so any
+ * `@media (max-width: …)` folds into the matching breakpoint's contextStyles;
+ * unmatched conditions round-trip as reusable site conditions. Returns empty
+ * arrays for an empty/whitespace-only snippet.
+ */
+function parseImportedStyleCss(styleCss: string): {
+  rules: NewStyleRule[]
+  conditions: ConditionDef[]
+} {
+  if (!styleCss.trim()) return { rules: [], conditions: [] }
+  const site = getStoreState().site
+  const breakpoints = site ? site.breakpoints.map((b) => ({ id: b.id, width: b.width })) : []
+  const { rules, conditions } = cssToStyleRules(styleCss, { breakpoints })
+  return { rules, conditions }
+}
 
 // ---------------------------------------------------------------------------
 // Per-tool TypeBox schemas
@@ -275,8 +296,11 @@ function findNodeAcrossSite(store: EditorStore, nodeId: string) {
  * Pipeline (identical to the paste-import modal path):
  *   1. Validate breakpoint keys in any class definitions.
  *   2. Create / resolve each class by name so CSS exists before insertion.
- *   3. importHtml(input.html) — parse → strip unsafe → walkAndMap → fragment.
- *   4. insertImportedNodes(parentId, fragment, index) — one undo step.
+ *   3. importHtml(input.html) — parse → strip unsafe → walkAndMap → fragment
+ *      (+ inline `style="…"` on node.inlineStyles, + raw `<style>` CSS).
+ *   4. parseImportedStyleCss — `<style>` CSS → registry rules + conditions.
+ *   5. insertImportedNodes(parentId, fragment, { index, styleRules, conditions })
+ *      — nodes, <style> rules, and class-token binding in one undo step.
  */
 function runInsertHtml(input: Static<typeof insertHtmlSchema>): AgentActionResult {
   // (1) Validate breakpoint keys before any mutation
@@ -299,17 +323,18 @@ function runInsertHtml(input: Static<typeof insertHtmlSchema>): AgentActionResul
     if (!classId) return { success: false, error: `Class could not be created: ${classDef.name}` }
   }
 
-  // (3) Parse and walk the HTML to produce a flat node fragment
-  const { nodes, rootIds } = importHtml(input.html)
+  // (3) Parse and walk the HTML to produce a flat node fragment + any <style> CSS
+  const { nodes, rootIds, styleCss } = importHtml(input.html)
   if (rootIds.length === 0) {
     return { success: false, error: 'HTML contained no importable elements.' }
   }
+  const { rules, conditions } = parseImportedStyleCss(styleCss)
 
   // (4) Insert via the store action — same path as the paste import modal
   const insertedRootIds = getStoreState().insertImportedNodes(
     input.parentId,
     { nodes, rootIds },
-    input.index,
+    { index: input.index, styleRules: rules, conditions },
   )
   if (insertedRootIds.length === 0) {
     return {
@@ -398,14 +423,16 @@ function runReplaceNodeHtml(input: Static<typeof replaceNodeHtmlSchema>): AgentA
   }
 
   // Import and insert the new HTML under the target node
-  const { nodes, rootIds } = importHtml(input.html)
+  const { nodes, rootIds, styleCss } = importHtml(input.html)
   if (rootIds.length === 0) {
     return { success: false, error: 'HTML contained no importable elements.' }
   }
+  const { rules, conditions } = parseImportedStyleCss(styleCss)
 
   const insertedRootIds = getStoreState().insertImportedNodes(
     input.nodeId,
     { nodes, rootIds },
+    { styleRules: rules, conditions },
   )
   if (insertedRootIds.length === 0) {
     return { success: false, error: `Node does not accept children: ${input.nodeId}` }

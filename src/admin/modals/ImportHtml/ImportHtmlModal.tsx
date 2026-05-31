@@ -10,9 +10,12 @@
  * from store values once on mount; no reset effects are needed.
  *
  * Pipeline on "Insert":
- *   1. `importHtml(source)` — parse → strip unsafe → walk and map to PageNodes
- *   2. `insertImportedNodes(parentId, fragment)` — single undo step
- *   3. `pushToast` — success summary with optional stripped-counts detail
+ *   1. `importHtml(source)` — parse → harvest inline styles + <style> CSS →
+ *      strip unsafe → walk and map to PageNodes
+ *   2. `cssToStyleRules(styleCss)` — parse <style> blocks into registry rules
+ *   3. `insertImportedNodes(parentId, fragment, { styleRules, conditions })` —
+ *      nodes + <style> rules in a single undo step
+ *   4. `pushToast` — success summary (added selectors + stripped-counts detail)
  *
  * The live preview debounces at 200 ms so typing feels instant.
  */
@@ -23,6 +26,7 @@ import { Button } from '@ui/components/Button'
 import { Select } from '@ui/components/Select'
 import { pushToast } from '@ui/components/Toast'
 import { importHtml, type ImportFragment, type ImportResult } from '@core/htmlImport'
+import { cssToStyleRules } from '@core/siteImport'
 import { useEditorStore, selectActiveCanvasPage } from '@site/store/store'
 import { registry } from '@core/module-engine'
 import { getNodeDisplayName } from '@core/page-tree/nodeDisplayName'
@@ -132,6 +136,7 @@ export function ImportHtmlModal() {
   const storePrefill = useEditorStore((s) => s.importHtmlModalPrefill)
   const closeModal = useEditorStore((s) => s.closeImportHtmlModal)
   const insertImportedNodes = useEditorStore((s) => s.insertImportedNodes)
+  const breakpoints = useEditorStore((s) => s.site?.breakpoints)
   const canvasPage = useEditorStore(selectActiveCanvasPage)
 
   // Initialize from store values — fresh on every mount.
@@ -190,28 +195,35 @@ export function ImportHtmlModal() {
     if (!parentId) return
 
     try {
+      // Parse any <style> CSS into registry rules using the site's breakpoints
+      // so @media folds into the matching breakpoint's contextStyles.
+      const bpHints = (breakpoints ?? []).map((b) => ({ id: b.id, width: b.width }))
+      const { rules, conditions } = result.styleCss.trim()
+        ? cssToStyleRules(result.styleCss, { breakpoints: bpHints })
+        : { rules: [], conditions: [] }
+
       const fragment: ImportFragment = { nodes: result.nodes, rootIds: result.rootIds }
-      const inserted = insertImportedNodes(parentId, fragment)
+      const inserted = insertImportedNodes(parentId, fragment, {
+        styleRules: rules,
+        conditions,
+      })
       if (inserted.length === 0) {
         setErrorMsg('The selected parent does not accept children.')
         return
       }
 
-      // Build toast body: node count + stripped-counts detail (non-zero only).
+      // Build toast body: node count + added-selector / stripped detail.
       const toastTitle = `Imported ${inserted.length} ${inserted.length === 1 ? 'node' : 'nodes'}`
+      const detailParts: string[] = []
+      if (rules.length) {
+        detailParts.push(`${rules.length} CSS selector${rules.length > 1 ? 's' : ''}`)
+      }
       const { stripped } = result
-      const strippedParts: string[] = []
-      if (stripped.scripts) strippedParts.push(`${stripped.scripts} <script>`)
-      if (stripped.styles) strippedParts.push(`${stripped.styles} <style>`)
+      if (stripped.scripts) detailParts.push(`stripped ${stripped.scripts} <script>`)
       if (stripped.inlineHandlers) {
-        strippedParts.push(`${stripped.inlineHandlers} inline handler${stripped.inlineHandlers > 1 ? 's' : ''}`)
+        detailParts.push(`stripped ${stripped.inlineHandlers} inline handler${stripped.inlineHandlers > 1 ? 's' : ''}`)
       }
-      if (stripped.inlineStyles) {
-        strippedParts.push(`${stripped.inlineStyles} inline style${stripped.inlineStyles > 1 ? 's' : ''}`)
-      }
-      const toastBody = strippedParts.length > 0
-        ? `Stripped: ${strippedParts.join(', ')}`
-        : undefined
+      const toastBody = detailParts.length > 0 ? detailParts.join(', ') : undefined
 
       pushToast({ kind: 'success', title: toastTitle, body: toastBody })
       closeModal()

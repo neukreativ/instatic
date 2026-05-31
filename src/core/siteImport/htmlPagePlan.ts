@@ -24,6 +24,13 @@ import type { FileMap, ImportWarning, PagePlan } from './types'
 export interface HtmlPagePlanResult {
   pagePlan: PagePlan
   warnings: ImportWarning[]
+  /**
+   * Raw CSS harvested from `<style>` blocks in the HTML head/body. Empty when
+   * the page had none. `buildImportPlan` parses this with the site's
+   * breakpoints and folds the rules in as a synthetic per-page CSS source so
+   * they scope, resolve assets, and detect conflicts like any linked stylesheet.
+   */
+  inlineCss: string
 }
 
 /**
@@ -68,8 +75,8 @@ export function makeHtmlPagePlan(
   // --- Step 4: derive slug ---
   const slug = deriveSlug(htmlPath)
 
-  // --- Step 5: parse body nodes ---
-  const { nodes, rootIds } = importHtml(htmlSource)
+  // --- Step 5: parse body nodes (+ harvest inline styles and <style> CSS) ---
+  const { nodes, rootIds, styleCss } = importHtml(htmlSource)
   const nodeFragment: ImportFragment = { nodes, rootIds }
 
   const pagePlan: PagePlan = {
@@ -80,7 +87,7 @@ export function makeHtmlPagePlan(
     nodeFragment,
   }
 
-  return { pagePlan, warnings }
+  return { pagePlan, warnings, inlineCss: styleCss }
 }
 
 // ---------------------------------------------------------------------------

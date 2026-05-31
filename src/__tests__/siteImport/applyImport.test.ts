@@ -27,6 +27,7 @@ import type {
 } from '@core/siteImport'
 import type { ImportFragment } from '@core/htmlImport'
 import { makeSampleFileMap, makeEmptySiteDocument, makeMockSiteDocument } from './mockSite'
+import { makeSinglePageFileMap } from './fixtures'
 import type { FileMap } from '@core/siteImport'
 
 // ---------------------------------------------------------------------------
@@ -113,6 +114,26 @@ describe('buildImportPlan — structure', () => {
   it('produces style rules from linked CSS', () => {
     // main.css and theme.css should produce rules
     expect(plan.styleRules.length).toBeGreaterThan(0)
+  })
+
+  it('folds a body <style> block into the plan as a per-page CSS source', () => {
+    const html = `<!doctype html><html><head>
+      <style>.promo { color: rgb(255, 99, 71); } a:hover { text-decoration: underline; }</style>
+    </head><body><div class="promo">Sale</div></body></html>`
+    const p = buildImportPlan({
+      fileMap: makeSinglePageFileMap(html),
+      currentSite: makeEmptySiteDocument(),
+    })
+    // The <style>'s class rule appears in the plan with its declarations.
+    const promo = p.styleRules.find((r) => r.kind === 'class' && r.name === 'promo')
+    expect(promo).toBeDefined()
+    expect(promo!.styles.color).toContain('255')
+    // The ambient selector is registered too.
+    expect(p.styleRules.some((r) => r.kind === 'ambient' && r.selector === 'a:hover')).toBe(true)
+    // The page node still carries the class NAME (linked to an id at commit time).
+    const fragment = p.pages[0].nodeFragment
+    const divNode = Object.values(fragment.nodes).find((n) => n.moduleId === 'base.container')
+    expect(divNode?.classIds).toContain('promo')
   })
 
   it('collects image assets', () => {
