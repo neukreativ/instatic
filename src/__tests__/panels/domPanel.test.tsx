@@ -495,6 +495,26 @@ describe('DomPanel — tree keyboard navigation', () => {
     expect(useEditorStore.getState().selectedNodeId).toBe('container-1')
   })
 
+  it('expanding two sibling containers is independent — each retains its own expanded state', () => {
+    // Validates the ExpansionStore refactor: per-node useSyncExternalStore
+    // subscriptions mean toggling node A must not collapse or affect node B.
+    loadSiblingContainerSite()
+    render(<DomPanel />)
+
+    // root + container-1 + container-2 visible; both containers collapsed
+    expect(screen.getAllByRole('treeitem').length).toBe(3)
+
+    // Expand container-1 — should show its text child
+    const containerItems = screen.getAllByRole('treeitem', { name: /container/i })
+    fireEvent.click(containerItems[0])
+    expect(screen.getAllByRole('treeitem').length).toBe(4) // root + c1 + text-1 + c2
+
+    // Expand container-2 — container-1 must REMAIN expanded (text-1 still visible)
+    const containerItemsNow = screen.getAllByRole('treeitem', { name: /container/i })
+    fireEvent.click(containerItemsNow[1])
+    expect(screen.getAllByRole('treeitem').length).toBe(5) // root + c1 + text-1 + c2 + text-2
+  })
+
   it('commits inline tree rename to the node label', () => {
     loadContainerSite()
     render(<DomPanel />)

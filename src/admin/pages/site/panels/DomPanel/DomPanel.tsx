@@ -14,7 +14,7 @@
  * Guideline #318 (Phase 3 Perf):
  * - Per-node Zustand selectors: only affected rows re-render on selection/hover
  * - DnD drag position tracked via refs; store updated once on dragEnd
- * - expandedNodeIds lives in DomTreeContext (UI-only) — never in siteSlice
+ * - ExpansionStore is an external observable in DomTreeContext (UI-only) — never in siteSlice
  *
  * Guideline #321 (Phase 3 Architecture):
  * - DndContext wraps the whole tree; SortableContexts are per-parent group
@@ -47,7 +47,7 @@ import {
 } from '@core/page-tree/nodeDisplayName'
 import { TreeNode } from './TreeNode'
 import { TreeBackgroundContextMenu } from './TreeBackgroundContextMenu'
-import { useDomTree } from './DomTreeContext'
+import { useExpansionStore } from './DomTreeContext'
 import { DomTreeProvider } from './DomTreeProvider'
 import { DomPanelDndContext } from './DomPanelDndContext'
 import { useDomPanelDnd } from './useDomPanelDnd'
@@ -172,7 +172,7 @@ function DomPanelInner({ variant = 'floating', editable = true }: { variant?: Pa
   const focusRef = useRef<HTMLDivElement>(null)
   const treeRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
-  const { expandAll, collapseAll, expandNode, isExpanded } = useDomTree()
+  const store = useExpansionStore()
 
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -197,7 +197,7 @@ function DomPanelInner({ variant = 'floating', editable = true }: { variant?: Pa
   )
 
   const treeAreaRef = useRef<HTMLDivElement>(null)
-  const dnd = useDomPanelDnd({ page, treeAreaRef, expandNode, isExpanded })
+  const dnd = useDomPanelDnd({ page, treeAreaRef, expandNode: store.expand, isExpanded: store.isExpanded })
 
   // ─── Restore panel width/other state from localStorage on mount ────────────
   // useState lazy initializer runs exactly once per component instance, which
@@ -231,8 +231,9 @@ function DomPanelInner({ variant = 'floating', editable = true }: { variant?: Pa
   // When the canvas selection changes, ensure the selected node is visible in
   // the tree (expand all its ancestors) and scroll the tree to it.
   //
-  // `expandNode` is a stable useCallback from DomTreeContext — listing it in
-  // deps is a no-op but satisfies exhaustive-deps without an opt-out.
+  // `store` is the stable ExpansionStore instance from context — it never
+  // changes reference for the lifetime of the DomTreeProvider. Listing it in
+  // deps satisfies exhaustive-deps without ever causing effect re-runs.
   useEffect(() => {
     if (!page || !selectedNodeId) return
 
@@ -243,7 +244,7 @@ function DomPanelInner({ variant = 'floating', editable = true }: { variant?: Pa
     if (autoExpandSelected) {
       const ancestorIds = getAncestorIds(page.nodes, page.rootNodeId, selectedNodeId)
       for (const ancestorId of ancestorIds) {
-        expandNode(ancestorId)
+        store.expand(ancestorId)
       }
     }
 
@@ -260,7 +261,7 @@ function DomPanelInner({ variant = 'floating', editable = true }: { variant?: Pa
         })
       }
     })
-  }, [selectedNodeId, page, autoExpandSelected, smoothScroll, expandNode])
+  }, [selectedNodeId, page, autoExpandSelected, smoothScroll, store])
 
   // ─── Focus management: F6 moves focus into panel ──────────────────────────
   // The hidden `focusTrap` div is the landing target when the user cycles
@@ -289,11 +290,11 @@ function DomPanelInner({ variant = 'floating', editable = true }: { variant?: Pa
       // Ctrl+E = expand all, Ctrl+W = collapse all
       if (e.key === 'e' && page) {
         e.preventDefault()
-        expandAll(flattenSubtree(page, page.rootNodeId))
+        store.expandAll(flattenSubtree(page, page.rootNodeId))
       }
       if (e.key === 'w') {
         e.preventDefault()
-        collapseAll()
+        store.collapseAll()
       }
       // Ctrl+F = focus search
       if (e.key === 'f') {

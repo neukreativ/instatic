@@ -30,7 +30,7 @@ import {
   getNodeClassNames,
 } from '@core/page-tree/nodeDisplayName'
 import { useDraggable } from '@dnd-kit/core'
-import { useDomTree } from './DomTreeContext'
+import { useExpansionStore, useIsNodeExpanded } from './DomTreeContext'
 import { useDomPanelDndContext } from './DomPanelDndContext'
 import { LayerNodeContextMenu } from './LayerNodeContextMenu'
 import { Input } from '@ui/components/Input'
@@ -106,7 +106,10 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth, editable = true 
   const pasteNode = useEditorStore((s) => s.pasteNode)
   const openImportHtmlModal = useEditorStore((s) => s.openImportHtmlModal)
 
-  const { isExpanded, toggleExpanded } = useDomTree()
+  const store = useExpansionStore()
+  // Hooks must be called unconditionally — evaluate expandedSelf regardless of isRoot,
+  // then gate with isRoot after the hook call (below, after the null guard).
+  const expandedSelf = useIsNodeExpanded(nodeId)
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [isFocused, setIsFocused] = useState(false)
@@ -147,7 +150,7 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth, editable = true 
   // collapsing it would just hide the entire document. Force it open and hide
   // its chevron — the row is purely a label for "the page body", with no
   // expand/collapse affordance.
-  const expanded = isRoot ? true : isExpanded(nodeId)
+  const expanded = isRoot ? true : expandedSelf
   const isOpenContainerGroup = node.moduleId === 'base.container' && hasChildren && expanded && isSelected
   const dropPosition =
     target?.overId === nodeId && target.position !== 'inside'
@@ -166,15 +169,15 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth, editable = true 
       case ' ':
         e.preventDefault()
         selectNode(nodeId)
-        if (hasChildren && !isRoot) toggleExpanded(nodeId)
+        if (hasChildren && !isRoot) store.toggle(nodeId)
         break
       case 'ArrowRight':
         e.preventDefault()
-        if (hasChildren && !isRoot && !expanded) toggleExpanded(nodeId)
+        if (hasChildren && !isRoot && !expanded) store.toggle(nodeId)
         break
       case 'ArrowLeft':
         e.preventDefault()
-        if (!isRoot && expanded) toggleExpanded(nodeId)
+        if (!isRoot && expanded) store.toggle(nodeId)
         break
       case 'F2':
         if (!editable) return
@@ -289,7 +292,7 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth, editable = true 
             return
           }
           selectNode(nodeId)
-          if (hasChildren && !isRoot) toggleExpanded(nodeId)
+          if (hasChildren && !isRoot) store.toggle(nodeId)
         }}
         onKeyDown={handleKeyDown}
         onContextMenu={(e) => {
@@ -311,7 +314,7 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth, editable = true 
         {/* Expand/collapse chevron — hidden on the page root, which is always
             expanded (no toggle affordance). */}
         <TreeChevron
-          onClick={(e) => { e.stopPropagation(); if (!isRoot) toggleExpanded(nodeId) }}
+          onClick={(e) => { e.stopPropagation(); if (!isRoot) store.toggle(nodeId) }}
           expanded={expanded}
           visible={hasChildren && !isRoot}
         />
