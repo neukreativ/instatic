@@ -348,7 +348,7 @@ describe('PP-5 — Advanced Section removed', () => {
 // PP-6: Section shared by top-level panel and class style categories
 // ---------------------------------------------------------------------------
 
-describe("PP-6 — StyleSurface used by PropertiesPanel; Section shared in ClassComposer", () => {
+describe("PP-6 — StyleSurface used by PropertiesPanel; Section shared in StyleSectionsEditor", () => {
   it('PropertiesPanelBody.tsx imports StyleSurface from ./StyleSurface', () => {
     // The PropertiesPanel was refactored into a slim JSX shell + a body
     // component that owns the surface-selection branches. The StyleSurface
@@ -358,8 +358,11 @@ describe("PP-6 — StyleSurface used by PropertiesPanel; Section shared in Class
     expect(src).toMatch(/import.*StyleSurface.*from\s+['"]\.\/StyleSurface['"]/)
   })
 
-  it('ClassComposer.tsx imports Section from the shared @ui/components/Section primitive', () => {
-    const src = readFileSync(join(PP_DIR, 'ClassComposer.tsx'), 'utf-8')
+  it('StyleSectionsEditor.tsx imports Section from the shared @ui/components/Section primitive', () => {
+    // Section moved from ClassComposer into StyleSectionsEditor when inline-styles
+    // refactoring (commit ee346c41) extracted the style-section rendering into a
+    // shared target-agnostic renderer used by both ClassComposer and InlineStyleComposer.
+    const src = readFileSync(join(PP_DIR, 'StyleSectionsEditor.tsx'), 'utf-8')
     expect(src).toMatch(/import\s*\{\s*Section\s*\}\s*from\s+['"]@ui\/components\/Section['"]/)
   })
 })
@@ -1447,9 +1450,13 @@ describe('PP-22 — Module settings is the first visible accordion', () => {
 // PP-24: ClassComposer shows only assigned style categories and uses shared Section
 // ---------------------------------------------------------------------------
 
-describe('PP-24 — ClassComposer assigned categories use shared Section', () => {
-  it('ClassComposer.tsx imports Section from the shared @ui/components/Section primitive', () => {
-    const src = readFileSync(join(PP_DIR, 'ClassComposer.tsx'), 'utf-8')
+describe('PP-24 — StyleSectionsEditor assigned categories use shared Section', () => {
+  it('StyleSectionsEditor.tsx imports Section from the shared @ui/components/Section primitive', () => {
+    // Section ownership moved from ClassComposer → StyleSectionsEditor in the
+    // inline-styles refactor (commit ee346c41). ClassComposer now delegates all
+    // style-section rendering to StyleSectionsEditor, which is the file that
+    // legitimately imports and uses the Section primitive.
+    const src = readFileSync(join(PP_DIR, 'StyleSectionsEditor.tsx'), 'utf-8')
     expect(src).toMatch(/import\s*\{\s*Section\s*\}\s*from\s+['"]@ui\/components\/Section['"]/)
   })
 

@@ -61,9 +61,10 @@ function createPublishFakeDb() {
       else state.dataRows.push(row)
       return { rows: [{ id: row.id }], rowCount: 1 }
     }
-    // saveDataRowDraft — update data_rows set cells_json, slug, updated_by_user_id
+    // saveDataRowDraft — update data_rows set cells_json, slug, updated_by_user_id, plugin_actor_id
+    // params: [0]=cells_json, [1]=slug, [2]=updated_by_user_id, [3]=plugin_actor_id, [4]=rowId
     if (sql.startsWith('update data_rows set cells_json')) {
-      const row = state.dataRows.find((r) => r.id === params[3])
+      const row = state.dataRows.find((r) => r.id === params[4])
       if (row) {
         row.cells_json = params[0]
         row.slug = params[1]
