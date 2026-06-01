@@ -292,6 +292,13 @@ describe('classSlice.renameClass', () => {
     expect(useEditorStore.getState().site!.styleRules[cls.id].name).toBe('button')
   })
 
+  it('keeps a class-kind rule selector in sync when renaming', () => {
+    setupSite()
+    const cls = getStore().createClass('btn')
+    getStore().renameClass(cls.id, 'button')
+    expect(useEditorStore.getState().site!.styleRules[cls.id].selector).toBe('.button')
+  })
+
   it('allows renaming to the same name (no-op, no throw)', () => {
     setupSite()
     const cls = getStore().createClass('btn')

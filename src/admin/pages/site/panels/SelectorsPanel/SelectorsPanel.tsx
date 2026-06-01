@@ -1,35 +1,27 @@
 import {
   useDeferredValue,
   useEffect,
-  useId,
   useRef,
   useState,
-  type FormEvent,
   type KeyboardEvent,
   type MouseEvent,
 } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { selectSelectedNode, useEditorStore } from '@site/store/store'
-import { styleRuleSelector } from '@core/page-tree'
+import { classifySelectorCreateInput, styleRuleSelector } from '@core/page-tree'
 import { generatedClassKindLabel, isGeneratedClass, isGeneratedClassLocked } from '@core/page-tree'
 import type { StyleRule } from '@core/page-tree'
 import { Button } from '@ui/components/Button'
 import { Checkbox } from '@ui/components/Checkbox'
-import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from '@ui/components/ContextMenu'
-import { Dialog } from '@ui/components/Dialog'
 import { EmptyState } from '@ui/components/EmptyState'
 import { FilterBar, type FilterBarItem } from '@ui/components/FilterBar'
-import { Input } from '@ui/components/Input'
 import { Skeleton } from '@ui/components/Skeleton'
-import { CloseIcon } from 'pixel-art-icons/icons/close'
-import { Copy2SharpIcon } from 'pixel-art-icons/icons/copy-2-sharp'
-import { TrashSolidIcon } from 'pixel-art-icons/icons/trash-solid'
-import { EditSolidIcon } from 'pixel-art-icons/icons/edit-solid'
-import { FilePlusSolidIcon } from 'pixel-art-icons/icons/file-plus-solid'
 import { PaintBucketSolidIcon } from 'pixel-art-icons/icons/paint-bucket-solid'
+import { PlusIcon } from 'pixel-art-icons/icons/plus'
 import { Panel } from '@admin/shared/Panel'
 import { cn } from '@ui/cn'
-import dialogStyles from '../../../../shared/dialogs/SiteCreateDialog/SiteCreateDialog.module.css'
+import { DeleteSelectorDialog, SelectorNameDialog } from './SelectorDialogs'
+import { SelectorContextMenu } from './SelectorContextMenu'
 import {
   buildSelectorUsageMap,
   formatSelectorUsage,
@@ -79,15 +71,6 @@ function keyboardMenuPosition(element: HTMLElement) {
   }
 }
 
-function normalizeClassNameInput(value: string) {
-  const trimmed = value.trim()
-  return (trimmed.startsWith('.') ? trimmed.slice(1) : trimmed).trim()
-}
-
-function selectorInputValue(className: string) {
-  return className ? `.${className}` : ''
-}
-
 function getEmptyFilterMessage(filter: SelectorFilter, query: string): string {
   const normalized = query.trim()
   if (normalized) return `No selectors match “${normalized}”.`
@@ -125,7 +108,6 @@ export function SelectorsPanel({ variant = 'docked' }: SelectorsPanelProps) {
   const [filter, setFilter] = useState<SelectorFilter>('all')
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
-  const [createAmbientDialogOpen, setCreateAmbientDialogOpen] = useState(false)
   const [renameTarget, setRenameTarget] = useState<StyleRule | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<StyleRule | null>(null)
   const [visibleCount, setVisibleCount] = useState(SELECTOR_PAGE_SIZE)
@@ -247,18 +229,16 @@ export function SelectorsPanel({ variant = 'docked' }: SelectorsPanelProps) {
     setFocusedPanel('properties')
   }
 
-  function handleCreate(name: string) {
-    const cls = createClass(name)
-    openSelectorInProperties(cls.id)
-    setCreateDialogOpen(false)
-  }
-
-  function handleCreateAmbient(selector: string) {
-    // createAmbientRule throws on empty / invalid selectors; the dialog catches
+  function handleCreate(value: string) {
+    const intent = classifySelectorCreateInput(value)
+    if (intent.kind === 'empty') return
+    // createClass/createAmbientRule throw on invalid input; the dialog catches
     // and surfaces the message inline so the user can fix and retry.
-    const rule = createAmbientRule({ selector })
+    const rule = intent.kind === 'ambient'
+      ? createAmbientRule({ selector: intent.selector })
+      : createClass(intent.name)
     openSelectorInProperties(rule.id)
-    setCreateAmbientDialogOpen(false)
+    setCreateDialogOpen(false)
   }
 
   function handleRename(name: string) {
@@ -282,12 +262,14 @@ export function SelectorsPanel({ variant = 'docked' }: SelectorsPanelProps) {
 
   function handleApplyToSelected(cls: StyleRule) {
     if (!selectedNodeId) return
+    if ((cls.kind ?? 'class') !== 'class') return
     addNodeClass(selectedNodeId, cls.id)
     setContextMenu(null)
   }
 
   function handleRemoveFromSelected(cls: StyleRule) {
     if (!selectedNodeId) return
+    if ((cls.kind ?? 'class') !== 'class') return
     removeNodeClass(selectedNodeId, cls.id)
     setContextMenu(null)
   }
@@ -311,30 +293,6 @@ export function SelectorsPanel({ variant = 'docked' }: SelectorsPanelProps) {
         testId="selectors-panel"
         bodyRef={scrollRef}
         onClose={() => setSelectorsPanelOpen(false)}
-        headerActions={
-          <>
-            <Button
-              variant="ghost"
-              size="xs"
-              iconOnly
-              aria-label="Create selector"
-              tooltip="Create selector"
-              onClick={() => setCreateDialogOpen(true)}
-            >
-              <FilePlusSolidIcon size={13} aria-hidden="true" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="xs"
-              iconOnly
-              aria-label="Create ambient selector"
-              tooltip="Create ambient selector (e.g. h1 > span)"
-              onClick={() => setCreateAmbientDialogOpen(true)}
-            >
-              <PaintBucketSolidIcon size={13} aria-hidden="true" />
-            </Button>
-          </>
-        }
       >
         <FilterBar<SelectorFilter>
             items={SELECTOR_FILTER_ITEMS}
@@ -347,6 +305,18 @@ export function SelectorsPanel({ variant = 'docked' }: SelectorsPanelProps) {
               placeholder: 'Search selectors',
               ariaLabel: 'Search selectors',
             }}
+            searchTrailing={
+              <Button
+                variant="secondary"
+                size="sm"
+                iconOnly
+                aria-label="Create selector"
+                tooltip="Create selector"
+                onClick={() => setCreateDialogOpen(true)}
+              >
+                <PlusIcon size={13} aria-hidden="true" />
+              </Button>
+            }
             groupLabel="Selector type"
           />
 
@@ -417,6 +387,7 @@ export function SelectorsPanel({ variant = 'docked' }: SelectorsPanelProps) {
           y={contextMenu.y}
           selectedNodeHasClass={Boolean(selectedNode?.classIds?.includes(contextClass.id))}
           selectedNodeId={selectedNodeId}
+          assignable={(contextClass.kind ?? 'class') === 'class'}
           onClose={() => setContextMenu(null)}
           onEdit={() => {
             openSelectorInProperties(contextClass.id)
@@ -448,24 +419,18 @@ export function SelectorsPanel({ variant = 'docked' }: SelectorsPanelProps) {
         />
       )}
 
-      {createAmbientDialogOpen && (
-        <SelectorNameDialog
-          mode="ambient"
-          title="Create ambient selector"
-          initialValue=""
-          submitLabel="Create"
-          onCancel={() => setCreateAmbientDialogOpen(false)}
-          onSubmit={handleCreateAmbient}
-        />
-      )}
-
       {renameTarget && (
         <SelectorNameDialog
           title="Rename selector"
-          initialValue={renameTarget.name}
+          initialValue={
+            renameTarget.kind === 'ambient'
+              ? styleRuleSelector(renameTarget)
+              : renameTarget.name
+          }
           submitLabel="Save"
           onCancel={() => setRenameTarget(null)}
           onSubmit={handleRename}
+          mode={renameTarget.kind === 'ambient' ? 'ambient' : 'class'}
         />
       )}
 
@@ -593,198 +558,5 @@ function SelectorRowsSkeleton() {
         </div>
       ))}
     </div>
-  )
-}
-
-function SelectorContextMenu({
-  x,
-  y,
-  selectedNodeHasClass,
-  selectedNodeId,
-  onClose,
-  onEdit,
-  onRename,
-  onDuplicate,
-  onApply,
-  onRemove,
-  onCopy,
-  onDelete,
-  locked,
-}: {
-  x: number
-  y: number
-  selectedNodeHasClass: boolean
-  selectedNodeId: string | null
-  onClose: () => void
-  onEdit: () => void
-  onRename: () => void
-  onDuplicate: () => void
-  onApply: () => void
-  onRemove: () => void
-  onCopy: () => void
-  onDelete: () => void
-  locked: boolean
-}) {
-  return (
-    <ContextMenu x={x} y={y} ariaLabel="Selector actions" onClose={onClose}>
-      <ContextMenuItem onClick={onEdit}>
-        <span aria-hidden="true"><EditSolidIcon size={13} /></span>
-        {locked ? 'View utility' : 'Edit'}
-      </ContextMenuItem>
-      <ContextMenuItem disabled={locked} onClick={onRename}>
-        <span aria-hidden="true"><EditSolidIcon size={13} /></span>
-        Rename
-      </ContextMenuItem>
-      <ContextMenuItem disabled={locked} onClick={onDuplicate}>
-        <span aria-hidden="true"><Copy2SharpIcon size={13} /></span>
-        Duplicate
-      </ContextMenuItem>
-      <ContextMenuSeparator />
-      <ContextMenuItem disabled={!selectedNodeId || selectedNodeHasClass} onClick={onApply}>
-        <span aria-hidden="true"><PaintBucketSolidIcon size={13} /></span>
-        Apply to selected element
-      </ContextMenuItem>
-      <ContextMenuItem disabled={!selectedNodeId || !selectedNodeHasClass} onClick={onRemove}>
-        <span aria-hidden="true"><CloseIcon size={13} /></span>
-        Remove from selected element
-      </ContextMenuItem>
-      <ContextMenuItem onClick={onCopy}>
-        <span aria-hidden="true"><Copy2SharpIcon size={13} /></span>
-        Copy selector
-      </ContextMenuItem>
-      <ContextMenuSeparator />
-      <ContextMenuItem danger disabled={locked} onClick={onDelete}>
-        <span aria-hidden="true"><TrashSolidIcon size={13} /></span>
-        Delete
-      </ContextMenuItem>
-    </ContextMenu>
-  )
-}
-
-const SELECTOR_NAME_FORM_ID = 'selector-name-form'
-
-function SelectorNameDialog({
-  title,
-  initialValue,
-  submitLabel,
-  onCancel,
-  onSubmit,
-  mode = 'class',
-}: {
-  title: string
-  initialValue: string
-  submitLabel: string
-  onCancel: () => void
-  onSubmit: (value: string) => void
-  /**
-   * 'class':  legacy behaviour — input is a class identifier, leading `.` is
-   *           normalised away, the value passed to `onSubmit` is the name.
-   * 'ambient': input is a full CSS selector (e.g. `h1 > span`, `a:hover`),
-   *           trimmed but otherwise untouched. The slice validates and
-   *           throws on syntactically invalid selectors; the error surfaces
-   *           inline.
-   */
-  mode?: 'class' | 'ambient'
-}) {
-  const isAmbient = mode === 'ambient'
-  const [name, setName] = useState(isAmbient ? initialValue : selectorInputValue(initialValue))
-  const [error, setError] = useState<string | null>(null)
-  const trimmedValue = isAmbient ? name.trim() : normalizeClassNameInput(name)
-  const nameInputId = useId()
-  const fieldLabel = isAmbient ? 'Selector' : 'Class name'
-  const fieldPlaceholder = isAmbient ? 'h1 > span, .hero .title, a:hover, ...' : undefined
-
-  function handleSubmit(event: FormEvent) {
-    event.preventDefault()
-    if (!trimmedValue) return
-    try {
-      onSubmit(trimmedValue)
-    } catch (err) {
-      setError(err instanceof Error ? err.message.replace(/^\[[^\]]+\]\s*/, '') : 'Unable to save selector')
-    }
-  }
-
-  return (
-    <Dialog
-      open
-      onClose={onCancel}
-      title={title}
-      size="sm"
-      footer={
-        <>
-          <Button variant="secondary" size="sm" type="button" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            type="submit"
-            form={SELECTOR_NAME_FORM_ID}
-            disabled={!trimmedValue}
-          >
-            {submitLabel}
-          </Button>
-        </>
-      }
-    >
-      <form id={SELECTOR_NAME_FORM_ID} className={dialogStyles.form} onSubmit={handleSubmit}>
-        <div className={dialogStyles.field}>
-          <label htmlFor={nameInputId} className={dialogStyles.label}>{fieldLabel}</label>
-          <Input
-            id={nameInputId}
-            fieldSize="sm"
-            value={name}
-            placeholder={fieldPlaceholder}
-            onChange={(event) => {
-              setName(event.target.value)
-              setError(null)
-            }}
-            aria-label={fieldLabel}
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </div>
-        {error && <p role="alert" className={dialogStyles.errorText}>{error}</p>}
-      </form>
-    </Dialog>
-  )
-}
-
-function DeleteSelectorDialog({
-  cls,
-  usage,
-  onCancel,
-  onDelete,
-}: {
-  cls: StyleRule
-  usage: string
-  onCancel: () => void
-  onDelete: () => void
-}) {
-  const selectorLabel = `.${cls.name}`
-
-  return (
-    <Dialog
-      open
-      onClose={onCancel}
-      title="Delete selector"
-      tone="danger"
-      size="sm"
-      footer={
-        <>
-          <Button variant="secondary" size="sm" type="button" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button variant="destructive" size="sm" type="button" onClick={onDelete}>
-            Delete selector
-          </Button>
-        </>
-      }
-    >
-      <p className={styles.dialogCopy}>
-        Delete <span className={styles.dialogStrong}>{selectorLabel}</span>?
-        This selector is {usage.toLowerCase()}.
-      </p>
-    </Dialog>
   )
 }

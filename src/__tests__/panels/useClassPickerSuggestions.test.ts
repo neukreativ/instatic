@@ -161,7 +161,7 @@ describe('useClassPickerSuggestions — typed query', () => {
     expect(result.exactMatchAlreadyAssigned).toBe(false)
     expect(result.canCreateNew).toBe(false)
     expect(result.hasSubmittableQuery).toBe(true)
-    expect(result.submitTooltip).toBe('Add class “header”')
+    expect(result.submitTooltip).toBe('Add class “.header”')
   })
 
   it('flags an exact match that is already assigned as non-submittable', () => {
@@ -177,7 +177,7 @@ describe('useClassPickerSuggestions — typed query', () => {
     expect(result.exactMatchedClass?.id).toBe(cls.id)
     expect(result.exactMatchAlreadyAssigned).toBe(true)
     expect(result.hasSubmittableQuery).toBe(false)
-    expect(result.submitTooltip).toBe('“header” is already on this element')
+    expect(result.submitTooltip).toBe('“.header” is already on this element')
   })
 
   it('reports canCreateNew when the typed query matches no existing class', () => {
@@ -191,7 +191,7 @@ describe('useClassPickerSuggestions — typed query', () => {
 
     expect(result.canCreateNew).toBe(true)
     expect(result.hasSubmittableQuery).toBe(true)
-    expect(result.submitTooltip).toBe('Create class “brand-new”')
+    expect(result.submitTooltip).toBe('Create class “.brand-new”')
   })
 
   it('reports selector creation for selector-shaped input', () => {
@@ -220,7 +220,19 @@ describe('useClassPickerSuggestions — typed query', () => {
 
     expect(result.exactMatchedClass?.name).toBe('header')
     expect(result.canCreateNew).toBe(false)
-    expect(result.submitTooltip).toBe('Add class “header”')
+    expect(result.submitTooltip).toBe('Add class “.header”')
+  })
+
+  it('filters classes by dot-prefixed partial input', () => {
+    const result = useClassPickerSuggestions({
+      allClasses: [makeClass('header'), makeClass('footer')],
+      assignedIds: [],
+      query: '.hea',
+      highlightedIndex: -1,
+      readUsage: NO_USAGE,
+    })
+
+    expect(result.filteredSuggestions.map((cls) => cls.name)).toEqual(['header'])
   })
 
   it('returns an empty suggestion list when no class matches the query', () => {
@@ -336,7 +348,7 @@ describe('useClassPickerSuggestions — highlightedIndex clamping', () => {
     expect(result.hasArrowSelection).toBe(true)
     // flatNavIds order matches candidates order when there's no usage history.
     expect(result.highlightedClassId).toBe(result.flatNavIds[1])
-    expect(result.highlightedName).toBe('bar')
+    expect(result.highlightedName).toBe('.bar')
   })
 
   it('arrow highlight wins over the typed query in the submit tooltip', () => {
@@ -352,7 +364,7 @@ describe('useClassPickerSuggestions — highlightedIndex clamping', () => {
     })
 
     expect(result.hasArrowSelection).toBe(true)
-    expect(result.submitTooltip).toBe('Add class “foo-bar”')
+    expect(result.submitTooltip).toBe('Add class “.foo-bar”')
   })
 })
 

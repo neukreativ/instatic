@@ -45,6 +45,9 @@ export interface FilterBarProps<TValue = string> {
   /** Element rendered to the LEFT of the search bar (same row). Use for
    *  primary actions like "Upload" that belong next to the search field. */
   searchLeading?: ReactNode;
+  /** Element rendered to the RIGHT of the search bar (same row). Use for
+   *  compact actions that should visually pair with filtering. */
+  searchTrailing?: ReactNode;
   /** Inline action(s) appended after the chips (same row, e.g. "Add category"). */
   inlineActions?: ReactNode;
   /** Trailing slot pinned to the right of the row (e.g. view-mode toggles). */
@@ -60,6 +63,7 @@ export function FilterBar<TValue = string>({
   onValueChange,
   search,
   searchLeading,
+  searchTrailing,
   inlineActions,
   trailing,
   groupLabel,
@@ -68,9 +72,9 @@ export function FilterBar<TValue = string>({
   return (
     <div className={cn(styles.bar, className)}>
       {search && (
-        searchLeading ? (
+        searchLeading || searchTrailing ? (
           <div className={styles.searchRow}>
-            {searchLeading}
+            {searchLeading && <div className={styles.searchAction}>{searchLeading}</div>}
             <SearchBar
               value={search.value}
               onValueChange={search.onValueChange}
@@ -79,6 +83,7 @@ export function FilterBar<TValue = string>({
               aria-label={search.ariaLabel}
               className={styles.searchFill}
             />
+            {searchTrailing && <div className={styles.searchAction}>{searchTrailing}</div>}
           </div>
         ) : (
           <SearchBar

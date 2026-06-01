@@ -16,7 +16,8 @@ Two kinds of rules:
 - Source-of-truth schema: `StyleRuleSchema` in `src/core/page-tree/styleRule.ts`.
 - Compiled to CSS by `classCss.ts` in the publisher; collected via `collectClassCSS(site)`.
 - Each node references class-kind rules by id (`node.classIds: string[]`). Later ids in the array win in cascade order.
-- Rule **name** is the display label; for class-kind rules the CSS selector is `.<name>`; for ambient rules the `selector` field is a verbatim CSS selector.
+- Selector UI surfaces display the rule's CSS selector (`styleRuleSelector(rule)`): class-kind rules appear as `.<name>`, ambient rules appear as their verbatim `selector` text.
+- Rule **name** is the class token for class-kind rules. For ambient rules, `selector` is the source of truth; user edits keep `name` aligned to the selector so old class-name-only UI paths cannot add an extra dot.
 - Rule **id** is the stable internal identifier (`<nanoid>`).
 - Scoped rules (`scope: { type: 'node', nodeId, role: 'module-style' }`) are pinned to one node.
 - Generated rules (framework-emitted spacing utilities, etc.) are flagged on `generated` so the Properties panel selector picker can filter them out by default.
@@ -28,7 +29,7 @@ Two kinds of rules:
 ```ts
 interface StyleRule {
   id:           string                              // nanoid, stable across renames
-  name:         string                              // display name / CSS class name for class-kind rules
+  name:         string                              // class token for class rules; selector mirror for ambient rules
   kind:         'class' | 'ambient'                // discriminator
   selector:     string                              // CSS selector (e.g. '.hero-button' or 'h1 > span')
   order:        number                              // cascade order; rules sorted ascending by this
@@ -59,11 +60,13 @@ This one map replaces the old split between `breakpointStyles` (width breakpoint
 
 ## Naming
 
-Class-kind rule **name** is the public CSS identifier. It must be a valid CSS identifier. `assertValidCssClassName(name)` enforces:
+Class-kind rule **name** is the public class token. It is stored without the leading dot; selector-facing UI renders it through `styleRuleSelector(rule)`, so users see `.hero-button` while node `class=` output stays `hero-button`. `assertValidCssClassName(name)` enforces:
 
-- Starts with a letter or `-_`
-- Contains only letters, digits, `-`, `_`
-- Doesn't collide with reserved names
+- Required, after trimming at creation/rename boundaries
+- No leading, trailing, or embedded ASCII whitespace
+- No control characters
+
+The selector itself is produced by `classKindSelector(name)`, which escapes the token for CSS when needed. Ambient rule **name** mirrors the ambient selector after user edits so older class-name-only surfaces cannot accidentally render an extra leading dot.
 
 Rule **id** is internal (a nanoid). Refs from nodes (`classIds`) and from internal data structures use the id, not the name. This means renaming a rule doesn't break anything that references it.
 
@@ -87,6 +90,8 @@ The right Properties Panel exposes this through a unified selector picker:
 - assigned class-kind rules appear as removable `TagPill` chips and add / remove entries from `node.classIds`;
 - matching ambient rules appear as non-removable `TagPill` chips because they affect the selected element through CSS matching;
 - non-matching ambient rules still appear in the dropdown, disabled with a "doesn't match this element" reason, so the user can see why the rule is not currently active.
+- class-kind pills and suggestion rows show the leading dot (`.hero-button`) because they are CSS selectors, not plain labels.
+- selector creation uses one input path. `classifySelectorCreateInput` treats one class token (`hero-button` or `.hero-button`) as a class-kind rule and selector-shaped input (`h1`, `.hero .title`, `a:hover`) as an ambient rule.
 
 The picker decides ambient matches against the selected live canvas element as the selector subject (`element.matches(selector)`). A selector such as `.hero .title` appears when the selected element is `.title`, not when the selected element is the `.hero` ancestor. Supported trailing pseudo-state selectors (`:hover`, `:focus`, `:focus-visible`, `:active`) are surfaced as inactive matches by stripping the trailing pseudo and testing the base selector.
 
@@ -201,25 +206,31 @@ Hard parsing (throws on shape mismatch) uses `Value.Parse(StyleRuleSchema, raw)`
 ### Create a class-kind rule
 
 ```ts
-import { nanoid } from 'nanoid'
 import type { StyleRule } from '@core/page-tree'
 import { classKindSelector } from '@core/page-tree'
+import { useEditorStore } from '@site/store/store'
 
 const name = 'hero-button'
-const rule: StyleRule = {
-  id:       nanoid(),
+const rule = useEditorStore.getState().createClass(name, {
+  'background-color': 'var(--site-primary)',
+  'padding':          { top: 12, right: 24, bottom: 12, left: 24 },
+  'border-radius':    '8px',
+})
+
+// Equivalent persisted shape:
+const persistedRule: StyleRule = {
+  id:       rule.id,
   name,
   kind:     'class',
   selector: classKindSelector(name),
-  order:    0,
+  order:    rule.order,
   styles: {
     'background-color': 'var(--site-primary)',
     'padding':          { top: 12, right: 24, bottom: 12, left: 24 },
     'border-radius':    '8px',
   },
+  contextStyles: {},
 }
-
-useEditorStore.getState().createClass(rule)
 ```
 
 The rule is added to `site.styleRules`. The publisher emits CSS for it on next publish.
@@ -227,7 +238,8 @@ The rule is added to `site.styleRules`. The publisher emits CSS for it on next p
 ### Assign a class rule to a node
 
 ```ts
-useEditorStore.getState().setNodeClassIds(nodeId, ['hero-button'])
+const rule = useEditorStore.getState().createClass('hero-button')
+useEditorStore.getState().setNodeClassIds(nodeId, [rule.id])
 ```
 
 The class names appear on the rendered element via `classNamesForClassIds`.
@@ -317,7 +329,8 @@ Rule **id** is stable; **name** is editable. The editor mutates `rule.name`. Nod
   - `src/core/page-tree/scopedClassClone.ts` — `cloneScopedClassesForNodeMap`
   - `src/core/publisher/classCss.ts` — `bagToCSS`
   - `src/core/publisher/cssCollector.ts` — `collectClassCSS`
-  - `src/admin/pages/site/panels/PropertiesPanel/selectorPickerModel.ts` — `deriveSelectorPickerModel`, `classifySelectorCreateInput`; the pure derivation layer for the unified selector picker
+  - `src/admin/pages/site/panels/PropertiesPanel/selectorPickerModel.ts` — `deriveSelectorPickerModel`; the pure derivation layer for the unified selector picker
+  - `src/core/page-tree/styleRule.ts` — `classifySelectorCreateInput`; the shared classifier for selector creation surfaces
   - `src/admin/pages/site/panels/PropertiesPanel/ClassPicker.tsx` — picker UI: pill strip, input, creation, context menus
 - Gate tests:
   - `src/__tests__/architecture/framework-typography-spacing.test.ts`

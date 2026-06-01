@@ -49,6 +49,7 @@ import { EditSolidIcon } from 'pixel-art-icons/icons/edit-solid'
 import {
   isGeneratedClassLocked,
   isUserVisibleClass,
+  classifySelectorCreateInput,
   type PageNode,
   type StyleRule,
 } from '@core/page-tree'
@@ -56,7 +57,6 @@ import { recordClassUsage } from '@site/preferences/classUsage'
 import { getErrorMessage } from '@core/utils/errorMessage'
 import { useClassPickerSuggestions } from './useClassPickerSuggestions'
 import {
-  classifySelectorCreateInput,
   deriveSelectorPickerModel,
   type SelectorSuggestionItem,
 } from './selectorPickerModel'

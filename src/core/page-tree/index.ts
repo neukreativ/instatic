@@ -20,7 +20,13 @@ export {
   parsePageNodeTree,
 } from './operationSchema'
 export { PageSchema } from './page'
-export { StyleRuleSchema, StyleRuleKindSchema, classKindSelector, parseStyleRule } from './styleRule'
+export {
+  StyleRuleSchema,
+  StyleRuleKindSchema,
+  classKindSelector,
+  classifySelectorCreateInput,
+  parseStyleRule,
+} from './styleRule'
 export { ConditionSchema, ConditionDefSchema } from './condition'
 export { SiteShellSchema } from './siteDocument'
 export {
@@ -36,7 +42,7 @@ export type { PageNode } from './pageNode'
 export type { TreeOperation, TreeMutateResult } from './operationSchema'
 export type { Page } from './page'
 export type { CSSPropertyBag } from './cssPropertyBag'
-export type { StyleRule, StyleRuleKind } from './styleRule'
+export type { SelectorCreateInput, StyleRule, StyleRuleKind } from './styleRule'
 export type { Condition, ConditionDef } from './condition'
 export type { SiteSettings } from './siteSettings'
 export type { SiteShell, SiteDocument } from './siteDocument'

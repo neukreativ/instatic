@@ -117,12 +117,41 @@ export const StyleRuleSchema = Type.Object({
 
 export type StyleRule = Static<typeof StyleRuleSchema>
 
+export type SelectorCreateInput =
+  | { kind: 'class'; name: string }
+  | { kind: 'ambient'; selector: string }
+  | { kind: 'empty' }
+
+const SINGLE_CLASS_INPUT_RE = /^\.?[a-zA-Z_-][a-zA-Z0-9_-]*$/
+
+// Bare words are class-first. Heading tags are the common exception authors
+// expect to behave as element selectors rather than new class names.
+const HEADING_TAG_NAMES = new Set([
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+])
+
 /**
  * Build the canonical `.<escaped-name>` selector for a class-kind rule.
  * Used during creation and when backfilling missing `selector` on old data.
  */
 export function classKindSelector(name: string): string {
   return `.${escapeCssIdent(name)}`
+}
+
+export function classifySelectorCreateInput(raw: string): SelectorCreateInput {
+  const value = raw.trim()
+  if (!value) return { kind: 'empty' }
+
+  if (SINGLE_CLASS_INPUT_RE.test(value) && !HEADING_TAG_NAMES.has(value.toLowerCase())) {
+    return { kind: 'class', name: value.startsWith('.') ? value.slice(1) : value }
+  }
+
+  return { kind: 'ambient', selector: value }
 }
 
 // ---------------------------------------------------------------------------

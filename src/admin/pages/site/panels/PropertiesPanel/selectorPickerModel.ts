@@ -18,11 +18,6 @@ export interface SelectorSuggestionItem {
   match: SelectorMatch | null
 }
 
-export type SelectorCreateInput =
-  | { kind: 'class'; name: string }
-  | { kind: 'ambient'; selector: string }
-  | { kind: 'empty' }
-
 export interface SelectorPickerModelInput {
   rules: Record<string, StyleRule>
   node: PageNode | null
@@ -36,28 +31,6 @@ export interface SelectorPickerModel {
 }
 
 const SUPPORTED_TRAILING_PSEUDOS = [':hover', ':focus', ':focus-visible', ':active'] as const
-const SINGLE_CLASS_INPUT_RE = /^\.?[a-zA-Z_-][a-zA-Z0-9_-]*$/
-// Keep bare-word creation class-first. Heading tags are the one bare selector
-// users commonly create from the text module's tag control.
-const HEADING_TAG_NAMES = new Set([
-  'h1',
-  'h2',
-  'h3',
-  'h4',
-  'h5',
-  'h6',
-])
-
-export function classifySelectorCreateInput(raw: string): SelectorCreateInput {
-  const value = raw.trim()
-  if (!value) return { kind: 'empty' }
-
-  if (SINGLE_CLASS_INPUT_RE.test(value) && !HEADING_TAG_NAMES.has(value.toLowerCase())) {
-    return { kind: 'class', name: value.startsWith('.') ? value.slice(1) : value }
-  }
-
-  return { kind: 'ambient', selector: value }
-}
 
 export function deriveSelectorPickerModel(input: SelectorPickerModelInput): SelectorPickerModel {
   const { rules, node, selectedElement, activeRuleId } = input

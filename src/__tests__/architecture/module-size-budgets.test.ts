@@ -104,7 +104,6 @@ const GRANDFATHERED: Record<string, number> = {
   'server/plugins/host/handlers/content.ts': 848,
   'src/core/siteImport/cssToStyleRules.ts': 829,
   'src/admin/pages/site/panels/MediaExplorerPanel/MediaExplorerPanel.tsx': 825,
-  'src/admin/pages/site/panels/SelectorsPanel/SelectorsPanel.tsx': 790,
   'src/admin/pages/site/panels/TypographyPanel/FontsSection/AddGoogleFontDialog.tsx': 750,
   'src/core/markdown/markdownDocument.ts': 748,
   'src/ui/components/ContextMenu/ContextMenu.tsx': 741,

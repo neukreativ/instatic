@@ -89,6 +89,20 @@ describe('createAmbientRule', () => {
   })
 })
 
+describe('rename ambient rule', () => {
+  it('keeps name and selector aligned to the edited selector', () => {
+    freshStore()
+    const store = useEditorStore.getState()
+    const rule = store.createAmbientRule({ selector: '.auth-back:hover' })
+
+    store.renameClass(rule.id, '.auth-back:focus')
+
+    const renamed = useEditorStore.getState().site!.styleRules[rule.id]
+    expect(renamed.name).toBe('.auth-back:focus')
+    expect(renamed.selector).toBe('.auth-back:focus')
+  })
+})
+
 describe('node.classIds → class attribute', () => {
   it('classNamesForClassIds filters ambient rules', () => {
     freshStore()

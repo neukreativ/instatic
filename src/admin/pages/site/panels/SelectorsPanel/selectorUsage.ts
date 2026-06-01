@@ -1,4 +1,4 @@
-import { isUserVisibleClass } from '@core/page-tree'
+import { isUserVisibleClass, styleRuleSelector } from '@core/page-tree'
 import type { StyleRule, SiteDocument } from '@core/page-tree'
 
 export function getReusableClasses(classes: Record<string, StyleRule>): StyleRule[] {
@@ -63,6 +63,7 @@ export function normalizeSelectorQuery(raw: string): string {
 export function selectorMatchesQuery(cls: StyleRule, normalizedQuery: string): boolean {
   if (!normalizedQuery) return true
   if (cls.name.toLowerCase().includes(normalizedQuery)) return true
+  if (styleRuleSelector(cls).toLowerCase().includes(normalizedQuery)) return true
   return buildSelectorSearchTokens(cls).some((token) => token.includes(normalizedQuery))
 }
 

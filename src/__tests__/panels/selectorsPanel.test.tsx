@@ -477,7 +477,22 @@ describe('SelectorsPanel', () => {
     expect(screen.getByRole('button', { name: /edit selector \.cta-button/i })).toBeDefined()
   })
 
-  it('creates a reusable selector from the panel toolbar and opens it for editing', async () => {
+  it('places the single create action beside search instead of in the panel header', () => {
+    loadSiteWithSelectors()
+    render(<SelectorsPanel variant="docked" />)
+
+    const panel = screen.getByTestId('selectors-panel')
+    const header = within(panel).getByRole('toolbar', { name: 'Selectors panel header' })
+    const search = within(panel).getByRole('searchbox', { name: /search selectors/i })
+    const searchRow = search.closest('div')?.parentElement
+
+    expect(within(header).queryByRole('button', { name: /create selector/i })).toBeNull()
+    expect(within(panel).queryByRole('button', { name: /create ambient selector/i })).toBeNull()
+    expect(searchRow).not.toBeNull()
+    expect(within(searchRow as HTMLElement).getByRole('button', { name: 'Create selector' })).toBeDefined()
+  })
+
+  it('creates a reusable selector from the search-row create action and opens it for editing', async () => {
     loadSiteWithSelectors()
     render(
       <>
@@ -487,7 +502,11 @@ describe('SelectorsPanel', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: /create selector/i }))
-    fireEvent.change(screen.getByRole('textbox', { name: /class name/i }), {
+    expect(screen.queryByRole('button', { name: /^class$/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /full selector/i })).toBeNull()
+    const selectorInput = screen.getByRole('textbox', { name: /^selector$/i })
+    expect(selectorInput.getAttribute('placeholder')).toContain('.hero .title')
+    fireEvent.change(selectorInput, {
       target: { value: '.feature-card' },
     })
     fireEvent.click(screen.getByRole('button', { name: /^create$/i }))
@@ -503,6 +522,30 @@ describe('SelectorsPanel', () => {
     expect(within(propertiesPanel).getByRole('heading', { name: '.feature-card' })).toBeDefined()
     expect(within(propertiesPanel).getByRole('button', { name: /rename selector \.feature-card/i })).toBeDefined()
     expect(within(propertiesPanel).queryByRole('region', { name: /selector feature-card/i })).toBeNull()
+  })
+
+  it('creates an ambient selector from the same create dialog', async () => {
+    loadSiteWithSelectors()
+    render(
+      <>
+        <SelectorsPanel variant="docked" />
+        <PropertiesPanel variant="docked" />
+      </>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create selector' }))
+    fireEvent.change(screen.getByRole('textbox', { name: /^selector$/i }), {
+      target: { value: '.feature-card:hover' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /^create$/i }))
+
+    const created = Object.values(useEditorStore.getState().site!.styleRules).find(
+      (cls) => cls.kind === 'ambient' && cls.selector === '.feature-card:hover',
+    )
+    expect(created).toBeDefined()
+    expect(useEditorStore.getState().activeClassId).toBe(created!.id)
+    await waitFor(() => expect(screen.getByTestId('properties-panel')).toBeDefined())
+    expect(within(screen.getByTestId('properties-panel')).getByRole('heading', { name: '.feature-card:hover' })).toBeDefined()
   })
 
   it('selecting a row opens the global class editor in the right properties panel', async () => {
@@ -537,6 +580,26 @@ describe('SelectorsPanel', () => {
       expect(useEditorStore.getState().site!.styleRules['hero-title'].name).toBe('feature-heading')
     })
     expect(within(propertiesPanel).getByRole('heading', { name: '.feature-heading' })).toBeDefined()
+  })
+
+  it('opens an ambient selector editor without adding an extra class dot', async () => {
+    loadSiteWithSelectors()
+    const ambient = useEditorStore.getState().createAmbientRule({ selector: '.auth-back:hover' })
+    render(
+      <>
+        <SelectorsPanel variant="docked" />
+        <PropertiesPanel variant="docked" />
+      </>,
+    )
+
+    const selectorsPanel = screen.getByTestId('selectors-panel')
+    fireEvent.click(within(selectorsPanel).getByRole('button', { name: /edit selector \.auth-back:hover/i }))
+
+    await waitFor(() => expect(screen.getByTestId('properties-panel')).toBeDefined())
+    const propertiesPanel = screen.getByTestId('properties-panel')
+    expect(useEditorStore.getState().activeClassId).toBe(ambient.id)
+    expect(within(propertiesPanel).getByRole('heading', { name: '.auth-back:hover' })).toBeDefined()
+    expect(within(propertiesPanel).queryByRole('heading', { name: '..auth-back:hover' })).toBeNull()
   })
 
   it('edit from the selector context menu opens the right properties panel editor', async () => {

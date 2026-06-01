@@ -12,15 +12,19 @@
  * testable without rendering React. See `useClassPickerSuggestions.test.ts`.
  */
 
-import { styleRuleSelector, type StyleRule } from '@core/page-tree'
+import {
+  classKindSelector,
+  classifySelectorCreateInput,
+  styleRuleSelector,
+  type SelectorCreateInput,
+  type StyleRule,
+} from '@core/page-tree'
 import {
   CLASS_USAGE_RECENT_LIMIT,
   readClassUsage,
   selectRecentAndFrequent,
 } from '@site/preferences/classUsage'
 import {
-  classifySelectorCreateInput,
-  type SelectorCreateInput,
   type SelectorSuggestionItem,
 } from './selectorPickerModel'
 
@@ -81,7 +85,7 @@ export interface ClassPickerSuggestionsResult {
   /** Primitive — safe `useEffect` dep. */
   highlightedClassId: string | null
   highlightedSelectorItem: SelectorSuggestionItem | null
-  /** Highlighted class's display name, when any. */
+  /** Highlighted class's selector label, when any. */
   highlightedName: string | null
 
   /**
@@ -126,9 +130,12 @@ export function useClassPickerSuggestions(
   // Ranking tiers (in classPickerRanking):
   //   4 = exact name | 3 = prefix | 2 = word boundary | 1 = substring
   // shorter names win within a tier, then alphabetical.
+  const classSearchQuery = createIntent.kind === 'class'
+    ? createIntent.name.toLowerCase()
+    : trimmedQuery
   const filteredSuggestions = isEmptyQuery
     ? candidates
-    : rankBySuggestionScore(candidates, trimmedQuery)
+    : rankBySuggestionScore(candidates, classSearchQuery)
   const selectorSuggestions = isEmptyQuery
     ? selectorItems.slice()
     : rankSelectorSuggestions(selectorItems, trimmedQuery)
@@ -167,13 +174,12 @@ export function useClassPickerSuggestions(
   const highlightedClassId = hasArrowSelection
     ? candidatesById.get(flatNavIds[effectiveHighlightedIndex] ?? '')?.id ?? null
     : null
+  const highlightedClass = highlightedClassId ? candidatesById.get(highlightedClassId) ?? null : null
   const selectorSuggestionsById = new Map(selectorSuggestions.map((item) => [item.rule.id, item]))
   const highlightedSelectorItem = hasArrowSelection
     ? selectorSuggestionsById.get(flatNavIds[effectiveHighlightedIndex] ?? '') ?? null
     : null
-  const highlightedName = highlightedClassId
-    ? candidatesById.get(highlightedClassId)?.name ?? null
-    : null
+  const highlightedName = highlightedClass ? styleRuleSelector(highlightedClass) : null
 
   // Exact-name match against ALL user-visible classes (including ones already
   // assigned). Drives the Enter-with-typed-input path: typing an existing
@@ -310,9 +316,9 @@ function deriveSubmitTooltip(args: {
     }
     return `Edit selector “${styleRuleSelector(highlightedSelectorItem.rule)}”`
   }
-  if (exactMatchedClass && !exactMatchAlreadyAssigned) return `Add class “${exactMatchedClass.name}”`
+  if (exactMatchedClass && !exactMatchAlreadyAssigned) return `Add class “${styleRuleSelector(exactMatchedClass)}”`
   if (exactMatchedClass && exactMatchAlreadyAssigned) {
-    return `“${exactMatchedClass.name}” is already on this element`
+    return `“${styleRuleSelector(exactMatchedClass)}” is already on this element`
   }
   if (exactMatchedSelectorItem) {
     if (exactMatchedSelectorItem.disabled) {
@@ -321,8 +327,8 @@ function deriveSubmitTooltip(args: {
     return `Edit selector “${styleRuleSelector(exactMatchedSelectorItem.rule)}”`
   }
   if (canCreateNew && trimmedQueryRaw) {
-    const label = createIntent.kind === 'ambient' ? 'selector' : 'class'
-    return `Create ${label} “${trimmedQueryRaw}”`
+    if (createIntent.kind === 'ambient') return `Create selector “${createIntent.selector}”`
+    if (createIntent.kind === 'class') return `Create class “${classKindSelector(createIntent.name)}”`
   }
   return 'Type a class name or selector to add or create'
 }

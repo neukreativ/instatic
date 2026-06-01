@@ -23,6 +23,12 @@
     width: auto;
 }
 
+.searchAction {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+}
+
 .row {
     display: grid;
     align-items: center;

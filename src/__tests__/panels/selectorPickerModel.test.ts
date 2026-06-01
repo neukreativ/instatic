@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'bun:test'
-import type { PageNode, StyleRule } from '@core/page-tree'
-import {
-  classifySelectorCreateInput,
-  deriveSelectorPickerModel,
-} from '@site/panels/PropertiesPanel/selectorPickerModel'
+import { classifySelectorCreateInput, type PageNode, type StyleRule } from '@core/page-tree'
+import { deriveSelectorPickerModel } from '@site/panels/PropertiesPanel/selectorPickerModel'
 
 function rule(overrides: Partial<StyleRule> & { id: string; name: string }): StyleRule {
   return {

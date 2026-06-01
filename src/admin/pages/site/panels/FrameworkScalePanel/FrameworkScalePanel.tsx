@@ -19,7 +19,6 @@
  */
 
 import { type MouseEvent, useState } from 'react'
-import { Button } from '@ui/components/Button'
 import {
   ContextMenu,
   ContextMenuItem,
@@ -27,7 +26,6 @@ import {
 } from '@ui/components/ContextMenu'
 import { Copy2SharpIcon } from 'pixel-art-icons/icons/copy-2-sharp'
 import { TrashSolidIcon } from 'pixel-art-icons/icons/trash-solid'
-import { FilePlusSolidIcon } from 'pixel-art-icons/icons/file-plus-solid'
 import { ReloadIcon } from 'pixel-art-icons/icons/reload'
 import { useEditorStore } from '@site/store/store'
 import { resolveFrameworkPreferences } from '@core/framework/preferences'
@@ -101,19 +99,6 @@ export function FrameworkScalePanel<G extends GroupShape, C extends GeneratorSha
         title={adapter.title}
         testId={`${adapter.panelId}-panel`}
         onClose={onClose}
-        headerActions={
-          <Button
-            variant="ghost"
-            size="xs"
-            iconOnly
-            aria-label={`Add ${adapter.title.toLowerCase()} scale`}
-            tooltip={`Add ${adapter.title.toLowerCase()} scale`}
-            onClick={handleAddGroup}
-            disabled={isDisabled}
-          >
-            <FilePlusSolidIcon size={13} aria-hidden="true" />
-          </Button>
-        }
       >
         <PanelBody<G, C>
           key={activeGroup?.id ?? 'empty'}

@@ -607,7 +607,8 @@ See [docs/features/plugin-system.md](features/plugin-system.md) for the plugin S
   - `src/admin/pages/site/canvas/CanvasRoot.tsx` — canvas mount
   - `src/admin/spotlight/SpotlightRoot.tsx` — Cmd+K palette
   - `src/admin/pages/site/panels/PropertiesPanel/ClassPicker.tsx` — unified selector picker UI
-  - `src/admin/pages/site/panels/PropertiesPanel/selectorPickerModel.ts` — selector picker derivation model (`deriveSelectorPickerModel`, `classifySelectorCreateInput`)
+  - `src/admin/pages/site/panels/PropertiesPanel/selectorPickerModel.ts` — selector picker derivation model (`deriveSelectorPickerModel`)
+  - `src/core/page-tree/styleRule.ts` — selector creation classifier (`classifySelectorCreateInput`) shared by the Properties picker and Selectors panel
   - `src/admin/pages/site/panels/SiteExplorerPanel/SiteExplorerPanel.tsx` — site explorer panel mount
   - `src/admin/pages/site/panels/SiteExplorerPanel/SiteExplorerTreeSection.tsx` — generic tree section renderer used by all explorer categories
   - `src/admin/pages/site/panels/SiteExplorerPanel/siteExplorerModel.ts` — `buildSiteExplorerTreeSection` (placement arrays → typed tree model)

@@ -23,6 +23,7 @@ import { classKindSelector, conditionId, makeConditionDef } from '@core/page-tre
 import { isGeneratedClassLocked, isUserVisibleClass } from '@core/page-tree'
 import { assertValidCssClassName } from '@core/page-tree'
 import { buildSiteHelpers } from './site/helpers'
+import { isValidCssSelector, renameStyleRule } from '../styleRuleRename'
 
 /**
  * Inputs accepted by `createAmbientRule`. `selector` is required (e.g.
@@ -47,26 +48,6 @@ function nextRuleOrder(classes: Record<string, StyleRule>): number {
     if (typeof cls.order === 'number' && cls.order > max) max = cls.order
   }
   return max + 1
-}
-
-/**
- * Defensive selector validity check using the browser's CSS engine. Throws
- * inside `querySelector` for invalid selectors; we turn that into a boolean
- * so the slice can reject the input cleanly.
- *
- * In headless tests happy-dom provides `document` with the same semantics.
- * In the (rare) case that `document` is unavailable, fall back to a permissive
- * accept — the publisher/canvas will still try to use the selector and any
- * downstream failure surfaces clearly.
- */
-function isValidCssSelector(selector: string): boolean {
-  if (typeof document === 'undefined') return true
-  try {
-    document.createDocumentFragment().querySelector(selector)
-    return true
-  } catch {
-    return false
-  }
 }
 
 export interface ClassPreviewAssignment {
@@ -207,7 +188,12 @@ export interface ClassSlice {
   /** Ensure a hidden node-scoped class exists for module instance style fields. */
   ensureNodeStyleClass(nodeId: string, moduleName?: string): StyleRule | null
 
-  /** Rename a class. Throws if the new name is already taken. */
+  /**
+   * Rename a style rule.
+   * - class-kind rules accept one class token and rebuild `selector` from it.
+   * - ambient rules accept a full CSS selector and keep `name` aligned to it
+   *   because selector surfaces display the selector, not an old class label.
+   */
   renameClass(classId: string, name: string): void
 
   /** Duplicate a reusable class. Returns the new class, or null if not found. */
@@ -791,25 +777,8 @@ export const createClassSlice: EditorStoreSliceCreator<ClassSlice> = (set, get) 
 
   renameClass(classId, name) {
     const { site } = get()
-    const cls = site?.styleRules[classId]
-    if (!cls) return
-    if (isGeneratedClassLocked(cls)) return
-    assertValidCssClassName(name)
-    if (Object.is(cls.name, name)) return
-
-    // Uniqueness check (allow keeping same name)
-    const existing = Object.values(site.styleRules).find(
-      (c) => c.name === name && c.id !== classId,
-    )
-    if (existing) throw new Error(`[classSlice] A class named "${name}" already exists`)
-
-    mutateSite((site) => {
-      const draftClass = site.styleRules[classId]
-      if (!draftClass) return false
-      draftClass.name = name
-      draftClass.updatedAt = Date.now()
-      return true
-    })
+    if (!site?.styleRules[classId]) return
+    mutateSite((site) => renameStyleRule(site.styleRules, classId, name))
   },
 
   duplicateClass(classId) {
