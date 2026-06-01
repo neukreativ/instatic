@@ -10,3 +10,4 @@
 
 export { TreeContainer } from './Tree'
 export { TreeRow, TreeChevron, TreeIconSlot, TreeLabelGroup, TreeLabel, TreeMeta } from './TreeRow'
+export { default as treeDropStyles } from './TreeDrop.module.css'

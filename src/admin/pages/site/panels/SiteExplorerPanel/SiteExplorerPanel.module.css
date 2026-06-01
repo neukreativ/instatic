@@ -52,7 +52,7 @@
     position: relative;
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 0;
 }
 
 .treeRowButton {
@@ -92,67 +92,6 @@
     background: var(--panel-bg);
     box-shadow: var(--panel-shadow);
     pointer-events: none;
-}
-
-.dropBefore,
-.dropAfter,
-.dropInside {
-    position: relative;
-}
-
-.rootDropGap {
-    position: relative;
-    flex: 0 0 auto;
-    height: 6px;
-}
-
-.dropBefore::before,
-.dropAfter::after,
-.dropRoot::after {
-    content: "";
-    position: absolute;
-    left: max(6px, var(--tree-row-pl));
-    right: 8px;
-    z-index: 2;
-    height: 2px;
-    border-radius: 999px;
-    background: var(--editor-success-green);
-    box-shadow: 0 0 0 1px var(--editor-success-border);
-    pointer-events: none;
-}
-
-.dropBefore::before {
-    top: 0;
-}
-
-.dropAfter::after {
-    bottom: 0;
-}
-
-.dropRoot::after {
-    left: 8px;
-    bottom: 0;
-}
-
-.rootDropGapActive::after {
-    content: "";
-    position: absolute;
-    top: 50%;
-    left: 8px;
-    right: 8px;
-    z-index: 2;
-    height: 2px;
-    border-radius: 999px;
-    background: var(--editor-success-green);
-    box-shadow: 0 0 0 1px var(--editor-success-border);
-    transform: translateY(-50%);
-    pointer-events: none;
-}
-
-.dropInside {
-    background: var(--editor-success-bg);
-    outline: 1px solid var(--editor-success-border);
-    outline-offset: -2px;
 }
 
 .mediaGrid {

@@ -42,6 +42,7 @@ import {
   TreeLabelGroup,
   TreeMeta,
   TreeRow,
+  treeDropStyles,
 } from '@site/ui/Tree'
 import { ModuleIcon } from '@site/ui/ModuleIcon'
 import { pillAccent } from '@ui/pillAccent'
@@ -248,10 +249,10 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth, editable = true 
         hidden={node.hidden}
         dragging={isDragging}
         className={cn(
-          dropPosition === 'before' && styles.dropBefore,
-          dropPosition === 'after' && styles.dropAfter,
-          dropPosition === 'inside' && styles.dropInside,
-          invalidOverId === nodeId && styles.dropInvalid,
+          dropPosition === 'before' && treeDropStyles.dropBefore,
+          dropPosition === 'after' && treeDropStyles.dropAfter,
+          dropPosition === 'inside' && treeDropStyles.dropInside,
+          invalidOverId === nodeId && treeDropStyles.dropInvalid,
         )}
         {...attributes}
         {...listeners}

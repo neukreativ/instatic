@@ -206,6 +206,62 @@ Same pattern fires on:
 
 ---
 
+## Componentizing existing page content
+
+A page subtree can be promoted to a new Visual Component without leaving the editor — the "Componentize" action is available in two places:
+
+**Layer context menu:** right-click any eligible node in the DOM panel or on the canvas, choose **Componentize**. The menu item is shown when `canComponentizeNode` returns true (see below).
+
+**Properties Panel button:** when a single eligible node is selected, a **Componentize** button appears in the Properties Panel header (next to the class picker).
+
+### Eligibility — `canComponentizeNode`
+
+`src/admin/pages/site/componentization/componentizeEligibility.ts`:
+
+```ts
+canComponentizeNode(activeDocument, node) → node is PageNode
+```
+
+Returns `true` only when all three conditions hold:
+
+- `activeDocument.kind !== 'visualComponent'` — page canvas only; not allowed inside a VC canvas.
+- The node exists (is not null / undefined).
+- `node.moduleId` is neither `'base.body'` (the page root) nor `'base.visual-component-ref'` (already a ref).
+
+### Store flow
+
+Both entry points call `openComponentizeEditor(nodeId)` on the editor store (`uiSlice`):
+
+1. Selection is set to `nodeId` (single-select).
+2. Properties Panel is expanded and `focusedPanel` is set to `'properties'`.
+3. `componentizeEditorRequest` is set to `{ nodeId, requestId }`.
+
+`ConvertToComponentButton` (`src/admin/pages/site/panels/PropertiesPanel/ConvertToComponentButton.tsx`) reads `componentizeEditorRequest`: when the request's `nodeId` matches the button's own `nodeId`, the button switches to its inline editing strip (Input + Create + Cancel) and auto-focuses the name field.
+
+The user types a component name and clicks **Create** (or presses Enter). `convertNodeToComponent(nodeId, name)` in `visualComponentsSlice`:
+
+1. Validates the name via `validateComponentName`.
+2. Deep-clones the source subtree from the page's flat nodes, remapping all IDs.
+3. Wraps the clone in a `base.body` root (invariant: every VC tree has `base.body` as root).
+4. Creates a new `VisualComponent` with the cloned tree and appends it to `site.visualComponents`.
+5. Replaces the original subtree in the page with a `base.visual-component-ref` pointing at the new VC.
+6. Runs `syncSlotInstances` on the new ref.
+
+On success, `activeDocument` switches to the new VC and the editor opens its tree for editing.
+
+### Key files
+
+| File | Role |
+|------|------|
+| `src/admin/pages/site/componentization/componentizeEligibility.ts` | `canComponentizeNode` — eligibility predicate |
+| `src/admin/pages/site/componentization/index.ts` | Public barrel for the `@site/componentization` module |
+| `src/admin/pages/site/panels/PropertiesPanel/ConvertToComponentButton.tsx` | Inline name-input strip in the Properties Panel |
+| `src/admin/pages/site/panels/DomPanel/LayerNodeContextMenu.tsx` | "Componentize" context menu item |
+| `src/admin/pages/site/store/slices/uiSlice.ts` | `openComponentizeEditor`, `clearComponentizeEditorRequest`, `componentizeEditorRequest` |
+| `src/admin/pages/site/store/slices/visualComponentsSlice.ts` | `convertNodeToComponent` — the actual page-tree mutation |
+
+---
+
 ## Editing a VC (VC-mode)
 
 The editor supports two modes — see [docs/editor.md](../editor.md):
@@ -338,6 +394,9 @@ const { refNode, slotInstances } = instantiateVCAtRef(vc, { /* instanceProps */ 
   - `src/core/visualComponents/origin.ts` — `findParamOrigin`
   - `src/core/publisher/renderVisualComponentRef.ts` — render-time inlining
   - `src/core/data/componentFromRow.ts` — VC ↔ data row serialization
+  - `src/admin/pages/site/componentization/componentizeEligibility.ts` — `canComponentizeNode`
+  - `src/admin/pages/site/panels/PropertiesPanel/ConvertToComponentButton.tsx` — inline name-input strip
+  - `src/admin/pages/site/store/slices/visualComponentsSlice.ts` — `convertNodeToComponent`
 - Gate tests:
   - `src/__tests__/architecture/visual-components-mutation-contract.test.ts`
   - `src/__tests__/architecture/no-vc-in-site-shell.test.ts`

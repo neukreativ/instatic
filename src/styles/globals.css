@@ -173,6 +173,12 @@
        there's no drift. */
     --canvas-selection-ring-color: #39ff14;
     --canvas-hover-ring-color: #ff2bd6;
+    --tree-drop-line: #5eead4;
+    --tree-drop-line-shadow: rgba(94, 234, 212, 0.18);
+    --tree-drop-inside-bg: rgba(94, 234, 212, 0.08);
+    --tree-drop-inside-border: rgba(94, 234, 212, 0.65);
+    --tree-drop-invalid-bg: rgba(239, 68, 68, 0.06);
+    --tree-drop-invalid-border: rgba(239, 68, 68, 0.28);
     /* Selector-affinity ring: drawn over every canvas element that matches a
        selector hovered in the Selectors panel. A third identity colour (neon
        orange) distinct from the green selection ring and pink hover ring, so a

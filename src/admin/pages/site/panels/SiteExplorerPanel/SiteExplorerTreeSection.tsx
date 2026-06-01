@@ -15,6 +15,7 @@ import {
   TreeLabelGroup,
   TreeMeta,
   TreeRow,
+  treeDropStyles,
 } from '@site/ui/Tree'
 import type { SiteExplorerSectionId } from '@core/page-tree'
 import type {
@@ -138,7 +139,7 @@ export function SiteExplorerTreeSection<TTarget>({
 
       <TreeContainer
         ariaLabel={title}
-        className={cn(styles.treeRows, rootDropActive && styles.dropRoot)}
+        className={cn(styles.treeRows, rootDropActive && treeDropStyles.dropRoot)}
         containerRef={rootDrop.setNodeRef}
       >
         {!hasRows ? (
@@ -278,7 +279,7 @@ function RootDropGap({ sectionId, index, active }: RootDropGapProps) {
     <div
       ref={setNodeRef}
       aria-hidden="true"
-      className={cn(styles.rootDropGap, active && styles.rootDropGapActive)}
+      className={cn(treeDropStyles.rootDropGap, active && treeDropStyles.rootDropGapActive)}
     />
   )
 }
@@ -349,9 +350,9 @@ function ExplorerFolderRow({
       depth={0}
       dragging={draggable.isDragging}
       className={cn(
-        dropPosition === 'before' && styles.dropBefore,
-        dropPosition === 'after' && styles.dropAfter,
-        dropPosition === 'inside' && styles.dropInside,
+        dropPosition === 'before' && treeDropStyles.dropBefore,
+        dropPosition === 'after' && treeDropStyles.dropAfter,
+        dropPosition === 'inside' && treeDropStyles.dropInside,
       )}
       data-drop-position={dropPosition ?? undefined}
       {...(renameActive ? undefined : draggable.attributes)}
@@ -472,9 +473,9 @@ function ExplorerItemRow<TTarget>({
       selected={item.active}
       dragging={draggable.isDragging}
       className={cn(
-        dropPosition === 'before' && styles.dropBefore,
-        dropPosition === 'after' && styles.dropAfter,
-        dropPosition === 'inside' && styles.dropInside,
+        dropPosition === 'before' && treeDropStyles.dropBefore,
+        dropPosition === 'after' && treeDropStyles.dropAfter,
+        dropPosition === 'inside' && treeDropStyles.dropInside,
       )}
       data-drop-position={dropPosition ?? undefined}
       {...(item.pinned || renameActive ? undefined : draggable.attributes)}

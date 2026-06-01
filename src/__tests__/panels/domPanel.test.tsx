@@ -29,6 +29,7 @@ import { useEditorStore } from '@site/store/store'
 import { makeSite, makePage, makeNode } from '../fixtures'
 
 const TREE_ROW_CSS_PATH = join(import.meta.dir, '../../admin/pages/site/ui/Tree/TreeRow.module.css')
+const TREE_DROP_CSS_PATH = join(import.meta.dir, '../../admin/pages/site/ui/Tree/TreeDrop.module.css')
 const TREE_NODE_CSS_PATH = join(import.meta.dir, '../../admin/pages/site/panels/DomPanel/TreeNode.module.css')
 const TREE_NODE_SOURCE_PATH = join(import.meta.dir, '../../admin/pages/site/panels/DomPanel/TreeNode.tsx')
 const DOM_PANEL_SOURCE_PATH = join(import.meta.dir, '../../admin/pages/site/panels/DomPanel/DomPanel.tsx')
@@ -322,7 +323,7 @@ describe('DomPanel — tree accessibility', () => {
   })
 
   it('drop indicators are CSS overlays that do not change tree row height', () => {
-    const css = readFileSync(TREE_NODE_CSS_PATH, 'utf8')
+    const css = readFileSync(TREE_DROP_CSS_PATH, 'utf8')
 
     expect(css).toContain('.dropBefore::before')
     expect(css).toContain('.dropAfter::after')
@@ -334,6 +335,16 @@ describe('DomPanel — tree accessibility', () => {
     const insideBlock = css.match(/\.dropInside\s*\{[^}]*\}/s)?.[0] ?? ''
     expect(insideBlock).toContain('outline')
     expect(insideBlock).not.toMatch(/(?:^|\n)\s*(height|margin|padding)\b/)
+  })
+
+  it('DOM tree nodes consume the shared tree drop helpers', () => {
+    const source = readFileSync(TREE_NODE_SOURCE_PATH, 'utf8')
+
+    expect(source).toContain('treeDropStyles')
+    expect(source).toContain('treeDropStyles.dropBefore')
+    expect(source).toContain('treeDropStyles.dropAfter')
+    expect(source).toContain('treeDropStyles.dropInside')
+    expect(source).toContain('treeDropStyles.dropInvalid')
   })
 
   it('drag overlay is portaled outside the transformed panel to keep pointer alignment', () => {

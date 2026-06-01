@@ -190,26 +190,40 @@ describe('SiteExplorerPanel', () => {
       new URL('../../admin/layouts/AdminCanvasLayout/AdminCanvasLayout.tsx', import.meta.url),
       'utf-8',
     )
+    const treeDropCss = readFileSync(
+      new URL('../../admin/pages/site/ui/Tree/TreeDrop.module.css', import.meta.url),
+      'utf-8',
+    )
     const css = readFileSync(
       new URL('../../admin/pages/site/panels/SiteExplorerPanel/SiteExplorerPanel.module.css', import.meta.url),
       'utf-8',
     )
 
     expect(treeSectionSource).toContain('align="start"')
+    expect(treeSectionSource).toContain('treeDropStyles')
     expect(treeSectionSource).toContain('data-drop-position')
     expect(treeSectionSource).toContain('RootDropGap')
     expect(panelSource).toContain('DragOverlay')
     expect(layoutSource).toContain('collisionDetection={pointerWithin}')
     expect(css).toContain('justify-content: flex-start')
-    expect(css).toContain('.dropBefore::before')
-    expect(css).toContain('.dropAfter::after')
-    expect(css).toContain('.rootDropGapActive::after')
-    expect(css).toContain('.dropInside')
+    expect(css).toMatch(/\.treeRows\s*\{[^}]*gap:\s*0/s)
+    expect(css).not.toContain('.dropBefore::before')
+    expect(css).not.toContain('.dropAfter::after')
+    expect(css).not.toContain('.rootDropGapActive::after')
+    expect(treeDropCss).toContain('.dropBefore::before')
+    expect(treeDropCss).toContain('.dropAfter::after')
+    expect(treeDropCss).toContain('.rootDropGapActive::after')
+    expect(treeDropCss).toContain('.dropInside')
     expect(css).toContain('.dragOverlayRow')
 
-    const beforeAfterBlock = css.match(/\.dropBefore::before,\n\.dropAfter::after,\n\.dropRoot::after\s*\{[^}]*\}/s)?.[0] ?? ''
+    const beforeAfterBlock = treeDropCss.match(/\.dropBefore::before,\n\.dropAfter::after,\n\.dropRoot::after,\n\.rootDropGapActive::after\s*\{[^}]*\}/s)?.[0] ?? ''
     expect(beforeAfterBlock).toContain('position: absolute')
     expect(beforeAfterBlock).not.toMatch(/(?:^|\n)\s*(margin|padding)\b/)
+
+    const rootGapBlocks = [...treeDropCss.matchAll(/\.rootDropGap\s*\{[^}]*\}/g)]
+    const rootGapBlock = rootGapBlocks[rootGapBlocks.length - 1]?.[0] ?? ''
+    expect(rootGapBlock).toContain('height: 12px')
+    expect(rootGapBlock).toContain('margin-block: -6px')
   })
 
   it('uses inline rename in Site Explorer and keeps the shared rename dialog chrome valid elsewhere', () => {
