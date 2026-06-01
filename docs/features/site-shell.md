@@ -177,6 +177,7 @@ type SiteExplorerSectionId =
 type SiteExplorerFolder = {
   id: string
   name: string
+  order: number  // root-level ordering among folders and unpinned items
 }
 
 type SiteExplorerItemPlacement = {

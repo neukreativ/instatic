@@ -46,7 +46,7 @@ See [docs/reference/database-dialects.md](database-dialects.md).
 
 | Test                                          | What it enforces                                                                 |
 |-----------------------------------------------|----------------------------------------------------------------------------------|
-| `task455-tree-primitive.test.ts`              | Every tree-of-nodes uses `NodeTree<TNode>`. No nested `children: PageNode[]`.    |
+| `task455-tree-primitive.test.ts`              | The `Tree*` primitive lives at `src/admin/pages/site/ui/Tree/` and exports `TreeContainer`, `TreeRow`, `TreeChevron`, `TreeIconSlot`, `TreeLabel`. DOM panel and Site Explorer both import from `@site/ui/Tree` and render `<TreeContainer>` / `<TreeRow>`. Site Explorer renders via `SiteExplorerTreeSection` and stays concept-oriented (no `src/pages/` paths, no `window.prompt`). |
 | `no-vc-mode-branches-in-mutations.test.ts`    | The 11 store actions don't branch on `kind === 'visualComponent'`. Routing happens in `mutateActiveTree`. |
 | `visual-components-mutation-contract.test.ts` | VC tree mutations preserve the slot-instance / slot-outlet invariants.           |
 | `centralized-site-mutation-history.test.ts`   | Every mutation flows through one entry-point so undo / redo stays consistent.    |

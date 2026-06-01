@@ -276,9 +276,26 @@ src/admin/pages/site/
 
 ### Site Explorer
 
-`SiteExplorerPanel` is the editor's concept browser for pages, templates, Visual Components, stylesheets, and scripts. Every section renders through `SiteExplorerTreeSection`, which uses the shared `Tree*` primitives from `src/admin/pages/site/ui/Tree/` for depth indent, chevrons, selection chrome, and DnD row affordances.
+`SiteExplorerPanel` (`src/admin/pages/site/panels/SiteExplorerPanel/`) is the editor's concept browser for pages, templates, Visual Components, stylesheets, and scripts. Every section renders through `SiteExplorerTreeSection`, which uses the shared `Tree*` primitives from `src/admin/pages/site/ui/Tree/` for depth indent, chevrons, selection chrome, and DnD row affordances.
 
 Organization is persisted in `site.explorer` on the site shell. Folders are decorative and flat: they group editor rows only, and never change page slugs, public URLs, component identity, or file paths. The homepage is the page whose slug is `index`; it is always pinned as the first Pages row and does not receive organization drag handlers.
+
+**Store actions** on `siteSlice` for explorer management:
+
+| Action | Effect |
+|---|---|
+| `createExplorerFolder(sectionId, name)` | Creates a folder in the given section, returns the new folder id |
+| `renameExplorerFolder(sectionId, folderId, name)` | Renames a folder |
+| `deleteExplorerFolder(sectionId, folderId)` | Deletes a folder; items that were inside it move to the section root |
+| `moveExplorerFolder(sectionId, folderId, nextIndex)` | Reorders a folder within the root level |
+| `moveExplorerItem(sectionId, itemId, parentFolderId, nextIndex)` | Moves an item to a folder or the root; the homepage cannot be moved |
+| `setPageAsHomepage(pageId)` | Promotes a page to `slug='index'`, demotes the previous homepage to a generated slug, pins the new homepage at the section root |
+
+**DnD architecture:** Organization drag-and-drop (`useSiteExplorerDnd`) uses `useDndMonitor` to hook into the outer `DndContext` that lives in `AdminCanvasLayout`. Component rows carry a separate `visualComponentRef` draggable payload for canvas drops; the explorer DnD hook ignores these payloads and only reacts to `siteExplorerItem` / `siteExplorerFolder` drags.
+
+**Section model:** `buildSiteExplorerTreeSection` in `siteExplorerModel.ts` converts the flat placement arrays from `site.explorer` into a typed tree model (`SiteExplorerTreeSectionModel`) that `SiteExplorerTreeSection` renders — pinned items come first, then root entries (folders and items) sorted by `order`, with each folder's items sorted within it.
+
+**Reconciliation:** `reconcileSiteExplorerInPlace(site)` is called on load, on item-lifecycle mutations (page/template conversions, file creates/deletes, VC creates/deletes), and before any move operation. It drops stale placements, appends newly-created items, filters out non-ejected generated files, and re-pins the homepage.
 
 ### Editor store
 
@@ -570,7 +587,13 @@ See [docs/features/plugin-system.md](features/plugin-system.md) for the plugin S
   - `src/admin/spotlight/SpotlightRoot.tsx` — Cmd+K palette
   - `src/admin/pages/site/panels/PropertiesPanel/ClassPicker.tsx` — unified selector picker UI
   - `src/admin/pages/site/panels/PropertiesPanel/selectorPickerModel.ts` — selector picker derivation model (`deriveSelectorPickerModel`, `classifySelectorCreateInput`)
+  - `src/admin/pages/site/panels/SiteExplorerPanel/SiteExplorerPanel.tsx` — site explorer panel mount
+  - `src/admin/pages/site/panels/SiteExplorerPanel/SiteExplorerTreeSection.tsx` — generic tree section renderer used by all explorer categories
+  - `src/admin/pages/site/panels/SiteExplorerPanel/siteExplorerModel.ts` — `buildSiteExplorerTreeSection` (placement arrays → typed tree model)
+  - `src/admin/pages/site/panels/SiteExplorerPanel/useSiteExplorerDnd.ts` — DnD monitor for explorer organization drag-and-drop
+  - `src/admin/pages/site/store/slices/site/explorerActions.ts` — 6 explorer store actions wired to `mutateSite`
 - Gate tests:
+  - `src/__tests__/architecture/task455-tree-primitive.test.ts` — gates the tree primitive shape and Site Explorer tree usage
   - `src/__tests__/architecture/admin-router-usage.test.ts`
   - `src/__tests__/architecture/admin-startup-imports.test.ts` — pre-auth code must not import the full `@core/persistence` barrel
   - `src/__tests__/architecture/bundle-size-budgets.test.ts` — per-chunk byte budgets (AdminPageLayout, AdminWorkspaceCanvasLayout, SitePage, ContentPage, …)
