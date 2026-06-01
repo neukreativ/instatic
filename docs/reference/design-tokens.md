@@ -7,7 +7,7 @@ The complete catalog of design tokens declared in `src/styles/globals.css`. Ever
 ## TL;DR
 
 - One file: `src/styles/globals.css`.
-- Grouped by surface: editor chrome, panels, inputs, canvas, tooltips, spotlight, charts.
+- Grouped by surface: editor chrome, panels, inputs, scrollbars, canvas, tooltips, spotlight, charts.
 - **Two-layer color model**: achromatic base + semantic / categorical color layer on top. See [docs/design.md](../design.md) for the rationale.
 - Add a new token by editing `globals.css`. Reference it with `var(--your-token)` in CSS Modules.
 - The `src/modules/` directory is **exempt** from the no-hardcoded-color rule — module CSS ships to published pages where editor tokens aren't available.
@@ -66,6 +66,22 @@ Five tones, each a different meaning level.
 | `--editor-text-subtle`      | `#52525b` | Disabled / very subtle         |
 
 Add a new text tone only by adding a new token here.
+
+---
+
+## Scrollbar chrome
+
+Scrollbars are admin chrome, not identity. Keep them achromatic so the panel rail remains the dominant colored vertical affordance.
+
+| Token                            | Value / source                                                      | Use                                           |
+|----------------------------------|---------------------------------------------------------------------|-----------------------------------------------|
+| `--editor-scrollbar-size`        | `6px`                                                               | WebKit/Blink scrollbar width and height       |
+| `--editor-scrollbar-radius`      | `var(--editor-radius-sm)`                                           | Thumb radius                                  |
+| `--editor-scrollbar-track`       | `transparent`                                                       | Track and corner background                   |
+| `--editor-scrollbar-thumb`       | `color-mix(in srgb, var(--editor-text-muted) 58%, transparent)`     | Default thumb color, also Firefox thumb color |
+| `--editor-scrollbar-thumb-hover` | `color-mix(in srgb, var(--editor-text-secondary) 72%, transparent)` | Hover thumb color                             |
+
+`globals.css` applies these through `scrollbar-color` for Firefox and `::-webkit-scrollbar` for WebKit/Blink. Scrollable panel layouts that place rail navigation beside content should use `scrollbar-gutter: stable`.
 
 ---
 

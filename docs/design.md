@@ -126,6 +126,8 @@ Base surfaces (achromatic):
   --editor-surface, --editor-surface-2..5
   --editor-border, --editor-border-med
   --editor-panel-border
+  --editor-scrollbar-track, --editor-scrollbar-thumb,
+  --editor-scrollbar-thumb-hover
 
 Base text (achromatic):
   --editor-text-bright, --editor-text, --editor-text-secondary,
@@ -196,6 +198,10 @@ These five are the entire text palette. Add a new tone only by adding a new toke
 | `--tooltip-radius`   | 6px   | Tooltips                                                     |
 
 Do not introduce ad-hoc radius values. The "16px tile" value isn't yet a named token — it appears in `Widget.module.css` and `DashboardGrid.module.css` as a literal. If a third surface adopts the tile pattern, promote it to `--card-radius`.
+
+### Scrollbar chrome
+
+Editor scrollbars are global chrome and stay achromatic. `globals.css` owns `--editor-scrollbar-size`, `--editor-scrollbar-radius`, `--editor-scrollbar-track`, `--editor-scrollbar-thumb`, and `--editor-scrollbar-thumb-hover`; use those tokens for both `scrollbar-color` and `::-webkit-scrollbar` styling.
 
 ### Shadow and elevation
 
@@ -327,6 +333,10 @@ The border is the input's identity. Don't fill them. Don't square the corners.
 Icons in the rail get a `drop-shadow` glow matching their tint. The active rail item has a 2px tinted indicator on its left edge. Canonical implementation: `src/admin/pages/site/sidebars/PanelRail/PanelRail.module.css`.
 
 This pattern (per-item rail tint via `data-accent`) is the recipe for any equivalent sidebar — media sidebar, data sidebar, etc.
+
+### 5. Scrollbar chrome
+
+Scrollable admin surfaces use a shared, quiet scrollbar: transparent track, muted achromatic thumb, and a slightly brighter hover state. Scrollbar styling lives in `src/styles/globals.css` so Firefox (`scrollbar-color`) and WebKit/Blink (`::-webkit-scrollbar`) stay visually aligned. Panel layouts that place a rail beside scrollable content should reserve a stable gutter so the scrollbar never covers rail icons.
 
 ---
 

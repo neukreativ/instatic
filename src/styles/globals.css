@@ -126,6 +126,17 @@
     /* ─── Panels ─────────────────────────────────────────────────────────── */
     --editor-panel-border: #1f1f1f;
 
+    /* ─── Scrollbars ─────────────────────────────────────────────────────── */
+    --editor-scrollbar-size: 6px;
+    --editor-scrollbar-radius: var(--editor-radius-sm);
+    --editor-scrollbar-track: transparent;
+    --editor-scrollbar-thumb: color-mix(in srgb, var(--editor-text-muted) 58%, transparent);
+    --editor-scrollbar-thumb-hover: color-mix(
+        in srgb,
+        var(--editor-text-secondary) 72%,
+        transparent
+    );
+
     /* ─── Floating Overlay Panels */
     --panel-bg: rgb(30 30 30);
     --panel-border: rgba(255, 255, 255, 0.1);
@@ -260,20 +271,32 @@ body {
     -webkit-font-smoothing: antialiased;
 }
 
-/* Scrollbar styling for panels */
+/* Admin chrome scrollbars: achromatic and quiet so rail tint stays dominant. */
+* {
+    scrollbar-color: var(--editor-scrollbar-thumb) var(--editor-scrollbar-track);
+    scrollbar-width: thin;
+}
+
 ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: var(--editor-scrollbar-size);
+    height: var(--editor-scrollbar-size);
 }
+
 ::-webkit-scrollbar-track {
-    background: transparent;
+    background: var(--editor-scrollbar-track);
 }
+
 ::-webkit-scrollbar-thumb {
-    background: var(--editor-border);
-    border-radius: 3px;
+    background: var(--editor-scrollbar-thumb);
+    border-radius: var(--editor-scrollbar-radius);
 }
+
 ::-webkit-scrollbar-thumb:hover {
-    background: var(--editor-text-muted);
+    background: var(--editor-scrollbar-thumb-hover);
+}
+
+::-webkit-scrollbar-corner {
+    background: var(--editor-scrollbar-track);
 }
 
 /* ===========================================================================
