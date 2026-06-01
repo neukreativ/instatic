@@ -5,9 +5,9 @@ Modules are the building blocks the visual editor places on the canvas — `base
 A module declares:
 - A unique `id` (namespaced: `base.text`, `acme.product-card`)
 - A `PropertySchema` describing its props (drives the right-panel form)
-- A `render({ props, children, html })` function that returns HTML + optional CSS
+- A pure `render(props, renderedChildren)` function that returns `{ html, css? }`
 - An optional canvas `component` (React) for in-editor preview
-- Optional defaults, behaviors (`canHaveChildren`, `htmlTag`, `category`)
+- Required metadata: `name`, `category`, `icon`, `version`, `trusted`, `canHaveChildren`, `defaults`
 
 ---
 
@@ -255,10 +255,33 @@ The React component receives `ModuleComponentProps<TProps>`:
 
 ```ts
 interface ModuleComponentProps<TProps> {
-  props:    TProps
-  children: React.ReactNode
-  nodeId:   string
-  // ... editor-time context (breakpoint, selected, hovered, etc.)
+  props:             TProps
+  nodeId:            string
+  isSelected:        boolean
+  children?:         React.ReactNode
+  /** Space-separated CSS class string from node.classIds — spread onto the root element. */
+  mcClassName?:      string
+  /**
+   * Editor attributes and event handlers — MUST be spread onto the root element.
+   * Wires selection, hover, double-click, context-menu, and keyboard activation.
+   * undefined outside the editor (publisher, plugin sandbox preview).
+   */
+  nodeWrapperProps?: NodeWrapperProps
+}
+```
+
+**Spreading `nodeWrapperProps` is mandatory.** Every module editor component must spread `nodeWrapperProps` onto its root JSX element and apply `mcClassName` as the class. Without this the node is invisible to the editor's interaction layer (selection, hover, keyboard). Example:
+
+```tsx
+export const HeadingEditor: React.FC<ModuleComponentProps<HeadingProps>> = ({
+  props, children, mcClassName, nodeWrapperProps,
+}) => {
+  const tag = `h${Math.max(1, Math.min(6, Number(props.level) || 2))}`
+  return React.createElement(tag, {
+    ...nodeWrapperProps,
+    className: mcClassName,
+    'data-align': props.align,
+  }, props.text)
 }
 ```
 

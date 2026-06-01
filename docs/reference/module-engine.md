@@ -1,48 +1,62 @@
 # Module Engine
 
-Cookbook for adding a new module — the building block used on the visual canvas. For the broader concept of what a module is, see [docs/features/modules.md](../features/modules.md). This page is a "how do I implement one?" reference.
+Cookbook for adding a new first-party module — the building block used on the visual canvas. For the broader concept of what a module is and how the registry works, see [docs/features/modules.md](../features/modules.md). This page answers "how do I implement one?"
 
 ---
 
 ## TL;DR
 
-- Define with `defineModule({ id, name, defaults, schema, render })` from `@core/module-engine`.
-- Register via `registry.register(YourModule)` in `src/modules/base/index.ts` (first-party) or via the plugin SDK's `modules` entrypoint (plugin).
+- Define as a `ModuleDefinition<TProps>` from `@core/module-engine/types`.
+- Register via `registry.registerOrReplace(YourModule)` in `src/modules/base/index.ts`.
 - `id` is namespaced kebab-case (`base.heading`, `acme.product-card`).
-- `render({ props, children, html })` is **pure** — string → string. No DOM, no React, no side effects.
-- Props pass through `escapeProps` before `render`. Strings are HTML-safe; objects pass through (used by `_resolvedMediaByKey`).
+- `render(props, renderedChildren)` is **pure** — string → string. No DOM, no React, no side effects.
+- String props are HTML-escaped by the publisher before `render` is called.
 - CSS from `render()` is deduped by `moduleId` — emit the same CSS per instance, it ships once.
+- Editor components **must** spread `nodeWrapperProps` and apply `mcClassName` on the root element.
 
 ---
 
 ## Minimal module
 
 ```ts
-// src/modules/base/heading/HeadingModule.ts
-import { defineModule } from '@core/module-engine'
+// src/modules/base/heading/index.ts
+import type { ModuleDefinition } from '@core/module-engine'
+import { registry } from '@core/module-engine'
+import { Type, Value, type Static } from '@core/utils/typeboxHelpers'
+import { HeadingIcon } from 'pixel-art-icons/icons/heading'
+import { HeadingEditor } from './HeadingEditor'
 
-export const HeadingModule = defineModule({
+const HeadingPropsSchema = Type.Object({
+  level: Type.Number({ default: 2 }),
+  text:  Type.String({ default: 'Heading' }),
+  align: Type.Union([Type.Literal('left'), Type.Literal('center'), Type.Literal('right')], { default: 'left' }),
+})
+
+type HeadingProps = Static<typeof HeadingPropsSchema>
+
+export const HeadingModule: ModuleDefinition<HeadingProps> = {
   id: 'base.heading',
   name: 'Heading',
   description: 'A heading element (h1–h6).',
   category: 'Typography',
+  version: '1.0.0',
+  icon: HeadingIcon,
+  trusted: true,
+  canHaveChildren: false,
+  propsSchema: HeadingPropsSchema,
+  defaults: Value.Create(HeadingPropsSchema),
   htmlTag: 'h2',
-  defaults: {
-    level: 2,
-    text:  'Heading',
-    align: 'left',
-  },
   schema: {
     level: {
-      type:    'select',
-      label:   'Level',
+      type: 'select',
+      label: 'Level',
       options: [1, 2, 3, 4, 5, 6].map((n) => ({ value: String(n), label: `h${n}` })),
     },
-    text: { type: 'text', label: 'Text' },
+    text:  { type: 'text', label: 'Text' },
     align: {
-      type:    'select',
-      label:   'Align',
-      layout:  'inline',
+      type: 'select',
+      label: 'Align',
+      layout: 'inline',
       options: [
         { value: 'left',   label: 'Left' },
         { value: 'center', label: 'Center' },
@@ -50,42 +64,31 @@ export const HeadingModule = defineModule({
       ],
     },
   },
-  render: ({ props, html }) => {
+  component: HeadingEditor,
+  render: (props) => {
     const tag = `h${Math.max(1, Math.min(6, Number(props.level) || 2))}`
     return {
-      html: html`<${tag} class="heading" data-align="${props.align}">${props.text}</${tag}>`,
+      html: `<${tag} class="heading" data-align="${props.align}">${props.text}</${tag}>`,
       css:  `.heading[data-align="center"] { text-align: center; }
              .heading[data-align="right"]  { text-align: right;  }`,
     }
   },
-})
+}
+
+registry.registerOrReplace(HeadingModule)
 ```
 
-Register:
+Register via `src/modules/base/index.ts` (import the file — the `registerOrReplace` call at the bottom runs at import time).
 
-```ts
-// src/modules/base/index.ts
-import { HeadingModule } from './heading/HeadingModule'
-registry.register(HeadingModule)
-```
-
-That's the whole feature loop:
-
-- The module appears in the canvas Module Picker.
-- Its Properties Panel auto-renders from `schema`.
-- The publisher walks it like any other module.
-- Its CSS is deduped across all instances.
+That's the whole feature loop: module picker, Properties Panel, publisher, CSS dedup.
 
 ---
 
 ## Render contract
 
 ```ts
-type ModuleRender<TProps> = (input: {
-  props:    TProps                                       // already escaped + bindings resolved
-  children: string                                       // joined rendered child HTML
-  html:     (strings, ...values) => string              // auto-escapes interpolations
-}) => RenderOutput  // { html: string; css?: string }
+render: (props: TProps, renderedChildren: string[]) => RenderOutput
+// RenderOutput = { html: string; css?: string }
 ```
 
 ### `props` is trusted (after escaping)
@@ -96,183 +99,149 @@ By the time `render` is called:
 - Dynamic bindings (`{currentEntry.title}`) have been resolved.
 - Per-breakpoint overrides have been merged in.
 
-So `${props.title}` inside the `html` template is safe to interpolate as-is.
+So `${props.title}` inside the HTML string is safe to interpolate as-is for most uses. For URL attributes (`href`, `src`, `action`) always run `safeUrl(value)` from `@modules/base/utils/escape` first.
 
-### `children` is trusted
+### `renderedChildren` is trusted
 
-It's already-rendered HTML from the publisher walker. Interpolate as-is:
-
-```ts
-html: html`<div class="container">${children}</div>`
-```
-
-### `html` is a tagged template that auto-escapes
+It's an array of already-rendered HTML strings from the publisher walker. Join them:
 
 ```ts
-html`<a href="${props.url}">${props.label}</a>`
+render: (props, renderedChildren) => ({
+  html: `<div class="container">${renderedChildren.join('')}</div>`,
+})
 ```
 
-Both `${props.url}` and `${props.label}` are auto-escaped. If you need to emit a raw HTML fragment (extremely rare), pre-build it with the same `html` template and concatenate.
+Leaf modules (`canHaveChildren: false`) receive an empty array — they can ignore the parameter.
 
 ### Returning CSS
 
 ```ts
 return {
-  html: html`<div class="my-mod">${children}</div>`,
-  css:  `.my-mod { padding: 16px; border-radius: var(--editor-radius); }`,
+  html: `<div class="my-mod">${renderedChildren.join('')}</div>`,
+  css:  `.my-mod { padding: 16px; }`,
 }
 ```
 
-- CSS is deduped per `moduleId` — emit the same CSS for every instance; it appears once.
-- Use module-scoped selectors (`.my-mod`, `.my-mod__inner`). Don't use global selectors.
-- The CSS goes through `sanitizeModuleCSS` — `@import`, `expression()`, `javascript:` URLs are stripped.
-- `src/modules/` is exempt from `css-token-policy.test.ts` (modules ship to published pages where editor tokens aren't available). Use hex literals or site framework tokens.
-
-### Emitting children
-
-If a module accepts children (`canHaveChildren: true`), put `${children}` where they should appear:
-
-```ts
-canHaveChildren: true,
-render: ({ children, html, props }) => ({
-  html: html`<section class="container" data-direction="${props.direction}">${children}</section>`,
-  css:  `/* ... */`,
-})
-```
-
-Modules without children ignore `children` (it's the empty string anyway).
+- CSS is deduped per `moduleId` — emit the same CSS for every instance; it appears once in the page.
+- Use module-scoped selectors (`.my-mod`, `.my-mod__inner`). Avoid global or id-based selectors.
+- `src/modules/` is exempt from `css-token-policy.test.ts` — hex literals are fine here. Editor tokens aren't available in published pages.
 
 ---
 
 ## Property schema patterns
 
-### Text input
+The `schema` field maps prop keys to `PropertyControl` descriptors. Full union in `src/core/module-engine/propertySchema.ts`.
+
+### Control types
+
+| `type`      | Renders as                                        | Value shape              |
+|-------------|---------------------------------------------------|--------------------------|
+| `text`      | `<Input>`                                         | `string`                 |
+| `textarea`  | `<Textarea>`                                      | `string`                 |
+| `richtext`  | Rich text editor (DOMPurify output)               | HTML string              |
+| `number`    | `<Input type="number">`                           | `number`                 |
+| `toggle`    | `<Switch>`                                        | `boolean`                |
+| `select`    | `<Select>` or `<ContextMenu>` for long lists      | option value string      |
+| `color`     | `<ColorInput>`                                    | hex string               |
+| `url`       | URL text input                                    | `string`                 |
+| `dataTable` | Data table picker                                 | table id string          |
+| `image`     | Media picker (images)                             | media id or URL string   |
+| `media`     | Media picker (image or video)                     | media id string          |
+| `svg`       | Inline SVG editor                                 | SVG markup string        |
+| `group`     | Collapsible section (visual grouping, no data)    | — (children record)      |
+
+### Conditional controls
 
 ```ts
 schema: {
-  label: { type: 'text', label: 'Label' },
-  body:  { type: 'textarea', label: 'Body', rows: 4 },
+  hasIcon: { type: 'toggle', label: 'Show icon' },
+  iconName: {
+    type:      'select',
+    label:     'Icon',
+    options:   ICON_OPTIONS,
+    condition: { field: 'hasIcon', eq: true },
+  },
 }
 ```
 
-### Select
+Condition operators: `eq`, `notEq`, `in`, `notIn`. Compose with `and` / `or`.
+
+### Edit-permission category
+
+The optional `category` field on a control marks who can edit it:
 
 ```ts
-size: {
-  type:    'select',
-  label:   'Size',
-  options: [
-    { value: 'sm', label: 'Small' },
-    { value: 'md', label: 'Medium' },
-    { value: 'lg', label: 'Large' },
-  ],
-  defaultValue: 'md',
-}
+text:  { type: 'text',   label: 'Text',  category: 'content' }  // content editors can change
+align: { type: 'select', label: 'Align', category: 'layout'  }  // structural — restricted
 ```
 
-For long lists (>10), the Properties Panel auto-switches to a searchable dropdown.
-
-### Conditional
-
-```ts
-hasIcon:  { type: 'boolean', label: 'Show icon' },
-iconName: {
-  type:    'select',
-  label:   'Icon',
-  options: ICON_OPTIONS,
-  condition: { prop: 'hasIcon', equals: true },
-}
-```
-
-The control hides when its condition is false.
-
-### Link
-
-```ts
-href: {
-  type:  'link',
-  label: 'Link',
-  defaultValue: { url: '', target: '_self', rel: '' },
-}
-```
-
-Cell shape is `LinkValue { url, target?, rel? }`.
-
-### Color
-
-```ts
-bgColor: { type: 'color', label: 'Background', defaultValue: '#1b1b1b' }
-```
-
-### Image / Media
-
-```ts
-poster:  { type: 'image', label: 'Poster' }
-video:   { type: 'media', label: 'Video', accept: ['video/*'] }
-```
-
-Cell shape: media id (string) or external URL (string). The publisher resolves via `mediaPrefetch.ts` and attaches `_resolvedMediaByKey` to props.
-
-### Spacing
-
-```ts
-padding: {
-  type:  'spacing',
-  label: 'Padding',
-  defaultValue: { top: 0, right: 0, bottom: 0, left: 0 },
-}
-```
-
-### Category grouping
-
-```ts
-text: { type: 'text', label: 'Text', category: 'content' }
-align: { type: 'select', label: 'Align', category: 'layout' }
-```
-
-Categories: `content` | `layout` | `spacing` | `typography` | `background` | `border` | `effects` | `meta`.
+Only `'content'` and `'layout'` are valid. Defaults: `text / textarea / richtext / svg / url / image / media → 'content'`; everything else → `'layout'`.
 
 ### Layout
 
-```ts
-align:  { type: 'select', label: 'Align',  layout: 'inline' }   // same row
-margin: { type: 'spacing', label: 'Margin', layout: 'block' }   // own row
+`layout: 'inline'` puts the control on the same row as its label. `layout: 'stacked'` (default) puts it below.
+
+---
+
+## Editor canvas component
+
+Provide a React `component` when the module needs DOM interaction at edit time (e.g. a live preview that differs from static HTML, or DOM measurements).
+
+```tsx
+// src/modules/base/heading/HeadingEditor.tsx
+import React from 'react'
+import type { ModuleComponentProps } from '@core/module-engine'
+
+interface HeadingProps extends Record<string, unknown> {
+  level: number
+  text:  string
+  align: string
+}
+
+export const HeadingEditor: React.FC<ModuleComponentProps<HeadingProps>> = ({
+  props,
+  mcClassName,
+  nodeWrapperProps,
+}) => {
+  const tag = `h${Math.max(1, Math.min(6, Number(props.level) || 2))}`
+  return React.createElement(tag, {
+    ...nodeWrapperProps,   // REQUIRED — wires selection, hover, keyboard to this node
+    className: mcClassName, // REQUIRED — applies node.classIds CSS
+    'data-align': props.align,
+  }, props.text)
+}
 ```
+
+**Rules:**
+- Spread `nodeWrapperProps` onto the root element. Without it the node is invisible to the editor's interaction layer (no selection, no hover, no keyboard).
+- Apply `mcClassName` as the root element's class. Without it the author's CSS class rules don't apply in the canvas.
+- Produce the same DOM structure as `render()` — canvas selection geometry, drop-target detection, and dimension measurement assume parity.
+- `nodeWrapperProps` is `undefined` outside the editor (publisher, plugin preview). Components that check for its presence can render a plain published element when it's absent.
 
 ---
 
 ## Media in `render`
 
-For `image` and `media` props, the publisher's `attachResolvedMediaByKey(...)` puts a resolved `RenderResolvedMedia` object on `props._resolvedMediaByKey?.<propKey>`:
+For `image` and `media` props the publisher's `attachResolvedMediaByKey` puts a resolved object on `props._resolvedMediaByKey?.<propKey>`:
 
 ```ts
-render({ props, html }) {
-  const resolved = props._resolvedMediaByKey?.src
+render: (props) => {
+  const resolved = (props._resolvedMediaByKey as Record<string, unknown> | undefined)?.src
   if (!resolved) {
-    // Fallback: render with the raw URL (for non-CMS URLs / preview)
-    return { html: html`<img src="${props.src}" alt="${props.alt ?? ''}">` }
+    return { html: `<img src="${props.src}" alt="${props.alt ?? ''}">` }
   }
-  // Resolved — emit responsive picture markup
-  return {
-    html: html`
-      <picture>
-        ${resolved.sources.map((s) => html`<source srcset="${s.srcset}" type="${s.type}" sizes="${s.sizes}">`).join('')}
-        <img src="${resolved.fallback}" alt="${props.alt ?? ''}"
-             ${resolved.width  ? html` width="${resolved.width}"`   : ''}
-             ${resolved.height ? html` height="${resolved.height}"` : ''}>
-      </picture>
-    `,
-  }
+  // Use resolved.sources, resolved.fallback, resolved.width, resolved.height
+  return { html: `<img src="${(resolved as { fallback: string }).fallback}" alt="${props.alt ?? ''}">` }
 }
 ```
 
-`mediaPresentation.ts` produces the variants; `attachResolvedMediaByKey` attaches them; the module just emits the markup.
+See `src/core/publisher/mediaPresentation.ts` for the resolved shape.
 
 ---
 
 ## Module dependencies (npm imports)
 
-If your module needs an npm package at **runtime** (e.g. `three.js` in a 3D scene module):
+If the module needs a runtime npm package (e.g. `three.js` in a 3D scene):
 
 ```ts
 dependencies: {
@@ -280,31 +249,7 @@ dependencies: {
 } as ModuleDependencies
 ```
 
-The publisher emits an `<script type="importmap">` entry mapping `three` to the per-site runtime cache URL. Inside the module's frontend bundle, `import * as THREE from 'three'` works.
-
-`getMissingModuleDependencies(...)` surfaces dependencies the site doesn't declare — the Site → Dependencies panel shows them so the user can add them.
-
----
-
-## Editor canvas component (optional)
-
-If your module needs DOM access at edit time (e.g. live preview interaction), provide a React `component`:
-
-```ts
-import type { ModuleComponentProps } from '@core/module-engine'
-
-function HeadingComponent({ props, children, nodeId }: ModuleComponentProps<HeadingProps>) {
-  // ... renders to React, inside the canvas iframe
-  return <h2 data-align={props.align}>{props.text}</h2>
-}
-
-export const HeadingModule = defineModule({
-  // ...
-  component: HeadingComponent,
-})
-```
-
-The canvas uses `component` instead of inserting raw `render()` HTML — but the **same HTML structure** must be produced. The canvas's selection geometry, drop-target detection, and dimension measurement assume parity.
+The publisher emits a `<script type="importmap">` entry. `getMissingModuleDependencies(...)` surfaces dependencies the site doesn't yet declare in the Dependencies panel.
 
 ---
 
@@ -314,23 +259,24 @@ The canvas uses `component` instead of inserting raw `render()` HTML — but the
 |----------------------------------------------------------------------|----------------------------------------------------------|
 | `document.querySelector` inside `render`                             | Render is pure. No DOM.                                  |
 | `await fetch(...)` inside `render`                                   | Render is sync. Pre-fetch via prefetch helpers.          |
-| Mutating `props` inside `render`                                     | Treat as immutable.                                      |
-| Hand-escaping with `String.replace`                                  | Use the `html` template helper.                          |
-| Returning `<script>` tags in module HTML                             | The pipeline sanitizes them out. Use plugin frontend assets for runtime JS. |
-| Importing from `@admin/...` inside a module                          | Modules are publisher-side. Stay inside `@core/...`, `@ui/...`. |
-| Hardcoding `'#ff7700'` in module CSS when a site token exists        | Reference site framework tokens via `var(--site-primary)` if the site exposes one. Module hex is OK because `src/modules/` is exempt from the token gate. |
-| One-off id-based selectors (`#node-${nodeId}`)                       | CSS is deduped per `moduleId` — selectors per-instance would defeat dedup. Use `[data-x]` attribute selectors instead. |
+| Mutating `props` inside `render`                                     | Treat props as immutable.                                |
+| Emitting `<script>` tags from `render`                              | The publisher sanitizer strips them. Use plugin frontend assets. |
+| Hardcoded id selectors in CSS (`.my-mod-${nodeId}`)                 | CSS is deduped per `moduleId`. Use `[data-*]` attribute selectors. |
+| Importing from `@admin/...` inside a module                          | Modules are publisher-side. Stay inside `@core/...` and `@ui/...` (icons only). |
+| Omitting `nodeWrapperProps` spread in editor component              | Node becomes unselectable and invisible to the editor.  |
+| Parallel `interface Foo` next to a `FooPropsSchema`                 | Use `type Foo = Static<typeof FooPropsSchema>`.          |
 
 ---
 
 ## Related
 
-- [docs/features/modules.md](../features/modules.md) — broader module concept + lifecycle
-- [docs/features/publisher.md](../features/publisher.md) — how `render()` fits in the walker
+- [docs/features/modules.md](../features/modules.md) — broader module concept, registry, boot-time registration
+- [docs/features/publisher.md](../features/publisher.md) — how `render()` fits in the publisher walker
 - [docs/features/visual-components.md](../features/visual-components.md) — `base.visual-component-ref`, slots
 - [docs/reference/page-tree.md](page-tree.md) — nodes reference modules by `moduleId`
 - Source-of-truth files:
-  - `src/core/module-engine/types.ts` — `ModuleDefinition`, `RenderOutput`
+  - `src/core/module-engine/types.ts` — `ModuleDefinition`, `RenderOutput`, `ModuleComponentProps`, `NodeWrapperProps`
   - `src/core/module-engine/propertySchema.ts` — `PropertyControl` discriminated union
-  - `src/core/module-engine/registry.ts` — registry singleton
-  - `src/modules/base/*` — first-party modules (read these for examples)
+  - `src/core/module-engine/registry.ts` — `IModuleRegistry`, `registry` singleton
+  - `src/modules/base/*` — first-party modules (read these for real examples)
+  - `src/modules/base/container/ContainerEditor.tsx` — canonical editor component pattern

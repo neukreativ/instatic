@@ -10,7 +10,7 @@ The published output has **no framework runtime**, **no client-side hydration of
 
 - Entry point: `publishPage(page, ctx)` in `src/core/publisher/render.ts`. Returns the full HTML document string.
 - Recursion: `renderNode(nodeId, ctx)` in `renderNode.ts`. Bottom-up walk. Two specialized renderers hook in for `base.visual-component-ref` and `base.loop`.
-- Per-node flow: render children → resolve effective + dynamic props → `escapeProps` → call `module.render({props, html, children})` → collect deduped CSS → inject author class names.
+- Per-node flow: render children → resolve effective + dynamic props → `escapeProps` → call `module.render(props, renderedChildren)` → collect deduped CSS → inject author class names.
 - CSS is deduped by `moduleId` via `CssCollector` (~60–80% size reduction on typical pages).
 - Module `render()` is a **pure function**: no DOM, no React, no side effects (Constraint #179).
 - Every node's props pass through `escapeProps` before `render()` (Constraint #211).
@@ -88,7 +88,7 @@ For each node, bottom-up:
   4. safeProps      = escapeProps(dynamicProps, schema)  ← HTML-escape strings
   5. attachResolvedMediaByKey(safeProps, def, ...)       ← attach <picture>/<srcset>
   6. attachAutoSizes(safeProps, def, ...)                ← auto <img sizes>
-  7. { html, css } = def.render({ props: safeProps, children, html })  ← MODULE BOUNDARY
+  7. { html, css } = def.render(safeProps, children)                  ← MODULE BOUNDARY
   8. css = sanitizeModuleCSS(css)                        ← DOMPurify
   9. cssCollector.add(moduleId, css)                     ← dedup by moduleId
  10. html = injectNodeClassIds(html, node, site)         ← splice classIds into root tag
@@ -104,15 +104,15 @@ The walker is recursive, but every step is local — there's no global state mut
 A module's `render()` is the only thing the walker calls per node. It's a **pure** function:
 
 ```ts
-type ModuleRender<Schema> = (input: {
-  props:    ResolvedProps<Schema>
-  children: string                       // joined rendered child HTML
-  html:     (strings: TemplateStringsArray, ...values: unknown[]) => string  // helper
-}) => { html: string; css?: string }
+type ModuleRender<TProps> = (
+  props:             TProps,       // already HTML-escaped + bindings resolved
+  renderedChildren:  string[],     // pre-rendered child HTML strings
+) => { html: string; css?: string }
 ```
 
 - **No DOM access**, **no React**, **no side effects**. The result is a string of HTML and an optional string of CSS.
-- The `html` helper is a tagged template that auto-escapes interpolated values. Use it for any prop you didn't get pre-escaped.
+- String props are HTML-safe after `escapeProps` — interpolate them directly. For URL attributes (`href`, `src`, `action`) use `safeUrl(value)` from `src/core/publisher/utils.ts`.
+- Join children as `renderedChildren.join('')`; leaf modules receive an empty array.
 - The returned `css` is collected and deduped — emitting the same CSS for every instance of a module is fine; it appears once in the page bundle.
 
 Constraints (gated by tests):
@@ -370,9 +370,8 @@ The `PublishedPageSnapshot` (JSON) in `data_row_versions.snapshot_json` remains 
 
 The publisher doesn't know about specific modules — it asks the registry. To add a new first-party module that renders correctly:
 
-1. Define the module via `defineModule(...)` (see [docs/features/modules.md](modules.md)).
-2. Implement `render({ props, children, html }) → { html, css? }` purely.
-3. Register the module in `src/core/module-engine/registry.ts`.
+1. Define a `ModuleDefinition<TProps>` and call `registry.registerOrReplace(...)` from `src/modules/base/index.ts` (see [docs/features/modules.md](modules.md) and [docs/reference/module-engine.md](../reference/module-engine.md)).
+2. Implement `render(props, renderedChildren) → { html, css? }` as a pure function.
 
 That's it. The walker, escape, class injection, and CSS dedup all work automatically.
 
