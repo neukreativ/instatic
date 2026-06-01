@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test'
 import { createTestDb } from '../helpers/createTestDb'
 import { createSite, getSetupStatus } from '../../../server/repositories/setup'
 import { createUser, findUserByEmail } from '../../../server/repositories/users'
+import { createCustomRole, listRoles } from '../../../server/repositories/roles'
 import { createSession, findUserBySessionHash, revokeSessionByHash } from '../../../server/auth/sessions'
 import { hashPassword } from '../../../server/auth/tokens'
 
@@ -53,6 +54,27 @@ describe('CMS repositories', () => {
         email: 'Owner@Example.com',
         role: { slug: 'member' },
       })
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it('lists built-in roles by rank before custom roles', async () => {
+    const { db, cleanup } = await createTestDb()
+    try {
+      await createCustomRole(db, {
+        name: 'Auditor',
+        description: 'Reads audit activity.',
+        capabilities: ['audit.read'],
+      })
+
+      expect((await listRoles(db)).map((role) => role.slug)).toEqual([
+        'owner',
+        'admin',
+        'client',
+        'member',
+        'auditor',
+      ])
     } finally {
       await cleanup()
     }

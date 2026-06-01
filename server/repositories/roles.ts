@@ -43,6 +43,17 @@ function rowToRole(row: RoleRow): Role {
   }
 }
 
+const SYSTEM_ROLE_RANK = new Map(SYSTEM_ROLES.map((role, index) => [role.id, index]))
+const CUSTOM_ROLE_RANK = SYSTEM_ROLES.length
+
+function compareRolesByRank(a: Role, b: Role): number {
+  const rankDifference =
+    (SYSTEM_ROLE_RANK.get(a.id) ?? CUSTOM_ROLE_RANK) -
+    (SYSTEM_ROLE_RANK.get(b.id) ?? CUSTOM_ROLE_RANK)
+  if (rankDifference !== 0) return rankDifference
+  return a.name.localeCompare(b.name)
+}
+
 function slugFromRoleName(value: string): string {
   return value
     .trim()
@@ -57,7 +68,7 @@ export async function listRoles(db: DbClient): Promise<Role[]> {
     from roles
     order by is_system desc, name asc
   `
-  return rows.map(rowToRole)
+  return rows.map(rowToRole).sort(compareRolesByRank)
 }
 
 async function getRole(db: DbClient, roleId: string): Promise<Role | null> {
@@ -214,4 +225,3 @@ export async function syncSystemRoles(db: DbClient): Promise<void> {
     }
   }
 }
-

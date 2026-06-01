@@ -159,12 +159,12 @@ Four system roles, defined in `SYSTEM_ROLES`:
 
 | Role    | id        | Capabilities                                                                 | Special     |
 |---------|-----------|------------------------------------------------------------------------------|-------------|
-| Owner   | `owner`   | All 19 (`CORE_CAPABILITIES`)                                                 | Owner-only `roles.manage`. Resyncs on every boot via `syncSystemRoles(db)`. |
+| Owner   | `owner`   | All `CORE_CAPABILITIES`                                                      | Owner-only `roles.manage`. Resyncs on every boot via `syncSystemRoles(db)`. |
 | Admin   | `admin`   | All except `roles.manage`                                                    | Editable    |
-| Client  | `client`  | `dashboard.read`, `site.read`, `site.content.edit`                           | Editable    |
+| Client  | `client`  | `dashboard.read`, `site.read`, `site.content.edit`, `media.read`, `data.tables.read` | Editable    |
 | Member  | `member`  | (none)                                                                       | Editable    |
 
-Custom roles can be created via `roles.manage` (Owner-only). Roles are persisted in the `roles` table with `capabilities_json: CoreCapability[]`.
+`listRoles(db)` returns the built-ins in rank order (`owner`, `admin`, `client`, `member`), followed by custom roles alphabetized by name. Custom roles can be created via `roles.manage` (Owner-only). Roles are persisted in the `roles` table with `capabilities_json: CoreCapability[]`.
 
 ### Owner auto-sync
 
