@@ -380,29 +380,32 @@ function FormTargetTableRow({
         label="Target table"
         layout="stacked"
       >
-        <Select
-          id="form-target-table"
-          name="form-target-table"
-          fieldSize="sm"
-          value={targetTableId}
-          options={options}
-          placeholder="Choose table"
-          disabled={loading}
-          onChange={handleTableChange}
-        />
+        <div className={styles.targetTableControl} data-testid="form-target-table-control">
+          <Select
+            id="form-target-table"
+            name="form-target-table"
+            fieldSize="sm"
+            value={targetTableId}
+            options={options}
+            placeholder="Choose table"
+            disabled={loading}
+            onChange={handleTableChange}
+          />
+          <Button
+            className={styles.createTableButton}
+            variant="secondary"
+            size="sm"
+            iconOnly
+            aria-label="Create table"
+            tooltip="Create table"
+            disabled={!canCreateTable}
+            type="button"
+            onClick={() => setCreateDialogOpen(true)}
+          >
+            <PlusIcon size={14} />
+          </Button>
+        </div>
       </ControlRow>
-      <Button
-        className={styles.createTableButton}
-        variant="secondary"
-        size="xs"
-        align="start"
-        disabled={!canCreateTable}
-        type="button"
-        onClick={() => setCreateDialogOpen(true)}
-      >
-        <PlusIcon size={13} />
-        Create table
-      </Button>
       {!canCreateTable && (
         <div className={styles.inlineStatus}>
           Add named form fields before creating a CMS data table.

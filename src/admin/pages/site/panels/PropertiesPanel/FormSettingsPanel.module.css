@@ -66,8 +66,15 @@
   gap: 7px;
 }
 
-.createTableButton {
-  justify-self: start;
+.targetTableControl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.targetTableControl .createTableButton.createTableButton {
+  height: 100%;
 }
 
 .sectionLabel {

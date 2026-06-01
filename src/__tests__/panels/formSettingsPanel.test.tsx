@@ -156,6 +156,11 @@ describe('FormSettingsPanelView', () => {
     expect(targetChanges).toEqual(['contact_submissions'])
 
     const createButton = screen.getByRole('button', { name: 'Create table' })
+    const targetControl = screen.getByTestId('form-target-table-control')
+    expect(targetControl.contains(select)).toBe(true)
+    expect(targetControl.contains(createButton)).toBe(true)
+    expect(createButton.textContent?.trim()).toBe('')
+    expect(createButton.hasAttribute('title')).toBe(false)
     fireEvent.click(createButton)
     const nameInput = screen.getByLabelText('Table name') as HTMLInputElement
     expect(nameInput.value).toBe('Contact submissions')
@@ -210,7 +215,7 @@ describe('FormSettingsPanelView', () => {
     expect(patches).toContainEqual({ formId: 'Support-Requests' })
   })
 
-  it('keeps the create-table action content-sized inside the setup grid', async () => {
+  it('keeps the create-table action as a square icon beside the table select', async () => {
     const { readFileSync } = await import('fs')
     const source = readFileSync(
       new URL('../../admin/pages/site/panels/PropertiesPanel/FormSettingsPanel.tsx', import.meta.url),
@@ -222,7 +227,9 @@ describe('FormSettingsPanelView', () => {
     )
 
     expect(source).toContain('className={styles.createTableButton}')
-    expect(css).toMatch(/\.createTableButton\s*{[^}]*justify-self:\s*start;/)
+    expect(source).toContain('iconOnly')
+    expect(source).toContain('tooltip="Create table"')
+    expect(css).toMatch(/\.targetTableControl\s*{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto;/)
   })
 
   it('offers missing table fields as one-click form nodes', () => {
