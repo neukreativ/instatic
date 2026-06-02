@@ -20,8 +20,11 @@ export function isSvgMime(mimeType: string): boolean {
 }
 
 export interface MediaFilters {
-  /** Filter by folder id. `undefined` → no folder filter (all assets). */
-  folderId?: string
+  /**
+   * Filter by folder id. `undefined` keeps the asset list global, `null`
+   * selects the root folder, and a string selects that concrete folder.
+   */
+  folderId?: string | null
   type?: MediaType
   /** Free-text query — matches filename, title, alt text, caption (case-insensitive). */
   q?: string
@@ -66,6 +69,7 @@ function matchesTag(asset: CmsMediaAsset, tag: string | undefined): boolean {
 
 function matchesFolder(asset: CmsMediaAsset, filter: MediaFilters['folderId']): boolean {
   if (filter === undefined) return true
+  if (filter === null) return asset.folderIds.length === 0
   return asset.folderIds.includes(filter)
 }
 

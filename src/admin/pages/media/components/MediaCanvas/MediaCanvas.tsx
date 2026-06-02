@@ -27,24 +27,37 @@ import { BulletlistSolidIcon } from 'pixel-art-icons/icons/bulletlist-solid'
 import { CheckIcon } from 'pixel-art-icons/icons/check'
 import { Copy2SolidIcon } from 'pixel-art-icons/icons/copy-2-solid'
 import { Grid2x22SolidIcon } from 'pixel-art-icons/icons/grid-2x2-2-solid'
-import { Image2SolidIcon } from 'pixel-art-icons/icons/image-2-solid'
-import { FolderGlyphIcon } from 'pixel-art-icons/icons/folder-glyph'
 import { ImagesSolidIcon } from 'pixel-art-icons/icons/images-solid'
 import { UploadIcon } from 'pixel-art-icons/icons/upload'
-import { VideoSolidIcon } from 'pixel-art-icons/icons/video-solid'
 import { cn } from '@ui/cn'
 // Reuse the editor's canvas surface so the Media page matches Site / Content:
 // rounded top-left, `--editor-surface-2` background. Keeps the look consistent.
 import canvasStyles from '@site/canvas/CanvasRoot.module.css'
-import type { CmsMediaAsset } from '@core/persistence/cmsMedia'
+import type { CmsMediaAsset, CmsMediaFolder } from '@core/persistence/cmsMedia'
 import type { MediaSort, MediaType } from '../../utils/filters'
-import { bucketForMime } from '../../utils/filters'
-import { blurHashToDataUrl, pickVariantUrl } from '../../utils/variants'
 import {
+  FOLDER_ALL,
   FOLDER_TRASH,
   type UseMediaWorkspaceResult,
 } from '../../hooks/useMediaWorkspace'
+import { childFoldersForParent, isFolderDescendant } from '../../utils/folderTree'
+import {
+  hasMediaDropData,
+  readMediaDropPayload,
+  writeMediaAssetDragData,
+  writeMediaFolderDragData,
+  type MediaDropPayload,
+} from '../../utils/mediaDragDrop'
 import styles from './MediaCanvas.module.css'
+import {
+  AssetRow,
+  AssetTile,
+  FolderRow,
+  FolderTile,
+  ParentFolderRow,
+  ParentFolderTile,
+  type ParentFolderEntry,
+} from './MediaCanvasItems'
 
 interface MediaCanvasProps {
   workspace: UseMediaWorkspaceResult
@@ -88,13 +101,6 @@ const SORT_OPTIONS: Array<{ value: MediaSort; label: string }> = [
   { value: 'name-desc', label: 'Name Z→A' },
 ]
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
-}
-
 function keyboardMenuPosition(element: HTMLElement) {
   const rect = element.getBoundingClientRect()
   return {
@@ -109,8 +115,29 @@ interface ContextMenuState {
   asset: CmsMediaAsset
 }
 
+const ROOT_FOLDER_DROP_KEY = '__media-root__'
+
 function isMacLike(): boolean {
   return typeof navigator !== 'undefined' && /mac/i.test(navigator.platform)
+}
+
+function folderDropKey(folderId: string | null): string {
+  return folderId ?? ROOT_FOLDER_DROP_KEY
+}
+
+function folderAssetCount(assets: CmsMediaAsset[], folderId: string): number {
+  return assets.filter((asset) => asset.folderIds.includes(folderId)).length
+}
+
+function folderItemMeta(folder: CmsMediaFolder, folders: CmsMediaFolder[], assets: CmsMediaAsset[]): string {
+  const count = childFoldersForParent(folders, folder.id).length + folderAssetCount(assets, folder.id)
+  return `${count} ${count === 1 ? 'item' : 'items'}`
+}
+
+function folderMatchesQuery(folder: CmsMediaFolder, query: string): boolean {
+  const normalized = query.trim().toLowerCase()
+  if (!normalized) return true
+  return folder.name.toLowerCase().includes(normalized)
 }
 
 export function MediaCanvas({ workspace }: MediaCanvasProps) {
@@ -118,6 +145,7 @@ export function MediaCanvas({ workspace }: MediaCanvasProps) {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [renameTarget, setRenameTarget] = useState<CmsMediaAsset | null>(null)
   const [dragActive, setDragActive] = useState(false)
+  const [dropTargetKey, setDropTargetKey] = useState<string | null>(null)
 
   function setViewMode(mode: ViewMode) {
     setViewModeState(mode)
@@ -125,6 +153,27 @@ export function MediaCanvas({ workspace }: MediaCanvasProps) {
   }
 
   const trashView = workspace.folderSelection === FOLDER_TRASH
+  const activeFolder = typeof workspace.folderSelection === 'string'
+    ? workspace.folderById.get(workspace.folderSelection) ?? null
+    : null
+  const parentFolder = activeFolder?.parentId
+    ? workspace.folderById.get(activeFolder.parentId) ?? null
+    : null
+  const parentEntry: ParentFolderEntry | null = activeFolder
+    ? {
+        label: activeFolder.parentId ? (parentFolder?.name ?? 'parent folder') : 'All files',
+        targetFolderId: activeFolder.parentId,
+        selection: activeFolder.parentId ?? FOLDER_ALL,
+      }
+    : null
+  const folderEntriesVisible =
+    !trashView &&
+    workspace.filters.type === 'all' &&
+    workspace.filters.tag.trim() === ''
+  const childFolders = folderEntriesVisible
+    ? childFoldersForParent(workspace.folders, activeFolder?.id ?? null)
+      .filter((folder) => folderMatchesQuery(folder, workspace.filters.q))
+    : []
 
   // Modifier-aware click dispatch:
   //   - plain click → set primary selection (collapses to one)
@@ -145,6 +194,75 @@ export function MediaCanvas({ workspace }: MediaCanvasProps) {
       return
     }
     workspace.setSelectedAssetId(asset.id)
+  }
+
+  function canMoveFolderTo(folderId: string, targetFolderId: string | null): boolean {
+    const folder = workspace.folderById.get(folderId)
+    if (!folder) return false
+    if (folderId === targetFolderId) return false
+    if (folder.parentId === targetFolderId) return false
+    if (targetFolderId && isFolderDescendant(workspace.folders, folderId, targetFolderId)) return false
+    return true
+  }
+
+  function canAcceptDrop(payload: MediaDropPayload | null, targetFolderId: string | null): boolean {
+    if (!payload) return true
+    if (payload.kind === 'assets') return true
+    return canMoveFolderTo(payload.folderId, targetFolderId)
+  }
+
+  async function commitDropPayload(payload: MediaDropPayload, targetFolderId: string | null) {
+    if (payload.kind === 'assets') {
+      await workspace.moveAssetsToFolder(payload.assetIds, targetFolderId)
+      return
+    }
+    if (canMoveFolderTo(payload.folderId, targetFolderId)) {
+      await workspace.moveFolder(payload.folderId, targetFolderId)
+    }
+  }
+
+  function handleAssetDragStart(asset: CmsMediaAsset, event: DragEvent<HTMLButtonElement>) {
+    const selectedIds = Array.from(workspace.selectedAssetIds)
+    const dragIds = workspace.selectedAssetIds.has(asset.id) && selectedIds.length > 0
+      ? selectedIds
+      : [asset.id]
+    writeMediaAssetDragData(event.dataTransfer, dragIds)
+  }
+
+  function handleFolderDragStart(folder: CmsMediaFolder, event: DragEvent<HTMLButtonElement>) {
+    writeMediaFolderDragData(event.dataTransfer, folder.id)
+  }
+
+  function handleFolderDragOver(
+    event: DragEvent<HTMLButtonElement>,
+    targetFolderId: string | null,
+  ) {
+    if (!hasMediaDropData(event.dataTransfer)) return
+    const payload = readMediaDropPayload(event.dataTransfer)
+    if (!canAcceptDrop(payload, targetFolderId)) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = 'move'
+    setDropTargetKey(folderDropKey(targetFolderId))
+  }
+
+  function handleFolderDragLeave(event: DragEvent<HTMLButtonElement>) {
+    const nextTarget = event.relatedTarget
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return
+    setDropTargetKey(null)
+  }
+
+  async function handleFolderDrop(
+    event: DragEvent<HTMLButtonElement>,
+    targetFolderId: string | null,
+  ) {
+    if (!hasMediaDropData(event.dataTransfer)) return
+    event.preventDefault()
+    event.stopPropagation()
+    setDropTargetKey(null)
+    const payload = readMediaDropPayload(event.dataTransfer)
+    if (!payload || !canAcceptDrop(payload, targetFolderId)) return
+    await commitDropPayload(payload, targetFolderId)
   }
 
   async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
@@ -226,8 +344,9 @@ export function MediaCanvas({ workspace }: MediaCanvasProps) {
   }
 
   const visibleAssets = workspace.visibleAssets
-  const showingTotal = workspace.assets.length
-  const showingMatching = visibleAssets.length
+  const contentMatching = visibleAssets.length + childFolders.length
+  const showingTotal = workspace.assets.length + (trashView ? 0 : workspace.folders.length)
+  const showingMatching = contentMatching + (parentEntry ? 1 : 0)
 
   // The big EmptyState below carries the message whenever `showingMatching === 0`,
   // so the status bar only narrates the non-empty cases (count, error).
@@ -237,8 +356,8 @@ export function MediaCanvas({ workspace }: MediaCanvasProps) {
   const headerLabel = (() => {
     if (workspace.loading) return null
     if (workspace.error) return workspace.error
-    if (showingMatching === 0) return null
-    return `${showingMatching} ${showingMatching === 1 ? 'item' : 'items'}`
+    if (contentMatching === 0) return null
+    return `${contentMatching} ${contentMatching === 1 ? 'item' : 'items'}`
   })()
 
   return (
@@ -408,12 +527,37 @@ export function MediaCanvas({ workspace }: MediaCanvasProps) {
           />
         ) : viewMode === 'grid' ? (
           <ul className={styles.grid} role="list" data-testid="media-grid">
+            {parentEntry && (
+              <ParentFolderTile
+                entry={parentEntry}
+                dropActive={dropTargetKey === folderDropKey(parentEntry.targetFolderId)}
+                onOpen={() => workspace.setFolderSelection(parentEntry.selection)}
+                onDragOver={handleFolderDragOver}
+                onDragLeave={handleFolderDragLeave}
+                onDrop={(event) => void handleFolderDrop(event, parentEntry.targetFolderId)}
+              />
+            )}
+            {childFolders.map((folder) => (
+              <FolderTile
+                key={folder.id}
+                folder={folder}
+                meta={folderItemMeta(folder, workspace.folders, workspace.assets)}
+                dropActive={dropTargetKey === folderDropKey(folder.id)}
+                onOpen={() => workspace.setFolderSelection(folder.id)}
+                onDragStart={handleFolderDragStart}
+                onDragOver={handleFolderDragOver}
+                onDragLeave={handleFolderDragLeave}
+                onDrop={(event) => void handleFolderDrop(event, folder.id)}
+              />
+            ))}
             {visibleAssets.map((asset) => (
               <AssetTile
                 key={asset.id}
                 asset={asset}
                 selected={workspace.selectedAssetIds.has(asset.id)}
                 onSelect={(event) => handleAssetClick(asset, event)}
+                onDragStart={handleAssetDragStart}
+                onDragEnd={() => setDropTargetKey(null)}
                 onContextMenu={openContextMenu}
                 onKeyboardMenu={openKeyboardContextMenu}
               />
@@ -421,12 +565,37 @@ export function MediaCanvas({ workspace }: MediaCanvasProps) {
           </ul>
         ) : (
           <ul className={styles.list} role="list" data-testid="media-list">
+            {parentEntry && (
+              <ParentFolderRow
+                entry={parentEntry}
+                dropActive={dropTargetKey === folderDropKey(parentEntry.targetFolderId)}
+                onOpen={() => workspace.setFolderSelection(parentEntry.selection)}
+                onDragOver={handleFolderDragOver}
+                onDragLeave={handleFolderDragLeave}
+                onDrop={(event) => void handleFolderDrop(event, parentEntry.targetFolderId)}
+              />
+            )}
+            {childFolders.map((folder) => (
+              <FolderRow
+                key={folder.id}
+                folder={folder}
+                meta={folderItemMeta(folder, workspace.folders, workspace.assets)}
+                dropActive={dropTargetKey === folderDropKey(folder.id)}
+                onOpen={() => workspace.setFolderSelection(folder.id)}
+                onDragStart={handleFolderDragStart}
+                onDragOver={handleFolderDragOver}
+                onDragLeave={handleFolderDragLeave}
+                onDrop={(event) => void handleFolderDrop(event, folder.id)}
+              />
+            ))}
             {visibleAssets.map((asset) => (
               <AssetRow
                 key={asset.id}
                 asset={asset}
                 selected={workspace.selectedAssetIds.has(asset.id)}
                 onSelect={(event) => handleAssetClick(asset, event)}
+                onDragStart={handleAssetDragStart}
+                onDragEnd={() => setDropTargetKey(null)}
                 onContextMenu={openContextMenu}
                 onKeyboardMenu={openKeyboardContextMenu}
               />
@@ -468,94 +637,6 @@ export function MediaCanvas({ workspace }: MediaCanvasProps) {
         />
       )}
     </section>
-  )
-}
-
-interface AssetItemProps {
-  asset: CmsMediaAsset
-  selected: boolean
-  onSelect: (event: MouseEvent<HTMLButtonElement>) => void
-  onContextMenu: (asset: CmsMediaAsset, event: MouseEvent<HTMLButtonElement>) => void
-  onKeyboardMenu: (asset: CmsMediaAsset, event: KeyboardEvent<HTMLButtonElement>) => void
-}
-
-// Target widths (CSS px) for the two view modes. Picked so a 1× display
-// fetches the next-bigger variant (w320 for grid tiles, w64 for the list
-// row's 24-px preview). DPR-aware picking happens inside pickVariantUrl.
-const TILE_CSS_WIDTH = 140
-const ROW_CSS_WIDTH = 24
-
-function AssetTile({ asset, selected, onSelect, onContextMenu, onKeyboardMenu }: AssetItemProps) {
-  const bucket = bucketForMime(asset.mimeType)
-  // Variant + blurhash bg only meaningful for images. Videos stream from
-  // the original; non-media types render a glyph.
-  const thumbUrl = bucket === 'image' ? pickVariantUrl(asset, TILE_CSS_WIDTH) : null
-  const blurUrl = bucket === 'image' ? blurHashToDataUrl(asset.blurHash) : null
-  const previewStyle = blurUrl
-    ? ({ backgroundImage: `url(${blurUrl})`, backgroundSize: 'cover' } as React.CSSProperties)
-    : undefined
-  return (
-    <li className={styles.tileItem}>
-      <Button
-        variant="ghost"
-        size="sm"
-        pressed={selected}
-        aria-label={`Open ${asset.filename}`}
-        className={cn(styles.tile, selected && styles.tileSelected)}
-        onClick={(event) => onSelect(event)}
-        onContextMenu={(e) => onContextMenu(asset, e)}
-        onKeyDown={(e) => onKeyboardMenu(asset, e)}
-      >
-        <span className={styles.tilePreview} aria-hidden="true" style={previewStyle}>
-          {bucket === 'image' && thumbUrl ? (
-            <img src={thumbUrl} alt="" className={styles.tileImage} loading="lazy" decoding="async" />
-          ) : bucket === 'video' ? (
-            <video src={asset.publicPath} preload="metadata" muted className={styles.tileVideo} />
-          ) : (
-            <FolderGlyphIcon size={28} />
-          )}
-        </span>
-        <span className={styles.tileBody}>
-          <span className={styles.tileLabel}>{asset.filename}</span>
-          <span className={styles.tileMeta}>{formatBytes(asset.sizeBytes)}</span>
-        </span>
-      </Button>
-    </li>
-  )
-}
-
-function AssetRow({ asset, selected, onSelect, onContextMenu, onKeyboardMenu }: AssetItemProps) {
-  const bucket = bucketForMime(asset.mimeType)
-  const thumbUrl = bucket === 'image' ? pickVariantUrl(asset, ROW_CSS_WIDTH) : null
-  const blurUrl = bucket === 'image' ? blurHashToDataUrl(asset.blurHash) : null
-  const previewStyle = blurUrl
-    ? ({ backgroundImage: `url(${blurUrl})`, backgroundSize: 'cover' } as React.CSSProperties)
-    : undefined
-  return (
-    <li className={styles.rowItem}>
-      <Button
-        variant="ghost"
-        size="sm"
-        pressed={selected}
-        aria-label={`Open ${asset.filename}`}
-        className={cn(styles.row, selected && styles.rowSelected)}
-        onClick={(event) => onSelect(event)}
-        onContextMenu={(e) => onContextMenu(asset, e)}
-        onKeyDown={(e) => onKeyboardMenu(asset, e)}
-      >
-        <span className={styles.rowPreview} aria-hidden="true" style={previewStyle}>
-          {bucket === 'image' && thumbUrl ? (
-            <img src={thumbUrl} alt="" className={styles.rowImage} loading="lazy" decoding="async" />
-          ) : bucket === 'video' ? (
-            <VideoSolidIcon size={13} />
-          ) : (
-            <Image2SolidIcon size={13} />
-          )}
-        </span>
-        <span className={styles.rowLabel}>{asset.filename}</span>
-        <span className={styles.rowMeta}>{formatBytes(asset.sizeBytes)}</span>
-      </Button>
-    </li>
   )
 }
 

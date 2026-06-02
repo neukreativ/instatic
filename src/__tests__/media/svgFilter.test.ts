@@ -14,12 +14,17 @@ import {
 } from '@admin/pages/media/utils/filters'
 import type { CmsMediaAsset } from '@core/persistence/cmsMedia'
 
-function asset(id: string, mimeType: string, filename: string): CmsMediaAsset {
+function asset(
+  id: string,
+  mimeType: string,
+  filename: string,
+  folderIds: string[] = [],
+): CmsMediaAsset {
   return {
     id, filename, mimeType, sizeBytes: 1, publicPath: `/uploads/${filename}`,
     uploadedByUserId: null, createdAt: '2026-01-01', altText: '', caption: '',
     title: '', tags: [], width: null, height: null, durationMs: null,
-    dominantColor: null, deletedAt: null, replacedAt: null, folderIds: [],
+    dominantColor: null, deletedAt: null, replacedAt: null, folderIds,
     blurHash: null, variants: [], posterPath: null,
   }
 }
@@ -58,5 +63,16 @@ describe('filterMediaAssets type: "svg"', () => {
 
   it('type "all" returns everything', () => {
     expect(filterMediaAssets(ASSETS, { type: 'all' }).length).toBe(5)
+  })
+})
+
+describe('filterMediaAssets folder views', () => {
+  it('treats folderId null as the root folder and hides foldered assets', () => {
+    const out = filterMediaAssets([
+      asset('root', 'image/png', 'root.png'),
+      asset('nested', 'image/png', 'nested.png', ['folder-assets']),
+    ], { folderId: null })
+
+    expect(out.map((a) => a.id)).toEqual(['root'])
   })
 })

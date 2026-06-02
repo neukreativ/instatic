@@ -6,7 +6,7 @@
  *     drives which set is loaded).
  *   - The folder list + tree.
  *   - The current folder selection (regular folder id, `'__all__'` sentinel
- *     for "All files", `'__trash__'` for the Trash view).
+ *     for the root "All files" view, `'__trash__'` for the Trash view).
  *   - The selected asset id (for the inspector).
  *   - The filter + sort + search state.
  *   - All async mutations (upload, rename, soft-delete, restore, purge,
@@ -164,6 +164,7 @@ export interface UseMediaWorkspaceResult extends WorkspaceLoadState {
     assetId: string,
     input: { add?: string[]; remove?: string[] },
   ) => Promise<CmsMediaAsset | null>
+  moveAssetsToFolder: (assetIds: string[], targetFolderId: string | null) => Promise<void>
 
   // Mutations — folders
   createFolder: (name: string, parentId: string | null) => Promise<CmsMediaFolder | null>
@@ -278,9 +279,11 @@ export function useMediaWorkspace(): UseMediaWorkspaceResult {
   // chip + the search box still work inside a smart-folder view.
   const isSmartFolder = isSmartFolderId(folderSelection)
   const filterFolder: MediaFilters['folderId'] =
-    isSmartFolder || folderSelection === FOLDER_ALL || folderSelection === FOLDER_TRASH
+    isSmartFolder || folderSelection === FOLDER_TRASH
       ? undefined
-      : folderSelection
+      : folderSelection === FOLDER_ALL
+        ? null
+        : folderSelection
   const filteredAssets = filterMediaAssets(assets, {
     folderId: filterFolder,
     type: filterType,
@@ -480,6 +483,45 @@ export function useMediaWorkspace(): UseMediaWorkspaceResult {
     }
   }
 
+  const moveAssetsToFolder = async (assetIds: string[], targetFolderId: string | null) => {
+    const uniqueIds = Array.from(new Set(assetIds.map((id) => id.trim()).filter(Boolean)))
+    if (uniqueIds.length === 0) return
+
+    setError(null)
+    try {
+      const assetById = new Map(assets.map((asset) => [asset.id, asset]))
+      const moved = await Promise.all(uniqueIds.map(async (assetId) => {
+        const existing = assetById.get(assetId) ?? null
+        const currentFolderIds = existing?.folderIds ?? []
+        const remove = currentFolderIds.filter((folderId) => folderId !== targetFolderId)
+        const add = targetFolderId && !currentFolderIds.includes(targetFolderId)
+          ? [targetFolderId]
+          : []
+
+        if (remove.length === 0 && add.length === 0) return existing
+        return setCmsMediaAssetFolders(assetId, { add, remove })
+      }))
+      const movedById = new Map(
+        moved
+          .filter((asset): asset is CmsMediaAsset => asset !== null)
+          .map((asset) => [asset.id, asset]),
+      )
+      if (movedById.size > 0) {
+        setAssets((current) => current.map((asset) => movedById.get(asset.id) ?? asset))
+        refreshCmsMediaAssetCache()
+      }
+      setSelectedAssetIdState((current) => (current && uniqueIds.includes(current) ? null : current))
+      setSelectedAssetIds((current) => {
+        const next = new Set(current)
+        for (const id of uniqueIds) next.delete(id)
+        return next
+      })
+    } catch (err) {
+      setError(errorMessage(err, 'Could not move assets'))
+      void refresh()
+    }
+  }
+
   // ── Folder mutations ───────────────────────────────────────────────────────
 
   const createFolder = async (name: string, parentId: string | null) => {
@@ -572,6 +614,7 @@ export function useMediaWorkspace(): UseMediaWorkspaceResult {
     restoreAsset,
     purgeAsset,
     setAssetFolders,
+    moveAssetsToFolder,
     createFolder,
     renameFolder,
     moveFolder,

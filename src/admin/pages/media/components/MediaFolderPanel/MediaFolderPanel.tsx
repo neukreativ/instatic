@@ -12,10 +12,11 @@
  *   - Inline create (opens a small input row under the active parent).
  *   - Rename / delete via the existing ExplorerItemContextMenu.
  */
-import { useState, type FormEvent, type KeyboardEvent, type MouseEvent } from 'react'
+import { useState, type DragEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from 'react'
 import { Button } from '@ui/components/Button'
 import { Input } from '@ui/components/Input'
 import { EmptyState } from '@ui/components/EmptyState'
+import { cn } from '@ui/cn'
 import { BoxStackSolidIcon } from 'pixel-art-icons/icons/box-stack-solid'
 import { CircleAlertSolidIcon } from 'pixel-art-icons/icons/circle-alert-solid'
 import { EraserSolidIcon } from 'pixel-art-icons/icons/eraser-solid'
@@ -38,9 +39,16 @@ import {
   TreeLabelGroup,
   TreeMeta,
   TreeRow,
+  treeDropStyles,
 } from '@admin/pages/site/ui/Tree'
 import type { CmsMediaAsset } from '@core/persistence/cmsMedia'
-import { flattenFolderTree, type MediaFolderNode } from '../../utils/folderTree'
+import { flattenFolderTree, isFolderDescendant, type MediaFolderNode } from '../../utils/folderTree'
+import {
+  hasMediaDropData,
+  readMediaDropPayload,
+  writeMediaFolderDragData,
+  type MediaDropPayload,
+} from '../../utils/mediaDragDrop'
 import {
   FOLDER_ALL,
   FOLDER_TRASH,
@@ -121,12 +129,20 @@ interface RenameState {
   initialValue: string
 }
 
+const ROOT_FOLDER_DROP_KEY = '__media-root__'
+
+function folderDropKey(folderId: string | null): string {
+  return folderId ?? ROOT_FOLDER_DROP_KEY
+}
+
 export function MediaFolderPanel({ workspace }: MediaFolderPanelProps) {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [renameState, setRenameState] = useState<RenameState | null>(null)
   const [createUnder, setCreateUnder] = useState<string | null | undefined>(undefined)
   const [createName, setCreateName] = useState('')
+  const [dropTargetKey, setDropTargetKey] = useState<string | null>(null)
+  const [draggingFolderId, setDraggingFolderId] = useState<string | null>(null)
 
   function toggleExpanded(folderId: string) {
     setExpanded((prev) => {
@@ -186,8 +202,76 @@ export function MediaFolderPanel({ workspace }: MediaFolderPanelProps) {
     })
   }
 
+  function canMoveFolderTo(folderId: string, targetFolderId: string | null): boolean {
+    const folder = workspace.folderById.get(folderId)
+    if (!folder) return false
+    if (folderId === targetFolderId) return false
+    if (folder.parentId === targetFolderId) return false
+    if (targetFolderId && isFolderDescendant(workspace.folders, folderId, targetFolderId)) return false
+    return true
+  }
+
+  function canAcceptDrop(payload: MediaDropPayload | null, targetFolderId: string | null): boolean {
+    if (!payload) return true
+    if (payload.kind === 'assets') return true
+    return canMoveFolderTo(payload.folderId, targetFolderId)
+  }
+
+  async function commitDropPayload(payload: MediaDropPayload, targetFolderId: string | null) {
+    if (payload.kind === 'assets') {
+      await workspace.moveAssetsToFolder(payload.assetIds, targetFolderId)
+      return
+    }
+    if (canMoveFolderTo(payload.folderId, targetFolderId)) {
+      await workspace.moveFolder(payload.folderId, targetFolderId)
+    }
+  }
+
+  function handleFolderDragStart(folderId: string, event: DragEvent<HTMLDivElement>) {
+    writeMediaFolderDragData(event.dataTransfer, folderId)
+    setDraggingFolderId(folderId)
+  }
+
+  function handleFolderDragEnd() {
+    setDraggingFolderId(null)
+    setDropTargetKey(null)
+  }
+
+  function handleDropTargetDragOver(
+    event: DragEvent<HTMLDivElement>,
+    targetFolderId: string | null,
+  ) {
+    if (!hasMediaDropData(event.dataTransfer)) return
+    const payload = readMediaDropPayload(event.dataTransfer)
+    if (!canAcceptDrop(payload, targetFolderId)) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = 'move'
+    setDropTargetKey(folderDropKey(targetFolderId))
+  }
+
+  function handleDropTargetDragLeave(event: DragEvent<HTMLDivElement>) {
+    const nextTarget = event.relatedTarget
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return
+    setDropTargetKey(null)
+  }
+
+  async function handleDropTargetDrop(
+    event: DragEvent<HTMLDivElement>,
+    targetFolderId: string | null,
+  ) {
+    if (!hasMediaDropData(event.dataTransfer)) return
+    event.preventDefault()
+    event.stopPropagation()
+    setDropTargetKey(null)
+    const payload = readMediaDropPayload(event.dataTransfer)
+    if (!payload || !canAcceptDrop(payload, targetFolderId)) return
+    await commitDropPayload(payload, targetFolderId)
+  }
+
   const rows = flattenFolderTree(workspace.folderTree, expanded)
   const renameFolder = renameState ? workspace.folderById.get(renameState.folderId) ?? null : null
+  const rootAssetCount = workspace.assets.filter((asset) => asset.folderIds.length === 0).length
 
   return (
     <div className={styles.root} data-testid="media-folder-panel">
@@ -200,7 +284,11 @@ export function MediaFolderPanel({ workspace }: MediaFolderPanelProps) {
           icon={ImagesSolidIcon}
           selected={isSelected(FOLDER_ALL)}
           onSelect={() => workspace.setFolderSelection(FOLDER_ALL)}
-          meta={workspace.assets.length}
+          meta={rootAssetCount}
+          dropActive={dropTargetKey === folderDropKey(null)}
+          onDragOver={(event) => handleDropTargetDragOver(event, null)}
+          onDragLeave={handleDropTargetDragLeave}
+          onDrop={(event) => void handleDropTargetDrop(event, null)}
         />
         {SMART_FOLDERS.map((descriptor) => {
           const count = workspace.assets.filter(descriptor.matches).length
@@ -258,10 +346,17 @@ export function MediaFolderPanel({ workspace }: MediaFolderPanelProps) {
               expanded={expanded.has(node.folder.id)}
               hasChildren={node.children.length > 0}
               selected={workspace.folderSelection === node.folder.id}
+              dragging={draggingFolderId === node.folder.id}
+              dropActive={dropTargetKey === folderDropKey(node.folder.id)}
               onSelect={() => workspace.setFolderSelection(node.folder.id)}
               onToggle={() => toggleExpanded(node.folder.id)}
               onContextMenu={openContextMenu}
               onKeyDown={handleKeyboardMenu}
+              onDragStart={handleFolderDragStart}
+              onDragEnd={handleFolderDragEnd}
+              onDragOver={handleDropTargetDragOver}
+              onDragLeave={handleDropTargetDragLeave}
+              onDrop={(event) => void handleDropTargetDrop(event, node.folder.id)}
               showCreateChild={createUnder === node.folder.id}
               createValue={createName}
               onCreateValueChange={setCreateName}
@@ -339,9 +434,24 @@ interface SentinelRowProps {
   title?: string
   /** Optional right-aligned count badge (used by smart-folder rows). */
   meta?: number
+  dropActive?: boolean
+  onDragOver?: (event: DragEvent<HTMLDivElement>) => void
+  onDragLeave?: (event: DragEvent<HTMLDivElement>) => void
+  onDrop?: (event: DragEvent<HTMLDivElement>) => void
 }
 
-function SentinelRow({ label, icon, selected, onSelect, title, meta }: SentinelRowProps) {
+function SentinelRow({
+  label,
+  icon,
+  selected,
+  onSelect,
+  title,
+  meta,
+  dropActive = false,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+}: SentinelRowProps) {
   const ariaLabel = meta !== undefined
     ? `${label} — ${meta} ${meta === 1 ? 'asset' : 'assets'}`
     : label
@@ -349,12 +459,16 @@ function SentinelRow({ label, icon, selected, onSelect, title, meta }: SentinelR
     <TreeRow
       depth={0}
       selected={selected}
+      className={cn(dropActive && treeDropStyles.dropInside)}
       role="treeitem"
       aria-selected={selected}
       aria-label={ariaLabel}
       tabIndex={0}
       title={title}
       onClick={onSelect}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault()
@@ -378,10 +492,17 @@ interface FolderRowItemProps {
   expanded: boolean
   hasChildren: boolean
   selected: boolean
+  dragging: boolean
+  dropActive: boolean
   onSelect: () => void
   onToggle: () => void
   onContextMenu: (folderId: string, event: MouseEvent<HTMLDivElement>) => void
   onKeyDown: (folderId: string, event: KeyboardEvent<HTMLDivElement>) => void
+  onDragStart: (folderId: string, event: DragEvent<HTMLDivElement>) => void
+  onDragEnd: () => void
+  onDragOver: (event: DragEvent<HTMLDivElement>, targetFolderId: string | null) => void
+  onDragLeave: (event: DragEvent<HTMLDivElement>) => void
+  onDrop: (event: DragEvent<HTMLDivElement>) => void
   showCreateChild: boolean
   createValue: string
   onCreateValueChange: (value: string) => void
@@ -394,10 +515,17 @@ function FolderRowItem({
   expanded,
   hasChildren,
   selected,
+  dragging,
+  dropActive,
   onSelect,
   onToggle,
   onContextMenu,
   onKeyDown,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDragLeave,
+  onDrop,
   showCreateChild,
   createValue,
   onCreateValueChange,
@@ -409,11 +537,19 @@ function FolderRowItem({
       <TreeRow
         depth={node.depth}
         selected={selected}
+        dragging={dragging}
+        className={cn(dropActive && treeDropStyles.dropInside)}
         role="treeitem"
         aria-selected={selected}
         aria-expanded={hasChildren ? expanded : undefined}
         aria-label={node.folder.name}
         tabIndex={0}
+        draggable
+        onDragStart={(event) => onDragStart(node.folder.id, event)}
+        onDragEnd={onDragEnd}
+        onDragOver={(event) => onDragOver(event, node.folder.id)}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
         onClick={(event) => {
           event.stopPropagation()
           onSelect()
@@ -488,4 +624,3 @@ function CreateRow({ depth, value, onValueChange, onSubmit, onCancel }: CreateRo
     </form>
   )
 }
-

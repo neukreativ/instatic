@@ -2,7 +2,7 @@
 
 The Media workspace — a dedicated admin page for managing every file on the site. Folder tree, file grid, bulk operations, usage tracking, floating windows for upload queue / viewer / bulk edit. Lives at `/admin/media`.
 
-The workspace is canvas-style: it uses `AdminWorkspaceCanvasLayout`, the lighter canvas shell shared by Content, Data, and Media. The sidebar is a panel rail with folders / storage / smart filters; the canvas is a file grid driven by `MediaCanvas`; overlays are draggable windows persisted via `panelLayoutStorage`.
+The workspace is canvas-style: it uses `AdminWorkspaceCanvasLayout`, the lighter canvas shell shared by Content, Data, and Media. The sidebar is a panel rail with folder-tree navigation / storage controls; the canvas is an OS-style file manager grid driven by `MediaCanvas`, where folders and assets share the same browsing surface. Overlays are draggable windows persisted via `panelLayoutStorage`.
 
 ---
 
@@ -10,7 +10,9 @@ The workspace is canvas-style: it uses `AdminWorkspaceCanvasLayout`, the lighter
 
 - **Route:** `/admin/media`, capability-gated by `media.manage`.
 - **Page entrypoint:** `src/admin/pages/media/MediaPage.tsx`.
-- **State:** one hook — `useMediaWorkspace()` — orchestrates folders, assets, selection, filters, upload queue. The editor store doesn't grow new slices; the Media page is self-contained.
+- **State:** one hook — `useMediaWorkspace()` — orchestrates folders, assets, selection, filters, upload queue, and folder moves. The editor store doesn't grow new slices; the Media page is self-contained.
+- **Folders:** folders render as first-class grid/list items in the canvas. Opening a folder filters the canvas to its contents, and nested folders show a parent-folder entry to navigate back.
+- **Drag/drop:** assets can be dragged into folders from the canvas or folder tree. A drop replaces the asset's folder memberships with the target folder, matching desktop file-manager move semantics.
 - **Floating windows:** Asset viewer, upload queue, bulk edit. Each is `useDraggablePanel('mediaViewer' | 'mediaUploadQueue' | 'mediaBulkEdit')`. Position survives reload via `panelLayoutStorage`.
 - **Auto-open behavior:** upload queue opens when uploads start; bulk-edit opens at 2+ selected; viewer opens on primary selection.
 - **Server side:** `media_assets`, `media_folders`, `media_asset_folders` tables. Handlers under `/admin/api/cms/media`, `/admin/api/cms/media/folders`, `/admin/api/cms/media/storage`. Repositories at `server/repositories/media*.ts`.
@@ -57,7 +59,7 @@ src/admin/pages/media/
 <AdminWorkspaceCanvasLayout>                         ← shared non-site canvas shell
   toolbar:                                           ← Upload + Bulk + … buttons
   sidebar: <MediaSidebar activePanel={…}>            ← Folders | Storage | Smart filters
-  canvas:  <MediaCanvas …>                           ← file grid / list
+  canvas:  <MediaCanvas …>                           ← folder + file grid / list
   overlays (floating windows):
     <MediaViewerWindow>     ← primary selection
     <UploadQueueWindow>     ← active uploads
@@ -82,6 +84,22 @@ const {
 ```
 
 The editor store does **not** grow new slices. The Media page is self-contained — it talks to the CMS API directly through the persistence layer.
+
+### Folder navigation and moves
+
+`MediaCanvas` treats folders as regular canvas items:
+
+- In **All files**, root folders render before root-level assets (assets with no folder assignment).
+- Inside a folder, immediate child folders render before assets, and a parent-folder item appears at the start of the grid/list.
+- Type filters other than `All` hide folder items so media-type filtering remains literal. Search still matches folder names when folders are visible.
+
+Drag/drop uses a media-specific `DataTransfer` payload helper in `src/admin/pages/media/utils/mediaDragDrop.ts`. Canvas folder items, the parent-folder item, and regular folder rows in `MediaFolderPanel` all accept the same payloads:
+
+- Asset drops call `useMediaWorkspace().moveAssetsToFolder(assetIds, targetFolderId)`.
+- Folder drops call the existing `moveFolder(folderId, parentId)` action after UI-side cycle/no-op checks.
+- Dropping on **All files** moves assets/folders back to the root (`targetFolderId: null`).
+
+Storage remains `media_asset_folders` (many-to-many), but the canvas move interaction is intentionally file-manager-like: moving an asset to a folder removes its previous folder assignments and adds only the target folder. The user-facing model is one current folder per asset move.
 
 ### Floating windows
 

@@ -15,9 +15,40 @@ export interface MediaFolderNode {
   depth: number
 }
 
-function compareFolders(a: CmsMediaFolder, b: CmsMediaFolder): number {
+export function compareFolders(a: CmsMediaFolder, b: CmsMediaFolder): number {
   if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder
   return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+}
+
+export function childFoldersForParent(
+  folders: CmsMediaFolder[],
+  parentId: string | null,
+): CmsMediaFolder[] {
+  return folders
+    .filter((folder) => folder.parentId === parentId)
+    .sort(compareFolders)
+}
+
+export function isFolderDescendant(
+  folders: CmsMediaFolder[],
+  folderId: string,
+  possibleDescendantId: string,
+): boolean {
+  const byParent = new Map<string | null, CmsMediaFolder[]>()
+  for (const folder of folders) {
+    const bucket = byParent.get(folder.parentId) ?? []
+    bucket.push(folder)
+    byParent.set(folder.parentId, bucket)
+  }
+
+  const stack = [...(byParent.get(folderId) ?? [])]
+  while (stack.length > 0) {
+    const next = stack.pop()
+    if (!next) continue
+    if (next.id === possibleDescendantId) return true
+    stack.push(...(byParent.get(next.id) ?? []))
+  }
+  return false
 }
 
 export function buildFolderTree(folders: CmsMediaFolder[]): MediaFolderNode[] {
