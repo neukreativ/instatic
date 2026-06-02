@@ -26,6 +26,7 @@
  */
 
 import { describe, it, expect } from 'bun:test'
+import { spawnSync } from 'child_process'
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs'
 import { extname, join } from 'path'
 
@@ -92,6 +93,24 @@ function listVendoredDist(): Set<string> {
   return out
 }
 
+function assertNotIgnoredByGit(path: string): void {
+  const result = spawnSync('git', ['check-ignore', '--quiet', '--no-index', path], {
+    cwd: PROJECT_ROOT,
+  })
+
+  if (result.status === 0) {
+    throw new Error(
+      `[vendor-icons-fresh] ${path} is ignored by .gitignore, so fresh checkouts will miss required icon package files.`,
+    )
+  }
+
+  if (result.status !== 1) {
+    throw new Error(
+      `[vendor-icons-fresh] git check-ignore failed for ${path} with exit ${result.status}.`,
+    )
+  }
+}
+
 const FIX_HINT =
   '\n  Fix: run `bun run icons:sync` to refresh vendor/pixel-art-icons/.'
 
@@ -100,6 +119,11 @@ describe('vendor/pixel-art-icons — freshness gate', () => {
     expect(existsSync(VENDOR_PACKAGE_JSON)).toBe(true)
     expect(existsSync(VENDOR_TYPES_FILE)).toBe(true)
     expect(existsSync(VENDOR_DIST_TYPES_FILE)).toBe(true)
+  })
+
+  it('vendored built icon package files are not hidden by .gitignore', () => {
+    assertNotIgnoredByGit('vendor/pixel-art-icons/dist/types.js')
+    assertNotIgnoredByGit('vendor/pixel-art-icons/dist/icons/check.js')
   })
 
   it('every imported icon has a vendored .tsx source', () => {
