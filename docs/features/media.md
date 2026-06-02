@@ -26,7 +26,7 @@ The workspace is canvas-style: it uses `AdminWorkspaceCanvasLayout`, the lighter
 src/admin/pages/media/
 ├── MediaPage.tsx                       — top-level component
 ├── components/
-│   ├── MediaSidebar/                   — folder tree + storage + smart filters
+│   ├── MediaSidebar/                   — folder tree + storage + smart folders
 │   ├── MediaCanvas/                    — file grid / list with FilterBar
 │   ├── MediaViewerWindow/              — floating asset viewer
 │   ├── UploadQueueWindow/              — floating upload progress
@@ -49,6 +49,7 @@ src/admin/pages/media/
     ├── filters.ts                      — type/date/folder filter predicates
     ├── folderTree.ts                   — folder utilities: tree build, descent check, child listing
     ├── mediaDragDrop.ts                — TypeBox-validated drag/drop payload helpers
+    ├── smartFolders.ts                 — smart folder IDs, type guard, per-ID predicates
     └── variants.ts                     — image variant URL helpers
 ```
 
@@ -59,7 +60,7 @@ src/admin/pages/media/
 ```text
 <AdminWorkspaceCanvasLayout>                         ← shared non-site canvas shell
   toolbar:                                           ← Upload + Bulk + … buttons
-  sidebar: <MediaSidebar activePanel={…}>            ← Folders | Storage | Smart filters
+  sidebar: <MediaSidebar activePanel={…}>            ← Folders | Storage | Smart folders
   canvas:  <MediaCanvas …>                           ← folder + file grid / list
   overlays (floating windows):
     <MediaViewerWindow>     ← primary selection
@@ -94,6 +95,24 @@ The editor store does **not** grow new slices. The Media page is self-contained 
 - Inside a folder, immediate child folders render before assets, and a parent-folder item appears at the start of the grid/list.
 - Type filters other than `All` and active tag filters hide folder items so filtering remains literal. Search still matches folder names when folders are visible.
 - Image-metadata smart folders (`Missing alt text`, `Missing title`) only match `image/*` assets; fonts, documents, and other non-image files are excluded even when those metadata fields are empty.
+
+### Smart folders
+
+Smart folders are virtual views in the sidebar that match assets by predicate rather than by folder membership. They are rendered alongside real folders in `MediaFolderPanel` and use the same `FolderSelection` union type (`SmartFolderId`). The predicate for each ID lives in `src/admin/pages/media/utils/smartFolders.ts`.
+
+| Smart folder ID          | Label               | Matches                                          | Scope       |
+|--------------------------|---------------------|--------------------------------------------------|-------------|
+| `smart:missing-alt`      | Missing alt text    | `altText.trim()` is empty                        | Images only |
+| `smart:missing-title`    | Missing title       | `title.trim()` is empty                          | Images only |
+| `smart:untagged`         | Untagged            | `tags` array is empty                            | All assets  |
+| `smart:large-files`      | Large files         | `sizeBytes > 1 MiB`                              | All assets  |
+| `smart:recently-replaced`| Recently replaced   | `replacedAt !== null`                            | All assets  |
+
+"Images only" means the predicate short-circuits to `false` for any `mimeType` that doesn't start with `image/`. Fonts, documents, videos, and audio files are never matched by the image-metadata smart folders even when those fields are empty.
+
+Standard filters (type chip, search, tag) still apply inside a smart folder view — `useMediaWorkspace` runs the smart predicate on top of the already-filtered list (`filteredAssets → visibleAssets`).
+
+The count badge shown next to each smart folder in the sidebar is computed client-side from `workspace.assets` using `smartFolderPredicate(id)` directly — no extra server round-trip.
 
 Drag/drop uses a media-specific `DataTransfer` payload helper in `src/admin/pages/media/utils/mediaDragDrop.ts`. Canvas folder items, the parent-folder item, and regular folder rows in `MediaFolderPanel` all accept the same payloads:
 
@@ -310,6 +329,7 @@ See [docs/features/plugin-system.md](plugin-system.md). The plugin SDK's `api.cm
   - `src/admin/pages/media/MediaPage.tsx` — top-level workspace
   - `src/admin/pages/media/hooks/useMediaWorkspace.ts` — orchestrator
   - `src/admin/pages/media/hooks/useUploadQueue.ts` — upload pipeline
+  - `src/admin/pages/media/utils/smartFolders.ts` — smart folder IDs + predicates
   - `src/core/persistence/cmsMedia.ts` — client-side schema + API
   - `server/handlers/cms/media*.ts` — handlers
   - `server/repositories/media*.ts` — repositories
