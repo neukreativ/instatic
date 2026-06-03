@@ -272,19 +272,29 @@ For inline page-level errors, prefer `role="alert"` content over a toast — toa
 ## `ContextMenu`
 
 ```tsx
-import { ContextMenu } from '@ui/components/ContextMenu'
+import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from '@ui/components/ContextMenu'
 
-<ContextMenu
-  trigger={<Button variant="ghost" iconOnly aria-label="More"><MoreIcon /></Button>}
-  items={[
-    { id: 'edit',   label: 'Edit',      onSelect: onEdit },
-    { id: 'sep',    kind: 'separator' },
-    { id: 'delete', label: 'Delete',    tone: 'destructive', onSelect: onDelete },
-  ]}
-/>
+{menu && (
+  <ContextMenu
+    x={menu.x}
+    y={menu.y}
+    ariaLabel="Layer actions"
+    onClose={() => setMenu(null)}
+  >
+    <ContextMenuItem onClick={onRename}>Rename</ContextMenuItem>
+    <ContextMenuItem onClick={onDuplicate}>Duplicate</ContextMenuItem>
+    <ContextMenuSeparator />
+    <ContextMenuItem danger onClick={onDelete}>Delete</ContextMenuItem>
+  </ContextMenu>
+)}
 ```
 
-`ContextMenu` covers both `…` overflow menus and right-click context menus. Items support icons, keyboard navigation, separators, destructive tone.
+`ContextMenu` covers both anchored overflow menus (`anchorRef` / `triggerRef`) and
+point-positioned right-click menus (`x` / `y`). Outside mouse-down and context-menu
+events close the menu without cancelling the underlying event, so the first
+outside click both dismisses the menu and reaches the clicked element. Items use
+`ContextMenuItem`, separators use `ContextMenuSeparator`, and nested menus use
+`ContextMenuSubmenu`.
 
 ---
 
