@@ -599,4 +599,16 @@ describe('DomPanel — tree keyboard navigation', () => {
     expect(renamedNode?.props.label).toBeUndefined()
     expect(screen.getByRole('treeitem', { name: /hero group/i })).toBeDefined()
   })
+
+  it('keeps hidden nodes in the tree and marks them with a hidden badge', () => {
+    loadContainerSite()
+    act(() => {
+      useEditorStore.getState().toggleNodeHidden('container-1')
+    })
+
+    render(<DomPanel />)
+
+    expect(screen.getByRole('treeitem', { name: /container, hidden/i })).toBeDefined()
+    expect(screen.getByText('hidden')).toBeDefined()
+  })
 })

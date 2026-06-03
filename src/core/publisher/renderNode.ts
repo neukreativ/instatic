@@ -239,6 +239,7 @@ const SPECIAL_NODE_RENDERERS: ReadonlyMap<
 export function renderNode(nodeId: string, ctx: RenderContext): string {
   const node = ctx.page.nodes[nodeId]
   if (!node) return ''
+  if (node.hidden) return ''
 
   const def = ctx.registry.get(node.moduleId)
   if (!def) {

@@ -87,8 +87,8 @@ export function LayerTreeNodeContent({
         </span>
       )}
       {hidden && (
-        <span title="Hidden" aria-hidden="true" className={styles.indicator}>
-          👁
+        <span aria-hidden="true" className={styles.hiddenBadge}>
+          hidden
         </span>
       )}
     </>

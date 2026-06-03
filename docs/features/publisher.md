@@ -10,6 +10,7 @@ The published output has **no framework runtime**, **no client-side hydration of
 
 - Entry point: `publishPage(page, ctx)` in `src/core/publisher/render.ts`. Returns the full HTML document string.
 - Recursion: `renderNode(nodeId, ctx)` in `renderNode.ts`. Bottom-up walk. Two specialized renderers hook in for `base.visual-component-ref` and `base.loop`.
+- Hidden nodes (`node.hidden`) are pruned at the top of `renderNode`, before unknown-module comments, dynamic holes, specialized renderers, standard rendering, or CSS collection.
 - Per-node flow: render children → resolve effective + dynamic props → `escapeProps` → call `module.render(props, renderedChildren)` → collect deduped CSS → inject author class names.
 - CSS is deduped by `moduleId` via `CssCollector` (~60–80% size reduction on typical pages).
 - Module `render()` is a **pure function**: no DOM, no React, no side effects (Constraint #179).
@@ -71,6 +72,7 @@ publishPage(page, ctx)             ← src/core/publisher/render.ts
     ├─→ build <head>: title, description, favicon, font import, lang, importmap, runtime <script>s, CSP
     ├─→ renderNode(rootNodeId, ctx)
     │       │
+    │       ├─→ if node.hidden, return '' before any renderer or CSS path
     │       ├─→ specialised renderer for `base.visual-component-ref`  → renderVisualComponentRef
     │       ├─→ specialised renderer for `base.loop`                  → renderLoop
     │       └─→ renderStandardNode for everything else (the bulk of the tree)

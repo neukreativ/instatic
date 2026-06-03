@@ -667,6 +667,123 @@ describe('LayerNodeContextMenu — "Insert module here" sibling fallback on leaf
   })
 })
 
+describe('LayerNodeContextMenu — Hide / Unhide', () => {
+  function setupHideMenuPage() {
+    localStorage.clear()
+    const home = makePage({
+      id: 'page-hide',
+      title: 'Home',
+      slug: 'index',
+      rootNodeId: 'root',
+      nodes: {
+        root: makeNode({ id: 'root', moduleId: 'base.body', children: ['a', 'b', 'c'] }),
+        a: makeNode({ id: 'a', moduleId: 'base.text' }),
+        b: makeNode({ id: 'b', moduleId: 'base.text', hidden: true }),
+        c: makeNode({ id: 'c', moduleId: 'base.text', hidden: true }),
+      },
+    })
+    useEditorStore.setState({
+      site: makeSite({ pages: [home], files: [], visualComponents: [] }),
+      activePageId: 'page-hide',
+      selectedNodeId: 'a',
+      selectedNodeIds: [],
+      hoveredNodeId: null,
+      activeDocument: null,
+      _historyPast: [],
+      _historyFuture: [],
+      canUndo: false,
+      canRedo: false,
+      hasUnsavedChanges: false,
+    } as Parameters<typeof useEditorStore.setState>[0])
+  }
+
+  function renderHideMenu(nodeId: string) {
+    return render(
+      <LayerNodeContextMenu
+        x={100}
+        y={200}
+        nodeId={nodeId}
+        onClose={noop}
+        onDelete={noop}
+        onDuplicate={noop}
+        onRename={noop}
+        onWrapInContainer={noop}
+        onCopy={noop}
+        onCut={noop}
+        onPaste={noop}
+      />,
+    )
+  }
+
+  it('shows Hide for a visible node and marks it hidden when clicked', () => {
+    setupHideMenuPage()
+    renderHideMenu('a')
+
+    fireEvent.click(screen.getByRole('menuitem', { name: /^hide$/i }))
+
+    expect(useEditorStore.getState().site?.pages[0].nodes.a.hidden).toBe(true)
+  })
+
+  it('places Hide first with a divider before the rest of the menu', () => {
+    setupHideMenuPage()
+    renderHideMenu('a')
+
+    const menu = screen.getByRole('menu', { name: 'Node options' })
+    const children = Array.from(menu.children)
+
+    expect(children[0].textContent).toBe('Hide')
+    expect(children[1].getAttribute('aria-hidden')).toBe('true')
+    expect(children[2].textContent).toBe('Rename')
+  })
+
+  it('shows Unhide for a hidden node and marks it visible when clicked', () => {
+    setupHideMenuPage()
+    renderHideMenu('b')
+
+    fireEvent.click(screen.getByRole('menuitem', { name: /^unhide$/i }))
+
+    expect(useEditorStore.getState().site?.pages[0].nodes.b.hidden).toBe(false)
+  })
+
+  it('does not show Hide for the structural root node', () => {
+    setupHideMenuPage()
+    renderHideMenu('root')
+
+    expect(screen.queryByRole('menuitem', { name: /^hide$/i })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: /^unhide$/i })).toBeNull()
+  })
+
+  it('hides every selected node when a multi-selection contains a visible node', () => {
+    setupHideMenuPage()
+    useEditorStore.setState({
+      selectedNodeId: 'a',
+      selectedNodeIds: ['a', 'b'],
+    } as Parameters<typeof useEditorStore.setState>[0])
+    renderHideMenu('a')
+
+    fireEvent.click(screen.getByRole('menuitem', { name: /^hide selected$/i }))
+
+    const nodes = useEditorStore.getState().site?.pages[0].nodes
+    expect(nodes?.a.hidden).toBe(true)
+    expect(nodes?.b.hidden).toBe(true)
+  })
+
+  it('unhides every selected node when all selected nodes are hidden', () => {
+    setupHideMenuPage()
+    useEditorStore.setState({
+      selectedNodeId: 'b',
+      selectedNodeIds: ['b', 'c'],
+    } as Parameters<typeof useEditorStore.setState>[0])
+    renderHideMenu('b')
+
+    fireEvent.click(screen.getByRole('menuitem', { name: /^unhide selected$/i }))
+
+    const nodes = useEditorStore.getState().site?.pages[0].nodes
+    expect(nodes?.b.hidden).toBe(false)
+    expect(nodes?.c.hidden).toBe(false)
+  })
+})
+
 describe('LayerNodeContextMenu — multi-delete confirmation', () => {
   function setupMultiSelection() {
     localStorage.clear()

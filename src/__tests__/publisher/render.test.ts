@@ -198,6 +198,58 @@ describe('renderNode', () => {
     expect(renderNode('nonexistent', c)).toBe('')
   })
 
+  it('returns empty string for a hidden node', () => {
+    const page = makePage({
+      root: { moduleId: 'base.text', props: { text: 'Hidden', level: 1 }, hidden: true },
+    })
+    const c = ctx(page)
+    expect(renderNode('root', c)).toBe('')
+  })
+
+  it('does not collect CSS for a hidden node', () => {
+    const page = makePage({
+      root: { moduleId: 'base.text', props: { text: 'Hidden', level: 1 }, hidden: true },
+    })
+    const c = ctx(page)
+    renderNode('root', c)
+    expect(c.cssMap.size).toBe(0)
+  })
+
+  it('renders visible children while omitting hidden children', () => {
+    const page = makePage({
+      root: {
+        moduleId: 'base.container',
+        props: { className: 'wrapper' },
+        children: ['shown', 'hidden'],
+      },
+      shown: { moduleId: 'base.text', props: { text: 'Shown', level: 2 } },
+      hidden: { moduleId: 'base.text', props: { text: 'Hidden', level: 2 }, hidden: true },
+    })
+    const c = ctx(page)
+    expect(renderNode('root', c)).toBe('<div class="wrapper"><h2>Shown</h2></div>')
+  })
+
+  it('prunes a hidden parent without mutating child hidden flags', () => {
+    const page = makePage({
+      root: {
+        moduleId: 'base.container',
+        props: { className: 'wrapper' },
+        children: ['shown-child', 'hidden-child'],
+        hidden: true,
+      },
+      'shown-child': { moduleId: 'base.text', props: { text: 'Shown', level: 2 } },
+      'hidden-child': {
+        moduleId: 'base.text',
+        props: { text: 'Hidden child', level: 2 },
+        hidden: true,
+      },
+    })
+    const c = ctx(page)
+    expect(renderNode('root', c)).toBe('')
+    expect(page.nodes['shown-child'].hidden).toBe(false)
+    expect(page.nodes['hidden-child'].hidden).toBe(true)
+  })
+
   it('emits HTML comment for unknown moduleId', () => {
     const page = makePage({
       root: { moduleId: 'unknown.widget', props: {} },
@@ -206,6 +258,30 @@ describe('renderNode', () => {
     const html = renderNode('root', c)
     expect(html).toContain('<!-- instatic: unknown module')
     expect(html).toContain('unknown.widget')
+  })
+
+  it('emits nothing for a hidden unknown module', () => {
+    const page = makePage({
+      root: { moduleId: 'unknown.widget', props: {}, hidden: true },
+    })
+    const c = ctx(page)
+    expect(renderNode('root', c)).toBe('')
+  })
+
+  it('does not emit a dynamic hole for a hidden dynamic node', () => {
+    const page = makePage({
+      root: { moduleId: 'base.text', props: { text: 'Dynamic', level: 1 }, hidden: true },
+    })
+    const c = ctx(page)
+    const holeNodeIds = new Set<string>()
+    const html = renderNode('root', {
+      ...c,
+      dynamicNodeIds: new Set(['root']),
+      holeNodeIds,
+      publishVersion: 7,
+    })
+    expect(html).toBe('')
+    expect(holeNodeIds.size).toBe(0)
   })
 
   // Security tests (Constraint #211)

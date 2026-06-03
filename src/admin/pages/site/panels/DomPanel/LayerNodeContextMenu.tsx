@@ -63,6 +63,7 @@ import { AppGridPlusGlyphIcon } from 'pixel-art-icons/icons/app-grid-plus-glyph'
 import { BoxStackSolidIcon } from 'pixel-art-icons/icons/box-stack-solid'
 import { CodeIcon } from 'pixel-art-icons/icons/code'
 import { BoxSolidIcon } from 'pixel-art-icons/icons/box-solid'
+import { EyeSolidIcon } from 'pixel-art-icons/icons/eye-solid'
 import styles from './LayerNodeContextMenu.module.css'
 
 interface LayerNodeContextMenuProps {
@@ -124,6 +125,7 @@ export function LayerNodeContextMenu({
   const copyNodesAction = useEditorStore((s) => s.copyNodes)
   const cutNodesAction = useEditorStore((s) => s.cutNodes)
   const deleteNodesAction = useEditorStore((s) => s.deleteNodes)
+  const activePage = useEditorStore(selectActiveCanvasPage)
   const confirmDelete = useConfirmDelete()
 
   // Reactive boolean for the conditional Paste item — re-renders whenever
@@ -182,6 +184,13 @@ export function LayerNodeContextMenu({
     const node = tree?.nodes[nodeId]
     return canComponentizeNode(s.activeDocument, node)
   })
+
+  const hideActionTargetIds = targetIds.filter((id) => id !== activePage?.rootNodeId)
+  const canToggleHidden = !lockedSlotInstance && hideActionTargetIds.length > 0
+  const shouldHideSelection = hideActionTargetIds.some((id) => !activePage?.nodes[id]?.hidden)
+  const hideActionLabel = isMulti
+    ? shouldHideSelection ? 'Hide selected' : 'Unhide selected'
+    : shouldHideSelection ? 'Hide' : 'Unhide'
 
   // "Insert module here" is hidden ONLY for multi-select (the new node has no
   // single anchor in that case) — for single-select every node is a legal
@@ -247,6 +256,17 @@ export function LayerNodeContextMenu({
     }
   }
 
+  const dispatchToggleHidden = () => {
+    const { toggleNodeHidden } = useEditorStore.getState()
+    for (const id of hideActionTargetIds) {
+      const currentHidden = Boolean(activePage?.nodes[id]?.hidden)
+      if (currentHidden !== shouldHideSelection) {
+        toggleNodeHidden(id)
+      }
+    }
+    onClose()
+  }
+
   const dispatchDelete = () => {
     if (isMulti) {
       const idsToDelete = [...targetIds]
@@ -307,21 +327,29 @@ export function LayerNodeContextMenu({
         </>
       )}
 
+      {canToggleHidden && (
+        <>
+          <ContextMenuItem ref={firstItemRef} onClick={dispatchToggleHidden}>
+            <span aria-hidden="true"><EyeSolidIcon size={13} /></span>
+            {hideActionLabel}
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+        </>
+      )}
+
       {/* Rename — hidden for slot-instance lockdown AND for multi-select
           (rename is single-node only). */}
       {!lockedSlotInstance && !isMulti && (
-        <>
-          <ContextMenuItem ref={firstItemRef} onClick={onRename}>
-            <span aria-hidden="true"><PenSquareSolidIcon size={13} /></span>
-            Rename
-          </ContextMenuItem>
-        </>
+        <ContextMenuItem ref={canToggleHidden ? undefined : firstItemRef} onClick={onRename}>
+          <span aria-hidden="true"><PenSquareSolidIcon size={13} /></span>
+          Rename
+        </ContextMenuItem>
       )}
 
       {!lockedSlotInstance && (
         <>
           <ContextMenuItem
-            ref={isMulti ? firstItemRef : undefined}
+            ref={!canToggleHidden && isMulti ? firstItemRef : undefined}
             onClick={dispatchDuplicate}
           >
             <span aria-hidden="true"><CopyPlusSolidIcon size={13} /></span>

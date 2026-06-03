@@ -270,6 +270,98 @@ describe('VC inlining — slot expansion', () => {
   })
 })
 
+describe('VC inlining — hidden nodes', () => {
+  it('omits hidden nodes from a Visual Component definition', () => {
+    const visibleText = makeVCNode({
+      id: 'vc-visible-text',
+      moduleId: 'base.text',
+      props: { text: 'Visible VC text', tag: 'p' },
+    })
+    const hiddenText = makeVCNode({
+      id: 'vc-hidden-text',
+      moduleId: 'base.text',
+      props: { text: 'Hidden VC text', tag: 'p' },
+      hidden: true,
+    })
+    const container = makeVCNode({
+      id: 'vc-hidden-root',
+      moduleId: 'base.container',
+      children: ['vc-visible-text', 'vc-hidden-text'],
+    })
+    const vc = makeVC({
+      id: 'vc-hidden',
+      name: 'Hidden Nodes',
+      nodes: [container, visibleText, hiddenText],
+      rootId: 'vc-hidden-root',
+    })
+    const page = makePage({
+      root: {
+        moduleId: 'base.visual-component-ref',
+        props: { componentId: 'vc-hidden', propOverrides: {} },
+      },
+    })
+    const site = makeSite({ visualComponents: [vc], pages: [page] })
+
+    const { html } = publishPage(page, site, registry)
+
+    expect(html).toContain('Visible VC text')
+    expect(html).not.toContain('Hidden VC text')
+  })
+
+  it('omits hidden slot-fill nodes from slot outlet output', () => {
+    const slotOutletNode = makeVCNode({
+      id: 'hidden-slot-outlet',
+      moduleId: 'base.slot-outlet',
+      props: { slotName: 'children' },
+    })
+    const container = makeVCNode({
+      id: 'hidden-slot-root',
+      moduleId: 'base.container',
+      children: ['hidden-slot-outlet'],
+    })
+    const vc = makeVC({
+      id: 'vc-hidden-slot',
+      name: 'Hidden Slot',
+      nodes: [container, slotOutletNode],
+      rootId: 'hidden-slot-root',
+      params: [makeParam({
+        id: 'param-children',
+        name: 'children',
+        type: 'slot',
+        defaultValue: [],
+      })],
+    })
+    const page = makePage({
+      root: {
+        moduleId: 'base.visual-component-ref',
+        props: { componentId: 'vc-hidden-slot', propOverrides: {} },
+        children: ['slot-inst'],
+      },
+      'slot-inst': {
+        moduleId: 'base.slot-instance',
+        props: { slotName: 'children' },
+        children: ['shown-slot-text', 'hidden-slot-text'],
+        locked: true,
+      },
+      'shown-slot-text': {
+        moduleId: 'base.text',
+        props: { text: 'Shown slot text', tag: 'p' },
+      },
+      'hidden-slot-text': {
+        moduleId: 'base.text',
+        props: { text: 'Hidden slot text', tag: 'p' },
+        hidden: true,
+      },
+    })
+    const site = makeSite({ visualComponents: [vc], pages: [page] })
+
+    const { html } = publishPage(page, site, registry)
+
+    expect(html).toContain('Shown slot text')
+    expect(html).not.toContain('Hidden slot text')
+  })
+})
+
 // ---------------------------------------------------------------------------
 // 3. Class CSS — VC node classIds included in CSS bundle
 // ---------------------------------------------------------------------------
