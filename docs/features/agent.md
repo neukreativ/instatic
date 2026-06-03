@@ -127,7 +127,7 @@ NDJSON stream events (one JSON object + \n per line):
     { type: 'toolCall', toolCallId, toolName, input, status: 'pending' }
     { type: 'toolRequest', requestId, toolName, input }    ← write tools only
     { type: 'toolResult', toolCallId, toolName, ok, error? }
-    { type: 'usage', promptTokens, completionTokens, costUsd? }
+    { type: 'usage', promptTokens, completionTokens, costUsd?, cacheReadTokens?, cacheCreationTokens? }
     { type: 'done' }
     { type: 'error', message }                             ← on server error
 
@@ -379,9 +379,9 @@ Conversations and their message history are persisted server-side in `ai_convers
 
 ## Abort + crash recovery
 
-- **Abort.** "Stop" calls `agentSlice.abortAgent()` → `AbortController.abort()` → the fetch stream closes. Two things happen in parallel on the server:
-  - The request `AbortSignal` is forwarded to the Anthropic SDK via `options.abortController` (set in `buildQueryOptions` in `server/ai/drivers/anthropic.ts`). The driver's model loop terminates immediately — no further tokens are generated or billed.
-  - Any `callBrowser` promise still waiting for a browser tool-result rejects immediately. The `onAbort` listener registered per pending call fires, removes the pending entry, and clears its timeout.
+- **Abort.** "Stop" calls `agentSlice.abortAgent()` → `AbortController.abort()` → the fetch stream closes. When the abort signal fires on the server:
+  - `req.signal` is passed straight to every `fetch()` call in the driver loop (`fetch(endpoint, { signal })`). The in-flight HTTP request to the provider is cancelled immediately — no further tokens are generated or billed. On `AbortError` the loop returns cleanly with no `error` event.
+  - Any `callBrowser` promise still waiting for a browser tool-result rejects via the `onAbort` listener registered per pending call (in `server/ai/runtime/transport.ts`). The listener fires, clears the timeout, and removes the pending entry.
   - The stream's `destroy()` hook fires, rejects any remaining pending entries, and removes the bridge from the registry.
 - **Browser tool timeout.** If the browser never POSTs a tool-result, `callBrowser` rejects after 90 seconds (`BROWSER_TOOL_TIMEOUT_MS` in `server/ai/runtime/transport.ts`). The driver sees a rejection, emits an error, and the stream closes. This prevents a closed or unresponsive tab from hanging the SDK loop indefinitely.
 - **Crash on server.** If `runChat` throws, the stream emits `{ type: 'error', message }`. The browser surfaces the message verbatim in the Agent Panel (admin-only surface, so info-disclosure is not a concern).
