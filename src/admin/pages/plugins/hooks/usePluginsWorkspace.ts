@@ -188,9 +188,8 @@ export function usePluginsWorkspace(): PluginsWorkspaceVM {
       setPayload(await listCmsPlugins())
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load plugins')
-    } finally {
-      setLoading(false)
     }
+    setLoading(false)
   }
 
   /**
@@ -209,28 +208,32 @@ export function usePluginsWorkspace(): PluginsWorkspaceVM {
       applyPluginResult(await runStepUp(fn))
       notifyCmsPluginsChanged()
     } catch (err) {
-      if (err instanceof Error && err.message === StepUpCancelledMessage) return
-      setError(err instanceof Error ? err.message : fallbackError)
-    } finally {
-      setBusyPluginId(null)
+      if (!(err instanceof Error && err.message === StepUpCancelledMessage)) {
+        setError(err instanceof Error ? err.message : fallbackError)
+      }
     }
+    setBusyPluginId(null)
   }
 
   async function installPendingPlugin(
     pending: PendingInstall,
-    grantedPermissions: PluginPermission[] = pending.manifest.permissions,
+    grantedPermissions?: PluginPermission[],
   ): Promise<void> {
     setUploading(true)
     setError(null)
     try {
+      const pendingFile = pending.file
+      const pendingManifest = pending.manifest
+      const resolvedGrantedPermissions =
+        grantedPermissions ?? pendingManifest.permissions
       // Installing / upgrading a plugin is a sensitive action — the server
       // requires a fresh `step_up` auth window. `runStepUp` runs the action
       // optimistically first; if the server replies `step_up_required`, it
       // pops a password-confirm dialog and retries.
       const result = await runStepUp(() =>
-        pending.file
-          ? installCmsPluginPackage(pending.file as File, grantedPermissions)
-          : installCmsPluginManifest(pending.manifest, grantedPermissions),
+        pendingFile
+          ? installCmsPluginPackage(pendingFile, resolvedGrantedPermissions)
+          : installCmsPluginManifest(pendingManifest, resolvedGrantedPermissions),
       )
       if (result.plugins.length > 0) {
         setPayload({ plugins: result.plugins, adminPages: result.adminPages })
@@ -246,18 +249,18 @@ export function usePluginsWorkspace(): PluginsWorkspaceVM {
       // pages / classes appear immediately.
       if (
         pending.manifest.pack &&
-        grantedPermissions.includes('visualComponents.register')
+        resolvedGrantedPermissions.includes('visualComponents.register')
       ) {
         notifyCmsSiteReload()
       }
       setPendingInstall(null)
     } catch (err) {
       // User dismissed the step-up dialog — treat as no-op, not an error.
-      if (err instanceof Error && err.message === StepUpCancelledMessage) return
-      setError(err instanceof Error ? err.message : 'Could not install plugin')
-    } finally {
-      setUploading(false)
+      if (!(err instanceof Error && err.message === StepUpCancelledMessage)) {
+        setError(err instanceof Error ? err.message : 'Could not install plugin')
+      }
     }
+    setUploading(false)
   }
 
   async function handleUpload(event: ChangeEvent<HTMLInputElement>): Promise<void> {
@@ -310,9 +313,8 @@ export function usePluginsWorkspace(): PluginsWorkspaceVM {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not install plugin')
-    } finally {
-      setUploading(false)
     }
+    setUploading(false)
   }
 
   async function togglePlugin(plugin: InstalledPlugin): Promise<void> {
@@ -360,11 +362,11 @@ export function usePluginsWorkspace(): PluginsWorkspaceVM {
       // without a full browser reload.
       notifyCmsSiteReload()
     } catch (err) {
-      if (err instanceof Error && err.message === StepUpCancelledMessage) return
-      setError(err instanceof Error ? err.message : 'Could not install plugin pack')
-    } finally {
-      setBusyPluginId(null)
+      if (!(err instanceof Error && err.message === StepUpCancelledMessage)) {
+        setError(err instanceof Error ? err.message : 'Could not install plugin pack')
+      }
     }
+    setBusyPluginId(null)
   }
 
   async function executeRemovePlugin(plugin: InstalledPlugin): Promise<void> {
@@ -378,18 +380,18 @@ export function usePluginsWorkspace(): PluginsWorkspaceVM {
       }))
       notifyCmsPluginsChanged()
     } catch (err) {
-      if (err instanceof Error && err.message === StepUpCancelledMessage) return
-      // The host's DELETE handler runs the plugin's `uninstall` lifecycle
-      // hook, removes runtime registrations, drops the DB row, and deletes
-      // the on-disk asset folder. If that flow returns an error we'd land
-      // in a confusing state where the plugin row may have been deleted
-      // server-side but the UI still shows it. Re-fetch the canonical list
-      // so the card reflects reality regardless of the failure mode.
-      setError(err instanceof Error ? err.message : 'Could not remove plugin')
-      await loadPlugins()
-    } finally {
-      setBusyPluginId(null)
+      if (!(err instanceof Error && err.message === StepUpCancelledMessage)) {
+        // The host's DELETE handler runs the plugin's `uninstall` lifecycle
+        // hook, removes runtime registrations, drops the DB row, and deletes
+        // the on-disk asset folder. If that flow returns an error we'd land
+        // in a confusing state where the plugin row may have been deleted
+        // server-side but the UI still shows it. Re-fetch the canonical list
+        // so the card reflects reality regardless of the failure mode.
+        setError(err instanceof Error ? err.message : 'Could not remove plugin')
+        await loadPlugins()
+      }
     }
+    setBusyPluginId(null)
   }
 
   // Auto-open the file picker when the spotlight queued a `plugins.install`
