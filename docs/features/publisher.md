@@ -469,4 +469,5 @@ This is rare and requires architectural review — most "new behavior" fits with
   - `src/__tests__/architecture/dispatcher-html-pipeline.test.ts`
   - `src/__tests__/architecture/publish-html-filter-context.test.ts`
   - `src/__tests__/architecture/media-presentation-pipeline.test.ts`
+  - `src/__tests__/server/dynamicDetection.test.ts` — Rules 1–4 (module flag, bindings, tokens, loop source, VC ref)
   - `src/__tests__/server/dynamicDetectionLoop.test.ts` — Rule 3.5 static loop body promotion
