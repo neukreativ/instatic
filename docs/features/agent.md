@@ -10,7 +10,7 @@ The agent runs on a provider-agnostic AI runtime (`server/ai/`) that can drive a
 
 - **Structure via HTML.** `insertHtml` and `replaceNodeHtml` accept semantic HTML strings; the browser executor calls `importHtml` (the same pipeline as the paste-HTML UI) to convert them into first-class, editable `PageNode`s.
 - **Styling via CSS.** The agent emits CSS the same way a human pastes it: a `<style>` block and/or `class=` attributes inside the `insertHtml`/`replaceNodeHtml` payload. The importer (`cssToStyleRules`) classifies every selector — a bare `.foo {}` rule becomes a reusable Selectors-panel class bound to `class="foo"`; any other selector (`.hero a`, `a:hover`, `nav > li`) becomes an ambient rule; `style=` attributes land on the node's inline styles. There is no structured `classes` parameter — the agent never hand-builds classes node-by-node at insert time. `createClass` / `updateClassStyles` / `assignClass` exist for editing styles on **existing** nodes after insertion.
-- **26 tools total.** 9 server-side read tools (resolved from the snapshot) + 17 browser-bridged write tools.
+- **22 tools total.** 5 server-side read tools (resolved server-side from the posted snapshot) + 17 browser-bridged write tools.
 - **Two-endpoint bridge.** `POST /admin/api/ai/chat/site` opens an NDJSON stream. When the model calls a write tool, the server emits `toolRequest`; the browser executor applies it to the editor store and POSTs the `AiToolOutput` result to `POST /admin/api/ai/tool-result`.
 - **Provider-agnostic.** The runtime selects a driver (Anthropic, OpenAI, OpenRouter, Ollama) from the conversation's configured credential.
 - **Tools defined with TypeBox** (`server/ai/tools/`). Gated by `ai-tools-typebox-only.test.ts`.
@@ -36,11 +36,10 @@ server/ai/
 ├── tools/
 │   ├── site/
 │   │   ├── writeTools.ts      — 17 browser-bridged write tools (TypeBox schemas)
-│   │   ├── readTools.ts       — 9 server-side read tools
+│   │   ├── readTools.ts       — 5 server-side read tools
 │   │   ├── render.ts          — server-side page render (`renderAgentPage`) + catalog derivations (`describeAgentModules`, `describeAgentTokens`, `filterTokenFamily`)
 │   │   ├── systemPrompt.ts    — HTML-native static prefix + buildDynamicSuffix
-│   │   ├── snapshotHelpers.ts — pure snapshot inspection helpers (search, inspect_node/class, list_tokens)
-│   │   └── snapshot.ts        — SiteSnapshot wire shape + catalog output types (ModuleInfo, SnapshotTokens, …)
+│   │   └── snapshot.ts        — `SiteAgentSnapshot` re-export + catalog output types (ModuleInfo, SnapshotTokens, …)
 │   └── content/            — content-workspace tools (separate scope)
 ├── drivers/
 │   ├── http/
@@ -67,8 +66,7 @@ src/admin/pages/site/agent/
 ├── agentApi.ts             — HTTP layer: tool-result POST, conversation bootstrap, message rehydration
 ├── streamEvents.ts         — NDJSON schema (ServerStreamEventSchema) + processStreamEvent reducer
 ├── siteAgentSnapshot.ts    — `SiteAgentSnapshot` raw-tree wire shape + `buildSiteAgentSnapshot` serializer
-├── pageContext.ts          — editor adapter: reads store scalars, delegates to buildPageSnapshot
-├── pageSnapshot.ts         — pure page snapshot builder (buildPageSnapshot — store-free, also used by the token benchmark)
+├── pageContext.ts          — editor adapter: reads active page + store scalars, calls `buildSiteAgentSnapshot`
 ├── executor.ts             — browser-side dispatcher: validates + runs write tools
 ├── renderEvidence.ts       — captureAgentRenderSnapshot (render_snapshot tool)
 ├── storeRef.ts             — setAgentStoreApi / getAgentStoreApi (avoids store ↔ executor cycle)
@@ -114,7 +112,7 @@ Server: chat.ts
           │  Direct HTTP drivers have no server-side session — every turn
           │  replays the whole log, mapped into the provider's message array.
           │
-          ├─→ read tool (e.g. inspect_page)
+          ├─→ read tool (e.g. read_page)
           │     → resolved server-side from snapshot; result returned to model
           │
           └─→ write tool (e.g. insertHtml)
@@ -149,18 +147,18 @@ The two-endpoint design keeps the **browser as editor-store authority** (write t
 
 ## The page snapshot
 
-Before each `sendAgentMessage` call, `buildCurrentPageContext(get)` (in `pageContext.ts`) extracts a serializable `PageContext` from the editor store. `pageContext.ts` is a thin adapter: it reads the two editor-only scalars (`selectedNodeId`, `activeBreakpointId`) off the store and delegates to the pure `buildPageSnapshot(page, site, registry, opts)` in `pageSnapshot.ts`, which owns the full `Page` + `Site` → snapshot mapping. Keeping the mapping store-free means the `snapshot-tokens` benchmark (`scripts/bench/benches/snapshot-tokens.ts`) measures the exact payload the agent receives. The snapshot contains:
+Before each `sendAgentMessage` call, `buildCurrentPageContext(get)` (in `pageContext.ts`) builds a `SiteAgentSnapshot` from the live editor store. `pageContext.ts` reads the active page and the two editor-only scalars (`selectedNodeId`, `activeBreakpointId`) off the store and calls `buildSiteAgentSnapshot(activePage, state.site, opts)` (in `siteAgentSnapshot.ts`). The result is the raw authoritative tree — no pre-flattening.
 
-- Page id, title, root node id
-- Every node on the active page: id, moduleId, label, parentId, children, props, classIds, breakpointOverrides
-- All pages in the site (id, title, slug, active, isHomepage)
-- Configured breakpoints (id, label, width)
-- CSS class registry (id, name, styles, breakpointStyles, `generated` family flag for framework utility classes)
-- Available modules from the registry (id, name, category, props schema, defaults)
-- Currently selected node id
-- Design tokens: color tokens (slug, CSS var, light/dark value, utility classes, shades/tints), typography scale groups (steps with CSS vars and utility classes), spacing scale groups, font tokens (CSS var, resolved family + fallback stack) — built by `describeFrameworkTokens` + `describeFontTokens` from `@core/framework` / `@core/fonts`
+```ts
+interface SiteAgentSnapshot {
+  page: Page           // active page with full nodes map
+  site: SiteDocument   // breakpoints, styleRules, settings intact; non-active pages emptied
+  selectedNodeId: string | null
+  activeBreakpointId: string
+}
+```
 
-This snapshot travels with every prompt so server-side read tools resolve entirely from it — no browser round-trips needed for reads.
+Only the active page carries full `nodes`. Non-active pages keep metadata (`id`, `title`, `slug`) with empty `nodes`, bounding the per-turn payload on multi-page sites. The server derives everything from this raw tree — `renderAgentPage` runs `publishPage` + `buildSiteCssBundle` for `read_page`; catalog tools read `site.settings` and the server module registry. No bespoke flattened shapes cross the wire.
 
 ---
 
@@ -173,7 +171,7 @@ This snapshot travels with every prompt so server-side read tools resolve entire
 {
   conversationId: string   // ai_conversations row id
   prompt:         string
-  snapshot:       PageContext   // built by buildCurrentPageContext()
+  snapshot:       SiteAgentSnapshot   // built by buildCurrentPageContext()
 }
 
 // Response: NDJSON stream of ServerStreamEvent (one JSON line + '\n' each)
@@ -208,19 +206,15 @@ Requires `ai.tools.write`. Calls `resolveBridgeToolResult(bridgeId, requestId, r
 
 ## Tools
 
-### Read tools — 9, server-side
+### Read tools — 5, server-side
 
-Resolved from the snapshot. No browser round-trip. Results are returned directly to the model.
+Resolved server-side from the posted `SiteAgentSnapshot`. No browser round-trip. Results are returned directly to the model.
 
 | Tool              | What it returns                                                         |
 |-------------------|-------------------------------------------------------------------------|
+| `read_page`       | The active page as annotated HTML (`<body>` where every element carries `uid="<nodeId>"`) + the page's CSS in a `<style>` block (framework tokens, utility classes, class rules with `@media` breakpoint rules). Addresses nodes by `uid` — the same id write tools accept. Replaces the old JSON page-tree tools (`inspect_page`, `inspect_node`, `search_nodes`, `list_classes`, `inspect_class`). |
 | `list_modules`    | Module registry (id, name, category, props schema, defaults); `category` filter |
-| `list_classes`    | CSS class registry (id, name, styles, breakpointStyles); substring filter |
 | `list_breakpoints`| Configured breakpoints + active id                                      |
-| `inspect_page`    | Full active page tree: every node id, moduleId, props, classIds, parent/children |
-| `search_nodes`    | Find nodes by free-text query, moduleId, classId, or className; `limit` default 25 |
-| `inspect_node`    | One node's full detail + light subtree to `maxDepth`; `breakpointId` default active |
-| `inspect_class`   | One class: id, name, base styles, breakpoint styles, assigned node ids  |
 | `list_pages`      | All pages in the site (id, title, slug, active, isHomepage)             |
 | `list_tokens`     | Design tokens: colors (with shades/tints), typography/spacing scale steps, font tokens — each with CSS variable + utility classes; optional `family` filter (`colors`\|`typography`\|`spacing`\|`fonts`) |
 
@@ -295,9 +289,10 @@ Drivers that support prompt caching (Anthropic) apply `cache_control` to the sta
 - Per-breakpoint variation: `@media` queries in the `<style>` block (matched against the site breakpoints), or `breakpointStyles` on `createClass`, keyed by breakpoint ids **verbatim from the dynamic suffix** — never invent ids like `"mobile"` or `"desktop"`.
 - Page ids come from the dynamic suffix; never invent them.
 - Write-tool success data uses explicit keys: `classId` for `createClass`, `pageId` for `addPage`/`duplicatePage`, `nodeId`/`nodeIds` for `duplicateNode`, `nodeIds` for HTML inserts.
+- Editing existing content: call `read_page` first — it returns the annotated page HTML where every element carries `uid="<nodeId>"`; pass that `uid` verbatim to write tools (`updateNodeProps`, `replaceNodeHtml`, etc.). For a single subtree, `getNodeHtml` is sufficient.
 - Reply rule: 1–2 narrating sentences only. No raw HTML/CSS/JSON in the reply.
 
-**Dynamic suffix** (built per request by `buildDynamicSuffix(snap: SiteSnapshot)`):
+**Dynamic suffix** (built per request by `buildDynamicSuffix(snap: SiteAgentSnapshot)`):
 ```text
 Page: "My Site" · root: <rootNodeId> · selected: <nodeId|none>
 · active breakpoint: <id> · all breakpoints: [<id>@<width>px, …]
@@ -318,7 +313,7 @@ The previous tool surface required the model to reference internal module ids (`
 
 The same importer that powers the Agent's `insertHtml` tool also powers the paste-HTML UI — see `docs/features/html-import.md`. No duplicated mapping logic.
 
-**HTML-native *reads* — approved, in progress.** Writes are HTML-native; reads are still structured JSON (`inspect_page` + `list_classes` + `list_tokens`), but that is changing. A benchmark (`snapshot-tokens`) confirmed that the HTML+CSS representation costs ~0.61× the tokens of the JSON snapshot (306,033 vs 499,257 tokens over 6 real pages). The approved design replaces the five page-tree read tools with a single `read_page` tool that renders the active page as annotated HTML (each element tagged with `uid="<nodeId>"`) + the site's `<style>` bundle — the same output `publishPage` produces with `annotateNodeIds: true`. The publisher annotation is implemented (`injectNodeId` in `src/core/publisher/classInjection.ts`); the tool-surface switch is in progress. Benchmark design: [`docs/superpowers/specs/2026-06-04-html-vs-json-snapshot-design.md`](../superpowers/specs/2026-06-04-html-vs-json-snapshot-design.md). Read-surface design: [`docs/superpowers/specs/2026-06-04-agent-html-read-surface-design.md`](../superpowers/specs/2026-06-04-agent-html-read-surface-design.md).
+**Reads are HTML-native.** The `read_page` tool replaced the five JSON page-tree tools (`inspect_page`, `inspect_node`, `search_nodes`, `list_classes`, `inspect_class`). A benchmark (`snapshot-tokens`) confirmed that the HTML+CSS representation costs ~0.61× the tokens of the JSON snapshot (306,033 vs 499,257 tokens over 6 real pages). `read_page` renders the active page via `publishPage(..., { annotateNodeIds: true })` + `buildSiteCssBundle`, returning an annotated `<body>` where every element carries `uid="<nodeId>"`. The agent reads `uid` values from the HTML and passes them verbatim to write tools — no separate node-lookup round-trip. Catalog tools (`list_modules`, `list_tokens`, `list_pages`, `list_breakpoints`) describe things not visible in the page HTML (what is insertable, design token CSS vars, page list) and remain as JSON tools.
 
 ---
 
@@ -414,10 +409,10 @@ Conversations and their message history are persisted server-side in `ai_convers
   - `src/core/ai/toolOutput.ts` — `AiToolOutput` type, `AiToolOutputSchema`, `aiToolOk`, `aiToolError` (canonical bridge result)
   - `src/core/ai/index.ts` — barrel re-exporting the above
   - `server/ai/tools/site/writeTools.ts` — 17 browser-bridged write tool definitions (TypeBox schemas)
-  - `server/ai/tools/site/readTools.ts` — 9 server-side read tool definitions
+  - `server/ai/tools/site/readTools.ts` — 5 server-side read tool definitions
   - `server/ai/tools/site/render.ts` — `renderAgentPage`, `describeAgentModules`, `describeAgentTokens`, `filterTokenFamily`
   - `server/ai/tools/site/systemPrompt.ts` — HTML-native system prompt
-  - `server/ai/tools/site/snapshot.ts` — `SiteSnapshot` interface + catalog output types (`ModuleInfo`, `SnapshotTokens`, …)
+  - `server/ai/tools/site/snapshot.ts` — `SiteAgentSnapshot` re-export + catalog output types (`ModuleInfo`, `SnapshotTokens`, …)
   - `src/admin/pages/site/agent/siteAgentSnapshot.ts` — `SiteAgentSnapshot` raw-tree wire type + `buildSiteAgentSnapshot`
   - `server/ai/handlers/chat.ts` — `POST /admin/api/ai/chat/site` endpoint
   - `server/ai/handlers/toolResult.ts` — `POST /admin/api/ai/tool-result` endpoint
@@ -429,7 +424,7 @@ Conversations and their message history are persisted server-side in `ai_convers
   - `src/admin/pages/site/agent/agentSliceConfig.site.ts` — site-editor scope config
   - `src/admin/pages/site/agent/agentApi.ts` — tool-result POST, conversation bootstrap, message rehydration
   - `src/admin/pages/site/agent/streamEvents.ts` — `ServerStreamEventSchema` + `processStreamEvent`
-  - `src/admin/pages/site/agent/pageContext.ts` — `buildCurrentPageContext`, `buildPageContext`
+  - `src/admin/pages/site/agent/pageContext.ts` — `buildCurrentPageContext`
   - `src/admin/pages/site/agent/executor.ts` — write-tool browser dispatcher
   - `src/admin/pages/site/agent/agentConfig.ts` — API path constants
   - `src/admin/pages/site/agent/renderEvidence.ts` — `captureAgentRenderSnapshot`
