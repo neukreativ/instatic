@@ -48,7 +48,7 @@ src/admin/pages/site/preferences/
 ├── catalog.ts                — declarative source of truth
 ├── editorPreferences.ts      — runtime: schema, IO, hook, event bus
 └── (consumed by)
-    src/admin/pages/site/preferences/Settings/sections/PreferencesSection.tsx
+    src/admin/modals/Settings/sections/PreferencesSection.tsx
 ```
 
 ### `catalog.ts` — source of truth
@@ -349,7 +349,7 @@ Adding density support to a new surface is two CSS lines.
 - Source-of-truth files:
   - `src/admin/pages/site/preferences/catalog.ts` — `PREFERENCE_CATALOG`, `PREFERENCE_CATEGORIES`
   - `src/admin/pages/site/preferences/editorPreferences.ts` — schema, IO, hooks, event bus
-  - `src/admin/pages/site/preferences/Settings/sections/PreferencesSection.tsx` — auto-rendered UI
+  - `src/admin/modals/Settings/sections/PreferencesSection.tsx` — auto-rendered UI
   - `src/admin/pages/site/store/slices/uiSlice.ts` — `usePersistence.ts` and its prefs subscription
 - Gate tests:
   - `src/__tests__/settings/settingsSections.test.tsx`

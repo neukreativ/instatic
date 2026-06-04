@@ -547,9 +547,26 @@ The sidebar shell expands/collapses by animating `--*-panel-width`. The panel sl
 `src/admin/pages/site/toolbar/`:
 
 - `PublishButton`, `PublishActionGroup` — publish current site / page
-- `SettingsButton` — open settings modal
+- `SettingsButton` — opens the Settings modal (see below)
 - `ZoomControls` — canvas zoom
 - `ModulePickerDropdown` — opens the module inserter modal
+
+### Settings modal
+
+`src/admin/modals/Settings/SettingsModal.tsx`. Shares the visual language of the Spotlight palette and Module Inserter: a `--panel-*`-token shell, `--editor-surface-2` rail with categorical rail-tint icon chips, accent-bar section header, and an Esc keycap affordance. Backdrop click and Esc both close — there is no dedicated close button.
+
+**Sections** (rail nav, four entries):
+
+| Section       | What it contains                                                             |
+|---------------|------------------------------------------------------------------------------|
+| General       | Site name, meta title, meta description, language, favicon                   |
+| Shortcuts     | Auto-rendered keyboard shortcut reference from the keybindings registry       |
+| Publishing    | Self-hosted runtime info + framework CSS tree-shaking toggle                 |
+| Preferences   | Catalog-driven editor preferences (auto-rendered from `PREFERENCE_CATALOG`)  |
+
+Site-specific controls that were previously sections of this modal (Pages roster, Breakpoints/Viewports, Conditions) now live in their dedicated surfaces: the Site Explorer panel and `CanvasContextSelector` (unified condition axis).
+
+**State bridge**: settings modal open/close state is mirrored between two stores. `adminUi` (`src/admin/state/adminUi.ts`) is the source the modal reads — this lets `SettingsButton` work on non-editor admin pages without pulling in the editor store. `settingsSlice` in the editor store mirrors that state via `bindSettingsBridgeStoreApi` so editor-side consumers (spotlight commands, tests) can open/navigate settings without knowing about `adminUi`. A re-entrance guard (`bridgeReentrancyGuard`) prevents the two-way sync from looping.
 
 `CanvasNotch` (`src/admin/pages/site/canvas/CanvasNotch.tsx`) owns the canvas-local insertion chrome. Its quick insert buttons are resolved from each admin's server-side `module-inserter` user preference; the default favorites are Container, Text, and Image. The full module inserter is the management surface for those favorites, so any insertable module, layout preset, or Visual Component can be pinned into the notch without adding a separate settings panel. In Visual Component mode, `CanvasRoot` mounts `VisualComponentModeControl` below the notch so the current component name, rename action, and page-return action stay attached to the canvas rather than the global toolbar.
 
@@ -655,6 +672,8 @@ See [docs/features/plugin-system.md](features/plugin-system.md) for the plugin S
   - `src/admin/AuthenticatedAdmin.tsx` — post-login shell + prewarmedLazy scheduler
   - `src/admin/lib/prewarmedLazy.ts` — React.lazy alternative with explicit preload + sync fast-path
   - `src/admin/state/adminUi.ts` — cross-shell Zustand store (settings modal, site-import modal, site name/favicon)
+  - `src/admin/modals/Settings/SettingsModal.tsx` — settings modal (4 sections: General, Shortcuts, Publishing, Preferences)
+  - `src/admin/pages/site/store/slices/settingsSlice.ts` — settings modal state + adminUi bridge
   - `src/admin/state/useSiteSummary.ts` — lightweight site name/favicon fetch for non-editor layouts
   - `src/admin/layouts/AdminPageLayout/AdminPageLayout.tsx` — lightweight non-editor shell
   - `src/admin/layouts/AdminWorkspaceCanvasLayout/AdminWorkspaceCanvasLayout.tsx` — canvas shell for Content/Data/Media
