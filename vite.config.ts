@@ -4,7 +4,7 @@ import babel from '@rolldown/plugin-babel'
 import path from 'path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
-const CMS_DEV_SERVER_ORIGIN = 'http://localhost:3001'
+const CMS_DEV_SERVER_ORIGIN = `http://localhost:${process.env.PORT ?? '3001'}`
 const FILE_EXTENSION_RE = /\.[a-zA-Z0-9]+$/
 
 function isEditorAppPath(pathname: string): boolean {
@@ -224,11 +224,11 @@ export default defineConfig({
       // not need WebSocket upgrades for the agent (NDJSON streams over a
       // standard HTTP response).
       '/admin/api': {
-        target: 'http://localhost:3001',
+        target: CMS_DEV_SERVER_ORIGIN,
         changeOrigin: true,
       },
       '/uploads': {
-        target: 'http://localhost:3001',
+        target: CMS_DEV_SERVER_ORIGIN,
         changeOrigin: true,
       },
       // Public-site runtime endpoints — frontend tracker POSTs, loop
@@ -237,7 +237,7 @@ export default defineConfig({
       // the tracker uses POST and the GET-only `publicSiteDevProxyPlugin`
       // would otherwise drop those requests.
       '/_instatic': {
-        target: 'http://localhost:3001',
+        target: CMS_DEV_SERVER_ORIGIN,
         changeOrigin: true,
       },
     },
