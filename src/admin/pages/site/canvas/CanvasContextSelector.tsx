@@ -35,7 +35,6 @@ import { PlusIcon } from 'pixel-art-icons/icons/plus'
 import { CloseIcon } from 'pixel-art-icons/icons/close'
 import { EditSolidIcon } from 'pixel-art-icons/icons/edit-solid'
 import { ChevronDownIcon } from 'pixel-art-icons/icons/chevron-down'
-import { SettingsCogSolidIcon } from 'pixel-art-icons/icons/settings-cog-solid'
 import { cn } from '@ui/cn'
 import styles from './CanvasContextSelector.module.css'
 
@@ -57,7 +56,6 @@ export function CanvasContextSelector() {
   const setActiveConditionId = useEditorStore((s) => s.setActiveConditionId)
   const removeCondition = useEditorStore((s) => s.removeCondition)
   const removeBreakpoint = useEditorStore((s) => s.removeBreakpoint)
-  const openSettings = useEditorStore((s) => s.openSettings)
 
   const [menuOpen, setMenuOpen] = useState(false)
   // null = closed; 'add' = add a new context; { bp } / { def } = edit that one.
@@ -201,15 +199,6 @@ export function CanvasContextSelector() {
             <PlusIcon size={12} aria-hidden="true" />
             <span className={styles.rowLabel}>Add context…</span>
           </ContextMenuItem>
-          {conditions.length > 0 && (
-            <ContextMenuItem
-              className={styles.menuRowMain}
-              onClick={() => { closeMenu(); openSettings('conditions') }}
-            >
-              <SettingsCogSolidIcon size={12} aria-hidden="true" />
-              <span className={styles.rowLabel}>Manage conditions…</span>
-            </ContextMenuItem>
-          )}
         </ContextMenu>
       )}
 

@@ -29,13 +29,9 @@ import { useAdminUi, bindEditorSettingsBridge } from '@admin/state/adminUi'
 
 export type SettingsSection =
   | 'general'
-  | 'pages'
-  | 'breakpoints'
-  | 'conditions'
   | 'preferences'
   | 'shortcuts'
   | 'publishing'
-  | 'modules'
 
 export interface SettingsSlice {
   /** Whether the settings modal is currently open */

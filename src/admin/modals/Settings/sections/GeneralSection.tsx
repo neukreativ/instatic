@@ -48,7 +48,6 @@ export function GeneralSection() {
 
   return (
     <div>
-      <h3 className={s.sectionHeading}>General</h3>
       <p className={s.sectionDescription}>
         Site name and HTML metadata used by the published CMS pages.
       </p>

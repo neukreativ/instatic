@@ -141,7 +141,11 @@ describe('Close-icon correctness — no X/Twitter logo used as close button', ()
     expect(src).toMatch(/<CloseIcon\b/)
   })
 
-  it('CI-3: SettingsModal close button uses CloseIcon from pixel-art-icons/icons/close', () => {
+  it('CI-3: SettingsModal closes via the shared Esc keycap (no X/Twitter close icon)', () => {
+    // The Settings modal shares the Spotlight / Module Inserter language:
+    // backdrop click + Esc both close, surfaced through a <Kbd>Esc</Kbd> hint.
+    // There is no dedicated close-icon button — so the only requirement is that
+    // it never reaches for an X/Twitter glyph as a close affordance.
     const modalPath = join(SRC_ROOT, 'admin/modals/Settings/SettingsModal.tsx')
     let src: string
     try {
@@ -150,9 +154,8 @@ describe('Close-icon correctness — no X/Twitter logo used as close button', ()
       throw new Error(`[CI-3] SettingsModal.tsx not found at expected path: ${modalPath}`)
     }
 
-    expect(src).toMatch(/import\s*\{[^}]*CloseIcon[^}]*\}\s*from\s*['"]pixel-art-icons\/icons\/close['"]/)
     expect(src).not.toMatch(X_LOGO_PATTERN)
-    expect(src).toMatch(/<CloseIcon\b/)
+    expect(src).toContain('<Kbd>Esc</Kbd>')
   })
 
   it('CI-4: PreviewOverlay close button uses CloseIcon from pixel-art-icons/icons/close', () => {

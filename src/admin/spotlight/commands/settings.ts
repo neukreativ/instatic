@@ -25,7 +25,7 @@ const SECTION_COMMANDS: Command[] = [
   {
     id: 'settings.open',
     title: 'Open Settings',
-    subtitle: 'General, Pages, Viewports, Publishing, Preferences',
+    subtitle: 'General, Shortcuts, Publishing, Preferences',
     group: 'settings',
     iconName: 'settings-cog-solid',
     keywords: ['settings', 'preferences', 'config', 'configuration', 'options'],
@@ -35,36 +35,6 @@ const SECTION_COMMANDS: Command[] = [
       ctx.closeSpotlight()
       const { useEditorStore } = await import('@site/store/store')
       useEditorStore.getState().openSettings()
-    },
-  },
-  {
-    id: 'settings.openPages',
-    title: 'Open Settings → Pages',
-    subtitle: 'Manage site pages and routing',
-    group: 'settings',
-    iconName: 'file-text-solid',
-    keywords: ['settings', 'pages', 'routing', 'sitemap'],
-    workspaces: ['site'],
-    capability: 'site.read',
-    run: async (ctx) => {
-      ctx.closeSpotlight()
-      const { useEditorStore } = await import('@site/store/store')
-      useEditorStore.getState().openSettings('pages')
-    },
-  },
-  {
-    id: 'settings.openBreakpoints',
-    title: 'Open Settings → Viewports',
-    subtitle: 'Configure responsive viewport contexts',
-    group: 'settings',
-    iconName: 'arrows-horizontal',
-    keywords: ['settings', 'breakpoints', 'responsive', 'mobile', 'desktop', 'viewport'],
-    workspaces: ['site'],
-    capability: 'site.read',
-    run: async (ctx) => {
-      ctx.closeSpotlight()
-      const { useEditorStore } = await import('@site/store/store')
-      useEditorStore.getState().openSettings('breakpoints')
     },
   },
   {

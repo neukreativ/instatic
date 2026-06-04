@@ -724,44 +724,38 @@ describe('SettingsModal — WCAG 2.4.3 focus-return on close (Guideline #225)', 
     expect(src).toContain('triggerRef.current = null')
   })
 
-  it('nav item buttons meet WCAG 2.5.5 44px touch target (not 36)', () => {
+  it('does not regress to a 36px touch target anywhere', () => {
     const { readFileSync } = require('fs')
     const src = readFileSync(
       new URL('../../admin/modals/Settings/SettingsModal.tsx', import.meta.url).pathname,
       'utf-8',
     ) as string
-    // No minHeight: 36 anywhere — both nav and close button must be 44
     expect(src).not.toMatch(/minHeight:\s*36/)
   })
 
-  it('nav items and close action have 44px touch targets', () => {
-    const { readFileSync, existsSync } = require('fs')
+  it('closes via the shared Esc keycap affordance, not a dedicated close button', () => {
+    // The modal shares the Spotlight / Module Inserter language: backdrop click
+    // and Esc both close, surfaced through a <Kbd>Esc</Kbd> hint in the rail.
+    // There is no bespoke "Close settings" button (consistency pass).
+    const { readFileSync } = require('fs')
     const tsx = readFileSync(
       new URL('../../admin/modals/Settings/SettingsModal.tsx', import.meta.url).pathname,
       'utf-8',
     ) as string
-    // Post-Task #399: styles moved from inline to SettingsModal.module.css — read both sources
-    const cssSrcUrl = new URL('../../admin/modals/Settings/SettingsModal.module.css', import.meta.url)
-    const css = existsSync(cssSrcUrl.pathname) ? readFileSync(cssSrcUrl, 'utf-8') : ''
-    expect(css).toContain('min-height: 44px')
-
-    const closeActionStart = tsx.indexOf('aria-label="Close settings"')
-    const closeActionBlock = tsx.slice(closeActionStart - 250, closeActionStart + 250)
-    expect(closeActionBlock).toContain('<Button')
-    expect(closeActionBlock).toContain('size="lg"')
+    expect(tsx).not.toContain('aria-label="Close settings"')
+    expect(tsx).toContain('<Kbd>Esc</Kbd>')
   })
 })
 
 describe('SettingsButton — section ID matches a valid SectionId', () => {
-  it("dispatches 'pages' (a valid SectionId), not 'general' (unrecognised)", () => {
+  it("dispatches 'general' (a valid SectionId after dropping the Pages section)", () => {
     const { readFileSync } = require('fs')
     const src = readFileSync(
       new URL('../../admin/pages/site/toolbar/SettingsButton.tsx', import.meta.url).pathname,
       'utf-8',
     ) as string
-    // 'general' is not in NAV_ITEMS — the modal silently fell back to 'pages'
-    // The fix dispatches 'pages' directly to avoid the silent fallback.
-    expect(src).not.toContain("openSettings('general')")
-    expect(src).toContain("openSettings('pages')")
+    // 'pages' / 'breakpoints' / 'conditions' were dropped from the modal —
+    // 'general' is the first NAV_ITEMS entry and the canonical default.
+    expect(src).toContain("openSettings('general')")
   })
 })

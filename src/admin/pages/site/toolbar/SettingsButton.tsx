@@ -21,7 +21,7 @@ export function SettingsButton() {
       iconOnly
       aria-label="Open settings"
       tooltip="Settings"
-      onClick={() => openSettings('pages')}
+      onClick={() => openSettings('general')}
       data-testid="toolbar-settings-btn"
     >
       <SettingsCogSolidIcon size={16} aria-hidden="true" />

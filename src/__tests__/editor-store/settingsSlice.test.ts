@@ -38,10 +38,10 @@ describe('settingsSlice', () => {
       activeSection: 'general',
     })
 
-    useEditorStore.getState().openSettings('breakpoints')
+    useEditorStore.getState().openSettings('shortcuts')
     expect(getSettings()).toEqual({
       isSettingsOpen: true,
-      activeSection: 'breakpoints',
+      activeSection: 'shortcuts',
     })
   })
 
@@ -57,25 +57,22 @@ describe('settingsSlice', () => {
   })
 
   it('setSettingsSection changes the section without opening a closed modal', () => {
-    useEditorStore.getState().setSettingsSection('modules')
+    useEditorStore.getState().setSettingsSection('preferences')
     expect(getSettings()).toEqual({
       isSettingsOpen: false,
-      activeSection: 'modules',
+      activeSection: 'preferences',
     })
   })
 
   it('accepts every settings section and preserves modal openness while navigating', () => {
     const sections: SettingsSection[] = [
       'general',
-      'pages',
-      'breakpoints',
       'preferences',
       'shortcuts',
       'publishing',
-      'modules',
     ]
 
-    useEditorStore.getState().openSettings('pages')
+    useEditorStore.getState().openSettings('shortcuts')
 
     for (const section of sections) {
       useEditorStore.getState().setSettingsSection(section)
@@ -87,7 +84,7 @@ describe('settingsSlice', () => {
   })
 
   it('reopens to general unless a specific section is requested', () => {
-    useEditorStore.getState().openSettings('breakpoints')
+    useEditorStore.getState().openSettings('shortcuts')
     useEditorStore.getState().closeSettings()
     useEditorStore.getState().openSettings()
     expect(getSettings()).toEqual({

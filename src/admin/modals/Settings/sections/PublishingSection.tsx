@@ -2,7 +2,7 @@
  * PublishingSection — self-hosted CMS publishing details.
  */
 import { useEditorStore } from '@site/store/store'
-import { resolveFrameworkPreferences } from '@core/framework/preferences'
+import { resolveFrameworkPreferences } from '@core/framework'
 import { Switch } from '@ui/components/Switch'
 import { SkeletonBlock } from '@ui/components/Skeleton'
 import s from '../SettingsModal.module.css'
@@ -20,7 +20,6 @@ export function PublishingSection() {
 
   return (
     <div>
-      <h3 className={s.sectionHeading}>Publishing</h3>
       <p className={s.sectionDescription}>
         Published pages are served by this self-hosted CMS.
       </p>

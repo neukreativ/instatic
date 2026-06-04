@@ -14,7 +14,6 @@ import s from '../SettingsModal.module.css'
 export function ShortcutsSection() {
   return (
     <div>
-      <h3 className={s.sectionHeading}>Keyboard Shortcuts</h3>
       <p className={s.sectionDescription}>
         All keyboard shortcuts, organized by context. Platform-specific hints
         are shown automatically based on your operating system.

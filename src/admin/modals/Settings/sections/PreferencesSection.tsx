@@ -37,7 +37,6 @@ export function PreferencesSection() {
 
   return (
     <div>
-      <h3 className={s.sectionHeading}>Preferences</h3>
       <p className={s.sectionDescription}>
         Editor preferences are stored locally on this device and do not affect the site file.
       </p>

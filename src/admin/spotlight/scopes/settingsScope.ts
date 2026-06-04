@@ -22,34 +22,6 @@ const SETTINGS_COMMANDS: Command[] = [
     },
   },
   {
-    id: 'scope.settings.pages',
-    title: 'Pages',
-    subtitle: 'Manage site pages and routing',
-    group: 'settings',
-    iconName: 'file-text-solid',
-    keywords: ['pages', 'routing', 'sitemap'],
-    workspaces: ['site'],
-    run: async (ctx) => {
-      ctx.closeSpotlight()
-      const { useEditorStore } = await import('@site/store/store')
-      useEditorStore.getState().openSettings('pages')
-    },
-  },
-  {
-    id: 'scope.settings.breakpoints',
-    title: 'Viewports',
-    subtitle: 'Configure responsive viewport contexts',
-    group: 'settings',
-    iconName: 'arrows-horizontal',
-    keywords: ['breakpoints', 'responsive', 'mobile', 'desktop', 'viewport'],
-    workspaces: ['site'],
-    run: async (ctx) => {
-      ctx.closeSpotlight()
-      const { useEditorStore } = await import('@site/store/store')
-      useEditorStore.getState().openSettings('breakpoints')
-    },
-  },
-  {
     id: 'scope.settings.publishing',
     title: 'Publishing',
     subtitle: 'Configure publishing and deployment settings',

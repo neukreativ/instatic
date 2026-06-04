@@ -1,5 +1,11 @@
 /**
- * SettingsModal — global settings modal with left-sidebar navigation.
+ * SettingsModal — global settings modal with left-rail navigation.
+ *
+ * Shares the visual language of the Spotlight palette and the Module
+ * Inserter: a `--panel-*`-token shell, an `--editor-surface-2` rail with
+ * categorical rail-tint icon chips, an accent-bar section header, and a
+ * shared `Esc` keycap affordance (backdrop click / Esc both close — there
+ * is no dedicated close button, matching the other two modals).
  *
  * Guideline #225 (Modal Shell Requirements, WCAG 2.1 AA):
  * - role="dialog" + aria-modal="true" + aria-labelledby
@@ -11,37 +17,31 @@
  * data-testid="settings-modal" for Playwright (Guideline #221)
  */
 import { useEffect, useRef } from 'react'
+import { cn } from '@ui/cn'
 import { useEditorStore } from '@site/store/store'
 import { useAdminUi } from '@admin/state/adminUi'
 import { Button } from '@ui/components/Button'
-import { Separator } from '@ui/components/Separator'
-import { CloseIcon } from 'pixel-art-icons/icons/close'
+import { Kbd } from '@ui/components/Kbd'
 import { SettingsCogSolidIcon } from 'pixel-art-icons/icons/settings-cog-solid'
-import { FileTextSolidIcon } from 'pixel-art-icons/icons/file-text-solid'
-import { SmartphoneSolidIcon } from 'pixel-art-icons/icons/smartphone-solid'
 import { CommandIcon } from 'pixel-art-icons/icons/command'
 import { UploadIcon } from 'pixel-art-icons/icons/upload'
 import { SlidersHorizontalIcon } from 'pixel-art-icons/icons/sliders-horizontal'
-import { LayoutSolidIcon } from 'pixel-art-icons/icons/layout-solid'
 import { GeneralSection } from './sections/GeneralSection'
-import { BreakpointsSection } from './sections/BreakpointsSection'
-import { ConditionsSection } from './sections/ConditionsSection'
-import { PagesSection } from './sections/PagesSection'
 import { PublishingSection } from './sections/PublishingSection'
 import { ShortcutsSection } from './sections/ShortcutsSection'
 import { PreferencesSection } from './sections/PreferencesSection'
 import s from './SettingsModal.module.css'
 
 // ─── Nav items ────────────────────────────────────────────────────────────────
+// `accent` keys map to the categorical `--rail-tint-*` tokens via the CSS
+// module's `[data-accent]` rules — the same identity system the Module
+// Inserter rail uses for its section icons.
 
 const NAV_ITEMS = [
-  { id: 'general',     label: 'General',     icon: SettingsCogSolidIcon       },
-  { id: 'pages',       label: 'Pages',       icon: FileTextSolidIcon          },
-  { id: 'breakpoints', label: 'Viewports',   icon: SmartphoneSolidIcon        },
-  { id: 'conditions',  label: 'Conditions',  icon: LayoutSolidIcon            },
-  { id: 'shortcuts',   label: 'Shortcuts',   icon: CommandIcon           },
-  { id: 'publishing',  label: 'Publishing',  icon: UploadIcon            },
-  { id: 'preferences', label: 'Preferences', icon: SlidersHorizontalIcon },
+  { id: 'general',     label: 'General',     icon: SettingsCogSolidIcon,  accent: 'lilac' },
+  { id: 'shortcuts',   label: 'Shortcuts',   icon: CommandIcon,           accent: 'sky'   },
+  { id: 'publishing',  label: 'Publishing',  icon: UploadIcon,            accent: 'mint'  },
+  { id: 'preferences', label: 'Preferences', icon: SlidersHorizontalIcon, accent: 'peach' },
 ] as const
 
 type SectionId = typeof NAV_ITEMS[number]['id']
@@ -65,8 +65,9 @@ export function SettingsModal() {
   const setSectionStore = useEditorStore((state) => state.setSettingsSection)
 
   const activeSection = normalizeSection(adminUiSection)
-  const dialogRef  = useRef<HTMLDivElement>(null)
-  const closeBtnRef = useRef<HTMLButtonElement>(null)
+  const activeItem = NAV_ITEMS.find((n) => n.id === activeSection) ?? NAV_ITEMS[0]
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const navRef = useRef<HTMLElement>(null)
   const triggerRef = useRef<HTMLElement | null>(null)
 
   // Focus management: capture trigger on open, restore on close (Guideline #225)
@@ -76,7 +77,7 @@ export function SettingsModal() {
         triggerRef.current = document.activeElement
       }
       requestAnimationFrame(() => {
-        closeBtnRef.current?.focus()
+        navRef.current?.querySelector<HTMLButtonElement>('button')?.focus()
       })
     } else {
       triggerRef.current?.focus()
@@ -157,25 +158,24 @@ export function SettingsModal() {
         onKeyDown={handleKeyDown}
         className={s.dialogWrapper}
       >
-        <div className={s.dialog}>
+        <div className={s.panel} data-accent={activeItem.accent}>
           {/* Screen-reader description */}
           <p id="settings-modal-desc" className={s.srOnly}>
             Site-level configuration. Press Escape to close.
           </p>
 
-          {/* ── Left sidebar ──────────────────────────────────────────────── */}
-          <div className={s.sidebar}>
-            <nav
-              aria-label="Settings sections"
-              className={s.sidebarNav}
-            >
-              <h2
-                id="settings-modal-title"
-                className={s.sidebarTitle}
-              >
-                Settings
-              </h2>
+          {/* ── Left rail ─────────────────────────────────────────────────── */}
+          <div className={s.rail}>
+            <h2 id="settings-modal-title" className={s.brand}>
+              <SettingsCogSolidIcon size={16} aria-hidden="true" />
+              Settings
+            </h2>
 
+            <nav
+              ref={navRef}
+              aria-label="Settings sections"
+              className={s.sectionList}
+            >
               {NAV_ITEMS.map((item) => (
                 <SettingsNavButton
                   key={item.id}
@@ -186,35 +186,33 @@ export function SettingsModal() {
               ))}
             </nav>
 
-            {/* Close button lives OUTSIDE <nav> */}
-            <Separator spacing="none" />
-            <Button
-              ref={closeBtnRef}
-              variant="ghost"
-              size="lg"
-              fullWidth
-              type="button"
-              onClick={handleClose}
-              aria-label="Close settings"
-            >
-              <CloseIcon size={12} color="currentColor" aria-hidden="true" />
-              Close
-            </Button>
+            <div className={s.railSpring} />
+
+            <div className={s.shortcutFooter} aria-label="Settings keyboard shortcuts">
+              <div className={s.shortcutHint}>
+                <Kbd>Esc</Kbd>
+                <span>close</span>
+              </div>
+            </div>
           </div>
 
           {/* ── Right content area ──────────────────────────────────────── */}
-          <div
-            role="region"
-            aria-label={NAV_ITEMS.find((n) => n.id === activeSection)?.label}
-            className={s.content}
-          >
-            {activeSection === 'general'     && <GeneralSection />}
-            {activeSection === 'pages'       && <PagesSection />}
-            {activeSection === 'breakpoints' && <BreakpointsSection />}
-            {activeSection === 'conditions'  && <ConditionsSection />}
-            {activeSection === 'shortcuts'   && <ShortcutsSection />}
-            {activeSection === 'publishing'  && <PublishingSection />}
-            {activeSection === 'preferences' && <PreferencesSection />}
+          <div className={s.main}>
+            <header className={s.sectionHeader} data-accent={activeItem.accent}>
+              <span className={s.sectionBar} aria-hidden="true" />
+              <h3 className={s.sectionTitle}>{activeItem.label}</h3>
+            </header>
+
+            <div
+              role="region"
+              aria-label={activeItem.label}
+              className={s.content}
+            >
+              {activeSection === 'general'     && <GeneralSection />}
+              {activeSection === 'shortcuts'   && <ShortcutsSection />}
+              {activeSection === 'publishing'  && <PublishingSection />}
+              {activeSection === 'preferences' && <PreferencesSection />}
+            </div>
           </div>
         </div>
       </div>
@@ -239,15 +237,17 @@ function SettingsNavButton({
   return (
     <Button
       variant="ghost"
-      size="lg"
-      navItem
-      active={active}
+      size="md"
+      align="start"
       onClick={onClick}
+      data-accent={item.accent}
       aria-current={active ? 'page' : undefined}
-      className={s.navItem}
+      className={cn(s.navItem, active && s.navItemActive)}
     >
-      <NavIcon size={14} aria-hidden="true" />
-      {item.label}
+      <span className={s.navIcon} aria-hidden="true">
+        <NavIcon size={16} />
+      </span>
+      <span className={s.navName}>{item.label}</span>
     </Button>
   )
 }

@@ -97,7 +97,7 @@ export function bindEditorSettingsBridge(bridge: EditorSettingsBridge | null): v
 
 export const useAdminUi = create<AdminUiState>((set) => ({
   settingsOpen: false,
-  settingsSection: 'pages',
+  settingsSection: 'general',
   openSettings: (section) => {
     let nextSection: string | undefined
     set((state) => {

@@ -70,10 +70,6 @@ function relPath(full: string): string {
 // ---------------------------------------------------------------------------
 
 const SELECT_ACTIVE_PAGE_ALLOWLIST = new Set<string>([
-  // §A.1 — settings pages section: manages the site's page list, not canvas nodes.
-  //   Renders a list of all site pages for add/rename/delete — never reads node data.
-  'admin/modals/Settings/sections/PagesSection.tsx',
-
   // §A.2 — module insertion hook: uses selectActiveCanvasPage so insertions
   //   resolve against either page mode or Visual Component canvas mode.
   'admin/pages/site/hooks/useInsertModule.ts',
