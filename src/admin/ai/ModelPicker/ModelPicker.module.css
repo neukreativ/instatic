@@ -1,0 +1,105 @@
+/* ModelPicker — trigger chrome + inline menu-row styling only. The dropdown
+   surface, scroll, and search header all come from the shared ContextMenu
+   primitive. */
+
+.root {
+    position: relative;
+}
+
+/* ── Field trigger (AI settings → Defaults) — looks like a Select. Layout
+   (full width, space-between, height) comes from Button's `fullWidth` +
+   `align="between"` + `size="md"`; this only adds the field skin. ───────── */
+.fieldTrigger {
+    gap: 7px;
+    padding: 6px 9px;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    color: var(--editor-text);
+    font-size: 12px;
+    font-weight: 400;
+}
+
+.fieldTrigger:hover {
+    border-color: var(--input-border-hover);
+    background: var(--input-bg);
+}
+
+.fieldTrigger[aria-expanded="true"] {
+    background: var(--input-bg-focus);
+    border-color: var(--input-border-focus);
+    box-shadow: var(--editor-focus-ring);
+}
+
+/* ── Inline trigger (chat composer toolbar) — compact ghost button ─────── */
+.inlineTrigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 200px;
+}
+
+.triggerLabel {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.inlineTrigger .triggerLabel {
+    font-size: 10px;
+}
+
+.fieldTrigger .triggerLabel {
+    flex: 1;
+    min-width: 0;
+}
+
+.triggerPlaceholder {
+    color: var(--editor-text-muted);
+}
+
+.staticState {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    max-width: 200px;
+    color: var(--editor-text-muted);
+    font-size: 10px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+/* ── Menu rows ─────────────────────────────────────────────────────────── */
+.groupHeader {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--editor-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.groupProvider {
+    color: var(--editor-text-subtle);
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.modelLabel {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.modelTier {
+    color: var(--editor-text-subtle);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-inline-start: auto;
+}
+
+.emptyOption {
+    padding: 6px 9px;
+    font-size: 12px;
+    color: var(--editor-text-muted);
+}

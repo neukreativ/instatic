@@ -11,6 +11,21 @@ const OPTIONS = [
   { value: 'archived', label: 'Archived' },
 ]
 
+// A long list (> SEARCH_THRESHOLD) so the in-menu search box auto-enables —
+// mirrors the 300+ AI model list that motivated search + scroll.
+const MANY_OPTIONS = [
+  { value: 'gpt-4', label: 'GPT 4' },
+  { value: 'gpt-4o', label: 'GPT 4o' },
+  { value: 'claude-opus', label: 'Claude Opus' },
+  { value: 'claude-sonnet', label: 'Claude Sonnet' },
+  { value: 'claude-haiku', label: 'Claude Haiku' },
+  { value: 'gemini-pro', label: 'Gemini Pro' },
+  { value: 'gemini-flash', label: 'Gemini Flash' },
+  { value: 'grok', label: 'Grok' },
+  { value: 'mistral', label: 'Mistral Medium' },
+  { value: 'llama', label: 'Llama 3' },
+]
+
 describe('Select', () => {
   it('opens the option list when the chevron icon area is clicked', () => {
     render(
@@ -351,6 +366,131 @@ describe('Select', () => {
     } finally {
       HTMLElement.prototype.getBoundingClientRect = originalRect
     }
+  })
+
+  it('caps the dropdown height so long lists scroll instead of overflowing', () => {
+    render(
+      <Select
+        id="scroll-status"
+        aria-label="Scroll status"
+        value="gpt-4"
+        options={MANY_OPTIONS}
+        onChange={() => {}}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('combobox', { name: /scroll status/i }))
+
+    const listbox = screen.getByRole('listbox', { name: /scroll status/i })
+    expect(listbox.getAttribute('style')).toContain('--context-menu-max-height: 320px')
+    expect(listbox.hasAttribute('data-scrollable')).toBe(true)
+  })
+
+  it('auto-enables a search box for long lists and filters as you type', () => {
+    render(
+      <Select
+        id="model-a"
+        aria-label="Model A"
+        value="gpt-4"
+        options={MANY_OPTIONS}
+        onChange={() => {}}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('combobox', { name: /model a/i }))
+
+    // All options visible before filtering.
+    expect(screen.getAllByRole('option')).toHaveLength(MANY_OPTIONS.length)
+
+    const search = screen.getByRole('combobox', { name: /search/i })
+    fireEvent.change(search, { target: { value: 'claude' } })
+
+    const filtered = screen.getAllByRole('option')
+    expect(filtered).toHaveLength(3)
+    expect(filtered.map((o) => o.textContent)).toEqual([
+      'Claude Opus',
+      'Claude Sonnet',
+      'Claude Haiku',
+    ])
+  })
+
+  it('shows a no-matches state when the query matches nothing', () => {
+    render(
+      <Select
+        id="model-b"
+        aria-label="Model B"
+        value="gpt-4"
+        options={MANY_OPTIONS}
+        onChange={() => {}}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('combobox', { name: /model b/i }))
+    fireEvent.change(screen.getByRole('combobox', { name: /search/i }), {
+      target: { value: 'zzzzz' },
+    })
+
+    expect(screen.queryAllByRole('option')).toHaveLength(0)
+    expect(screen.getByText('No matches')).toBeDefined()
+  })
+
+  it('commits a keyboard selection made from the filtered search results', () => {
+    let selected = 'gpt-4'
+    render(
+      <Select
+        id="model-c"
+        aria-label="Model C"
+        value={selected}
+        options={MANY_OPTIONS}
+        onChange={(event) => {
+          selected = event.target.value
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('combobox', { name: /model c/i }))
+
+    const search = screen.getByRole('combobox', { name: /search/i })
+    fireEvent.change(search, { target: { value: 'sonnet' } })
+    // Highlight resets to the first match; Enter commits it.
+    fireEvent.keyDown(search, { key: 'Enter' })
+
+    expect(selected).toBe('claude-sonnet')
+    expect(screen.queryByRole('listbox', { name: /model c/i })).toBeNull()
+  })
+
+  it('does not show a search box for short lists', () => {
+    render(
+      <Select
+        id="short-status"
+        aria-label="Short status"
+        value="draft"
+        options={OPTIONS}
+        onChange={() => {}}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('combobox', { name: /short status/i }))
+
+    // Only the trigger combobox exists — no in-menu search combobox.
+    expect(screen.getAllByRole('combobox')).toHaveLength(1)
+  })
+
+  it('can force the search box on for a short list', () => {
+    render(
+      <Select
+        id="forced-picker"
+        aria-label="Forced picker"
+        value="draft"
+        searchable
+        options={OPTIONS}
+        onChange={() => {}}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('combobox', { name: /forced picker/i }))
+
+    expect(screen.getByRole('combobox', { name: /search/i })).toBeDefined()
   })
 
   it('can place the menu to the left of the trigger', () => {

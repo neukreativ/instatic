@@ -53,3 +53,11 @@
     appearance: none;
     display: none;
 }
+
+/* The global Input placeholder is `--editor-text-subtle` (very dim) — too
+   faint for a search field, especially on the lighter dropdown surfaces where
+   SearchBar appears. Lift it to the muted/placeholder token so it stays
+   legible. */
+.searchBar .input::placeholder {
+    color: var(--editor-text-muted);
+}

@@ -367,57 +367,6 @@
   color: var(--editor-warning-text);
 }
 
-/* ── ModelPicker (trigger + inline label only — dropdown chrome comes
-   from the shared ContextMenu primitive) ─────────────────────────────── */
-
-.modelPickerButton {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: 200px;
-}
-
-.modelPickerStaticState {
-  display: inline-flex;
-  align-items: center;
-  min-height: 22px;
-  max-width: 200px;
-  color: var(--editor-text-muted);
-  font-size: 10px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.modelPickerLabel {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 10px;
-}
-
-.modelPickerGroupHeader {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--editor-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.modelPickerProvider {
-  color: var(--editor-text-subtle);
-  font-weight: 400;
-  text-transform: none;
-  letter-spacing: 0;
-}
-
-.modelPickerTier {
-  color: var(--editor-text-subtle);
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-inline-start: auto;
-}
-
 /* ── Conversation history (inline children only — dropdown chrome comes
    from the shared ContextMenu primitive) ────────────────────────────── */
 

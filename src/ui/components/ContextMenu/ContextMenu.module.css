@@ -26,6 +26,21 @@
     overscroll-behavior: contain;
 }
 
+/* Sticky search header for searchable dropdowns (Select, ModelPicker).
+   Negative margins let it span edge-to-edge over the menu's 4px padding;
+   `top: -4px` keeps it flush against the menu's top as the options scroll
+   beneath it. The menu background covers scrolled rows so they don't bleed
+   through. */
+.searchHeader {
+    position: sticky;
+    top: -4px;
+    z-index: 1;
+    margin: -4px -4px 4px;
+    padding: 4px;
+    background: var(--editor-surface-4);
+    border-bottom: 1px solid var(--editor-surface-5);
+}
+
 .item {
     min-height: 28px;
     padding: 0 9px;

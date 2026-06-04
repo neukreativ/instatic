@@ -111,6 +111,12 @@
     font-size: 12px;
 }
 
+.emptyOption {
+    padding: 6px 9px;
+    font-size: 12px;
+    color: var(--editor-text-muted);
+}
+
 .optionLabel {
     min-width: 0;
     overflow: hidden;

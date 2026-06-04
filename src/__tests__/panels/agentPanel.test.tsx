@@ -21,7 +21,6 @@ function createAgentStore(overrides: Partial<AgentSlice> = {}) {
     isAgentStreaming: false,
     agentMessages: [],
     agentError: null,
-    agentSessionId: null,
     agentConversationId: null,
     agentActiveCredentialId: null,
     agentActiveModelId: null,
