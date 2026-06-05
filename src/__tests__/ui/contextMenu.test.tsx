@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test'
-import React, { useState } from 'react'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import React, { useRef, useState } from 'react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ContextMenu, ContextMenuItem } from '@ui/components/ContextMenu'
 
 afterEach(cleanup)
@@ -93,6 +93,96 @@ describe('ContextMenu', () => {
       expect(onClose).toHaveBeenCalledTimes(1)
     })
     expect(screen.queryByRole('menu', { name: /node options/i })).toBeNull()
+  })
+
+  it('re-flips an anchored menu when its content grows after the first measure', () => {
+    // Regression: an anchored dropdown (e.g. ModelPicker) measures itself once
+    // on open, but its content can grow afterwards as data lazy-loads. A menu
+    // whose trigger sits near the viewport bottom auto-flips to `top` and pins
+    // its top edge for the short height; once the content fills in, it must
+    // recompute or it grows downward off-screen. A ResizeObserver on the menu
+    // drives that recompute — here we stub the observer + rects to assert it.
+
+    const realRO = globalThis.ResizeObserver
+    const realRect = HTMLElement.prototype.getBoundingClientRect
+    const realInnerHeight = Object.getOwnPropertyDescriptor(window, 'innerHeight')
+    const realInnerWidth = Object.getOwnPropertyDescriptor(window, 'innerWidth')
+
+    Object.defineProperty(window, 'innerHeight', { value: 800, configurable: true })
+    Object.defineProperty(window, 'innerWidth', { value: 1000, configurable: true })
+
+    // The menu mounts short, then grows once its (mock) content loads.
+    let menuHeight = 40
+    const rect = (r: Partial<DOMRect>): DOMRect => ({
+      top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, x: 0, y: 0,
+      toJSON: () => ({}), ...r,
+    }) as DOMRect
+
+    HTMLElement.prototype.getBoundingClientRect = function () {
+      if (this.getAttribute('role') === 'menu') {
+        return rect({ top: 0, left: 100, right: 320, width: 220, height: menuHeight })
+      }
+      if ((this as HTMLElement).dataset.anchor === 'true') {
+        // Trigger pinned to the bottom of the 800px-tall viewport.
+        return rect({ top: 760, bottom: 780, left: 100, right: 200, width: 100, height: 20 })
+      }
+      return realRect.call(this)
+    }
+
+    const observerCallbacks: ResizeObserverCallback[] = []
+    class MockResizeObserver {
+      constructor(cb: ResizeObserverCallback) {
+        observerCallbacks.push(cb)
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    globalThis.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver
+
+    function AnchoredHarness() {
+      const ref = useRef<HTMLButtonElement>(null)
+      return (
+        <>
+          <button ref={ref} data-anchor="true" type="button">
+            Trigger
+          </button>
+          <ContextMenu
+            anchorRef={ref}
+            triggerRef={ref}
+            ariaLabel="Models"
+            minWidth={220}
+            maxHeight={320}
+            onClose={() => {}}
+          >
+            <ContextMenuItem onClick={() => {}}>Item</ContextMenuItem>
+          </ContextMenu>
+        </>
+      )
+    }
+
+    try {
+      render(<AnchoredHarness />)
+      const menu = screen.getByRole('menu', { name: /models/i })
+
+      // First measure: short menu flips above the trigger, top edge at
+      //   760 - 40 - 6(offset) = 714.
+      expect(menu.style.getPropertyValue('--context-menu-y')).toBe('714px')
+
+      // Content loads → menu grows. The ResizeObserver fires → recompute with
+      // the capped height (min(500, 320)=320): 760 - 320 - 6 = 434, so the menu
+      // now sits fully on-screen instead of overflowing the bottom.
+      menuHeight = 500
+      act(() => {
+        for (const cb of observerCallbacks) cb([], {} as ResizeObserver)
+      })
+      expect(menu.style.getPropertyValue('--context-menu-y')).toBe('434px')
+    } finally {
+      globalThis.ResizeObserver = realRO
+      HTMLElement.prototype.getBoundingClientRect = realRect
+      if (realInnerHeight) Object.defineProperty(window, 'innerHeight', realInnerHeight)
+      if (realInnerWidth) Object.defineProperty(window, 'innerWidth', realInnerWidth)
+    }
   })
 
   it('dismisses on a click inside a same-origin iframe document', async () => {

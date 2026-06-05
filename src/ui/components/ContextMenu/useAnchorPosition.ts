@@ -126,6 +126,22 @@ export function useAnchorPosition({
     // floating-position math must run again to keep alignment correct.
   }, [anchorRef, anchorWidth, recompute])
 
+  // Re-run the position math whenever the menu's own measured size changes.
+  // Menu content can grow *after* the first measuring frame — e.g. ModelPicker
+  // lazy-loads its model lists once opened, so the menu mounts short and fills
+  // in asynchronously. Without this, a menu that auto-flipped to `top` (trigger
+  // near the viewport bottom) keeps the `top` edge it picked for the short
+  // height, then grows downward off-screen as content arrives. Observing the
+  // menu reflows the position the moment it resizes.
+  useLayoutEffect(() => {
+    if (!anchorRef) return
+    const menuEl = menuRef.current
+    if (!menuEl || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => recompute())
+    observer.observe(menuEl)
+    return () => observer.disconnect()
+  }, [anchorRef, menuRef, recompute])
+
   // Track the anchor's measured width so `matchAnchorWidth` dropdowns
   // can render flush with their trigger and respond to panel resizes.
   useLayoutEffect(() => {

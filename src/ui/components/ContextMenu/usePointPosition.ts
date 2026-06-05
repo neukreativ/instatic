@@ -89,6 +89,19 @@ export function usePointPosition({
     // coordinate (the typical right-click flow) re-measures and re-flips.
   }, [anchorRef, pointX, pointY, recompute])
 
+  // Re-run the flip/clamp math whenever the menu's own measured size changes —
+  // content that loads after the first measuring frame (async-populated menus)
+  // would otherwise overflow the viewport past the bottom/right edge it was
+  // clamped against while still short.
+  useLayoutEffect(() => {
+    if (anchorRef) return
+    const menuEl = menuRef.current
+    if (!menuEl || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => recompute())
+    observer.observe(menuEl)
+    return () => observer.disconnect()
+  }, [anchorRef, menuRef, recompute])
+
   useEffect(() => {
     if (anchorRef) return
     function onViewportChange() {
