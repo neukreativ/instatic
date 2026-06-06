@@ -33,38 +33,12 @@
  */
 import React from 'react'
 import type { ModuleComponentProps } from '@core/module-engine'
-import { resolveHtmlTag } from '@modules/base/utils/htmlTag'
+import { resolveHtmlTag, VOID_HTML_ELEMENTS } from '@modules/base/utils/htmlTag'
 import { CanvasModulePlaceholder } from '@ui/components/CanvasModulePlaceholder'
 import { ContainerSolidIcon } from 'pixel-art-icons/icons/container-solid'
+import type { ContainerStoredProps } from './index'
 
-interface ContainerProps extends Record<string, unknown> {
-  tag: string
-  customTag: string
-}
-
-/**
- * The full set of void HTML elements. React refuses to render children
- * inside any of these tags, so ContainerEditor must skip the children
- * (and the empty-container placeholder) when the resolved tag is void.
- */
-const VOID_HTML_TAGS = new Set([
-  'area',
-  'base',
-  'br',
-  'col',
-  'embed',
-  'hr',
-  'img',
-  'input',
-  'link',
-  'meta',
-  'param',
-  'source',
-  'track',
-  'wbr',
-])
-
-export const ContainerEditor: React.FC<ModuleComponentProps<ContainerProps>> = ({
+export const ContainerEditor: React.FC<ModuleComponentProps<ContainerStoredProps>> = ({
   props,
   children,
   mcClassName,
@@ -75,7 +49,7 @@ export const ContainerEditor: React.FC<ModuleComponentProps<ContainerProps>> = (
   // Void elements cannot have children. Render the element alone so React
   // does not throw. No empty-container placeholder is shown for void tags —
   // a self-closing element is its own affordance.
-  if (VOID_HTML_TAGS.has(Tag)) {
+  if (VOID_HTML_ELEMENTS.has(Tag)) {
     return React.createElement(Tag, {
       ...nodeWrapperProps,
       className: mcClassName,

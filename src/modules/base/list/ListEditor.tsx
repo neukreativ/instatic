@@ -9,11 +9,7 @@
 import React from 'react'
 import type { ModuleComponentProps } from '@core/module-engine'
 import styles from './list.module.css'
-
-interface ListProps extends Record<string, unknown> {
-  items: string
-  listType: 'unordered' | 'ordered'
-}
+import type { ListStoredProps } from './index'
 
 function parseItems(raw: string): string[] {
   return raw
@@ -22,7 +18,7 @@ function parseItems(raw: string): string[] {
     .filter((s) => s.length > 0)
 }
 
-export const ListEditor: React.FC<ModuleComponentProps<ListProps>> = ({ props, mcClassName, nodeWrapperProps }) => {
+export const ListEditor: React.FC<ModuleComponentProps<ListStoredProps>> = ({ props, mcClassName, nodeWrapperProps }) => {
   const items = parseItems(props.items || '')
   const Tag = props.listType === 'ordered' ? 'ol' : 'ul'
   return React.createElement(

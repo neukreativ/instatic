@@ -49,3 +49,5 @@ export {
 export { registry } from './registry'
 
 export { validateNodeProps } from './validateNodeProps'
+
+export { resolveHtmlTagBadge } from './htmlTagBadge'

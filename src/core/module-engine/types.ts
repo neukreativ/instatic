@@ -214,6 +214,29 @@ export interface ModuleDefinition<
   canHaveChildren: boolean
 
   /**
+   * How the publisher's node walker dispatches this module. Makes the
+   * otherwise-invisible two-tier render contract explicit on the definition:
+   *
+   * - `'standard'` (default): the normal bottom-up flow in `renderStandardNode`
+   *   — render children → resolve/escape props → call `render()` → inject
+   *   classes. Almost every module.
+   * - `'special'`: the walker replaces the standard flow with a publisher-side
+   *   specialised renderer keyed by module id (`base.loop`, `base.visual-component-ref`).
+   *   A module declaring `'special'` MUST have a matching renderer registered in
+   *   the publisher, and the publisher only takes the special path when the
+   *   module declares it — so a special module must opt in here, it can no
+   *   longer be special purely by living in a hardcoded id list.
+   * - `'transparent'`: the node contributes nothing on its own — its `render()`
+   *   MUST return empty HTML (validated at registration). Its content reaches
+   *   the page through another mechanism (slot-instance children are emitted at
+   *   the matching slot-outlet position). Used by `base.slot-instance` /
+   *   `base.slot-outlet`.
+   *
+   * Omit for the standard path.
+   */
+  publishBehavior?: 'standard' | 'special' | 'transparent'
+
+  /**
    * When `true`, this module's render output varies per visitor request and
    * cannot be pre-rendered into a static disk artefact at publish time.
    *

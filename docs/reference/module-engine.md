@@ -316,6 +316,26 @@ Return `null` for modules that don't emit a single deterministic root tag (`base
 
 `htmlTag` is **not consumed by the publisher** — `render()` remains the source of truth for the emitted HTML. This is pure metadata for editor display.
 
+The DOM/Layers panel resolves the badge through the single helper `resolveHtmlTagBadge(def, props)` (exported from `@core/module-engine`), which does the three-case dispatch (omitted / static string / function) in one place — consumers never re-inline it.
+
+---
+
+## `publishBehavior` — how the publisher dispatches the node
+
+The publisher's node walker has more than one render path, and which one a module takes used to be invisible on the definition. `publishBehavior` makes the contract explicit:
+
+```ts
+publishBehavior: 'standard'     // (default, omit) — the normal bottom-up walk
+publishBehavior: 'special'      // a publisher-side specialised renderer replaces the walk
+publishBehavior: 'transparent'  // the node renders nothing on its own
+```
+
+- **`'standard'`** (the default — just omit the field): `renderStandardNode` runs the usual flow — render children → resolve/escape props → call `render()` → inject classes. Almost every module.
+- **`'special'`**: the walker hands the node to a publisher-side specialised renderer keyed by module id (e.g. `renderLoop`, `renderVisualComponentRef`). These renderers replace the entire standard flow because the node's semantics need a different shape (a loop iterates a data source; a vc-ref inlines a Visual Component tree). The renderer **implementations** stay in the publisher (`SPECIAL_RENDERER_IMPLS` — they take `renderNode` as a callback and bypass the pure-render boundary); the module **declares** the contract via `publishBehavior: 'special'`. The contract is not magically derived — it is **declared, guarded, and gated**: a `'special'` declaration with no matching publisher implementation throws at dispatch (a forgotten renderer fails loudly instead of silently falling through to the wrong standard path), and a bidirectional test gate keeps `getSpecialRendererModuleIds()` and the set of modules declaring `'special'` from drifting apart.
+- **`'transparent'`**: the node contributes nothing on its own — its `render()` **must** return empty HTML (and empty/absent CSS). This is **validated at registration**: registering a transparent module whose `render()` returns non-empty output throws. Its content reaches the page by another mechanism — e.g. a `base.slot-instance`'s children are emitted at the matching `base.slot-outlet` position by the vc-ref renderer.
+
+First-party assignments: `base.loop` and `base.visual-component-ref` are `'special'`; `base.slot-instance` and `base.slot-outlet` are `'transparent'`; everything else is `'standard'`.
+
 ---
 
 ## Module dependencies (npm imports)

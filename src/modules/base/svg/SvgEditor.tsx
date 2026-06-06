@@ -13,13 +13,9 @@ import type { ModuleComponentProps } from '@core/module-engine'
 import { sanitizeSvg } from '@core/sanitize'
 import { CanvasModulePlaceholder } from '@ui/components/CanvasModulePlaceholder'
 import { ImageSolidIcon } from 'pixel-art-icons/icons/image-solid'
+import type { SvgStoredProps } from './index'
 
-interface SvgProps extends Record<string, unknown> {
-  svg: string
-  title: string
-}
-
-export const SvgEditor: React.FC<ModuleComponentProps<SvgProps>> = ({
+export const SvgEditor: React.FC<ModuleComponentProps<SvgStoredProps>> = ({
   props,
   mcClassName,
   nodeWrapperProps,

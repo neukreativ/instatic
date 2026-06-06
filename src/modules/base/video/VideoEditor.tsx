@@ -27,17 +27,7 @@ import { buildVariantSrcset, pickVariantUrl } from '@admin/pages/media/utils/var
 import { CanvasModulePlaceholder } from '@ui/components/CanvasModulePlaceholder'
 import { VideoSolidIcon } from 'pixel-art-icons/icons/video-solid'
 import { parseYoutubeId, youtubeEmbedUrl } from './youtube'
-
-interface VideoProps extends Record<string, unknown> {
-  videoUrl: string
-  poster: string
-  autoplay: boolean
-  loop: boolean
-  muted: boolean
-  controls: boolean
-  playsinline: boolean
-  preload: 'none' | 'metadata' | 'auto'
-}
+import type { VideoStoredProps } from './index'
 
 // Canvas tile width hint — drives the poster variant pick. Videos in the
 // editor preview usually render at half the published-page width because
@@ -81,7 +71,7 @@ const FACADE_SHIELD_STYLE: CSSProperties = {
   cursor: 'pointer',
 }
 
-export const VideoEditor: React.FC<ModuleComponentProps<VideoProps>> = ({ props, mcClassName, nodeWrapperProps }) => {
+export const VideoEditor: React.FC<ModuleComponentProps<VideoStoredProps>> = ({ props, mcClassName, nodeWrapperProps }) => {
   const youtubeId = parseYoutubeId(props.videoUrl || '')
 
   // Resolve both assets in parallel via the per-path cache. For YouTube

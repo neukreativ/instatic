@@ -216,33 +216,60 @@ function renderHolePlaceholder(
   )
 }
 
+type SpecialRenderer = (
+  node: PageNode,
+  config: RenderConfig,
+  acc: RenderAccumulators,
+  renderNode: RenderNodeFn,
+) => string
+
 /**
- * Specialised renderers keyed by moduleId. Looked up by `renderNode` before
- * the standard bottom-up walk. Each entry replaces the entire
- * "render children → resolve props → call render() → inject classes" flow
- * because the moduleId's semantics need a different shape:
+ * Publisher-side specialised-renderer IMPLEMENTATIONS, keyed by moduleId. Each
+ * replaces the entire "render children → resolve props → call render() → inject
+ * classes" flow because the moduleId's semantics need a different shape:
  *
  * - `base.visual-component-ref`: inlines a Visual Component tree recursively,
  *   consuming its `base.slot-instance` children for slot fills.
  * - `base.loop`: iterates a `LoopEntitySource` and renders its child template
  *   once per item with a freshly pushed entry-stack frame.
  *
- * Each specialised renderer takes `renderNode` as a callback so the file
- * graph stays acyclic. Adding a new specialised render path is a single
- * Map entry plus its renderer function — no edit to renderNode's body.
+ * Each takes `renderNode` as a callback so the file graph stays acyclic, and
+ * each bypasses the standard pure-render boundary — so the implementation MUST
+ * live here in the publisher. The registry only declares WHICH modules are
+ * special (via `publishBehavior: 'special'`); this map supplies the matching
+ * implementation. Adding a new special render path is a single map entry plus
+ * `publishBehavior: 'special'` on the module definition.
  */
-const SPECIAL_NODE_RENDERERS: ReadonlyMap<
-  string,
-  (
-    node: PageNode,
-    config: RenderConfig,
-    acc: RenderAccumulators,
-    renderNode: RenderNodeFn,
-  ) => string
-> = new Map([
+const SPECIAL_RENDERER_IMPLS: ReadonlyMap<string, SpecialRenderer> = new Map([
   ['base.visual-component-ref', renderVisualComponentRef],
   ['base.loop', renderLoop],
 ])
+
+/** The moduleIds the publisher provides a specialised renderer for. */
+export function getSpecialRendererModuleIds(): string[] {
+  return [...SPECIAL_RENDERER_IMPLS.keys()]
+}
+
+/**
+ * Resolve the specialised renderer for a node. A `publishBehavior: 'special'`
+ * declaration on the module definition is the contract that this dispatch
+ * exists — `getSpecialRendererModuleIds()` must stay in sync with the set of
+ * registered modules declaring `'special'` (enforced by test). Declaring
+ * `'special'` with NO matching publisher implementation is a programming error
+ * and throws here, so a forgotten renderer fails loudly instead of silently
+ * falling through to the standard (wrong) render path.
+ */
+export function resolveSpecialRenderer(
+  def: AnyModuleDefinition,
+): SpecialRenderer | undefined {
+  const impl = SPECIAL_RENDERER_IMPLS.get(def.id)
+  if (def.publishBehavior === 'special' && !impl) {
+    throw new Error(
+      `[publisher] Module "${def.id}" declares publishBehavior:'special' but no specialised renderer is registered for it.`,
+    )
+  }
+  return impl
+}
 
 /**
  * Render a single node and its entire subtree recursively.
@@ -271,7 +298,7 @@ export function renderNode(
     return renderHolePlaceholder(node, def, config, acc)
   }
 
-  const specialRenderer = SPECIAL_NODE_RENDERERS.get(node.moduleId)
+  const specialRenderer = resolveSpecialRenderer(def)
   if (specialRenderer) return specialRenderer(node, config, acc, renderNode)
 
   return renderStandardNode(node, def, config, acc)

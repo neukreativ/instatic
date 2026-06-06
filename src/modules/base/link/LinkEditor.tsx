@@ -13,14 +13,9 @@
  */
 import React from 'react'
 import type { ModuleComponentProps } from '@core/module-engine'
+import type { LinkStoredProps } from './index'
 
-interface LinkProps extends Record<string, unknown> {
-  href: string
-  text: string
-  target: '_blank' | '_self' | '_parent'
-}
-
-export const LinkEditor: React.FC<ModuleComponentProps<LinkProps>> = ({ props, children, mcClassName, nodeWrapperProps }) => {
+export const LinkEditor: React.FC<ModuleComponentProps<LinkStoredProps>> = ({ props, children, mcClassName, nodeWrapperProps }) => {
   const rel = props.target === '_blank' ? 'noopener noreferrer' : undefined
   const hasChildren = Array.isArray(children) ? children.length > 0 : children != null
   const content = hasChildren ? children : (props.text ?? 'Link text')

@@ -32,6 +32,26 @@ class ModuleRegistry implements IModuleRegistry {
   }
 
   /**
+   * Enforce the `publishBehavior: 'transparent'` contract at registration: a
+   * transparent module contributes nothing on its own, so its `render()` MUST
+   * return empty HTML. Catching this here means a future transparent module
+   * whose render is not actually empty fails loudly at boot instead of silently
+   * leaking markup into the published page.
+   */
+  private validatePublishBehavior<T extends Record<string, unknown>>(
+    definition: ModuleDefinition<T>,
+  ): void {
+    if (definition.publishBehavior !== 'transparent') return
+    const output = definition.render(definition.defaults, [])
+    if (output.html !== '' || (output.css ?? '') !== '') {
+      throw new Error(
+        `[ModuleRegistry] Module "${definition.id}" declares publishBehavior:'transparent' ` +
+          `but its render() returned non-empty output. Transparent modules must render nothing.`,
+      )
+    }
+  }
+
+  /**
    * Subscribe to registration changes. Used by the editor canvas to
    * re-render when plugin module packs activate after the canvas has
    * already mounted. Returns an unsubscribe function.
@@ -71,6 +91,7 @@ class ModuleRegistry implements IModuleRegistry {
           `Use registerOrReplace() to intentionally overwrite.`
       )
     }
+    this.validatePublishBehavior(definition)
     this._modules.set(definition.id, this.erase(definition))
     this.emitChange()
   }
@@ -81,6 +102,7 @@ class ModuleRegistry implements IModuleRegistry {
         `[ModuleRegistry] Invalid module ID "${definition.id}".`
       )
     }
+    this.validatePublishBehavior(definition)
     this._modules.set(definition.id, this.erase(definition))
     this.emitChange()
   }

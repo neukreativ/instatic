@@ -32,9 +32,9 @@ const TextPropsSchema = Type.Object({
   ),
 })
 
-type TextProps = Static<typeof TextPropsSchema>
+export type TextStoredProps = Static<typeof TextPropsSchema>
 
-export const TextModule: ModuleDefinition<TextProps> = {
+export const TextModule: ModuleDefinition<TextStoredProps> = {
   id: 'base.text',
   name: 'Text',
   description: 'A semantic text element.',

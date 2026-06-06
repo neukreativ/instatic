@@ -20,29 +20,21 @@
 import React from 'react'
 import type { ModuleComponentProps } from '@core/module-engine'
 import { useEditorStore } from '@site/store/store'
-import { instantiateVCAtRef } from '@core/visualComponents'
+import { instantiateVCAtRef, resolveSlotName, safePropOverrides } from '@core/visualComponents'
 import type { BaseNode } from '@core/page-tree'
 import { BracesIcon } from 'pixel-art-icons/icons/braces'
 import { CanvasModulePlaceholder } from '@ui/components/CanvasModulePlaceholder'
 import { VCInlineTree } from './VCInlineTree'
+import type { VisualComponentRefStoredProps } from './index'
 
-interface VisualComponentRefProps extends Record<string, unknown> {
-  componentId: string
-  /** Per-param value overrides — keyed by VCParam.id (stable across renames) */
-  propOverrides: Record<string, unknown>
-}
-
-export const VisualComponentRefEditor: React.FC<ModuleComponentProps<VisualComponentRefProps>> = ({
+export const VisualComponentRefEditor: React.FC<ModuleComponentProps<VisualComponentRefStoredProps>> = ({
   props,
   nodeId,
   mcClassName,
   nodeWrapperProps,
 }) => {
   const componentId = typeof props.componentId === 'string' ? props.componentId : ''
-  const propOverrides =
-    props.propOverrides && typeof props.propOverrides === 'object' && !Array.isArray(props.propOverrides)
-      ? (props.propOverrides as Record<string, unknown>)
-      : {}
+  const propOverrides = safePropOverrides(props)
 
   const vc = useEditorStore(
     (s) => s.site?.visualComponents?.find((v) => v.id === componentId) ?? null,
@@ -88,11 +80,7 @@ export const VisualComponentRefEditor: React.FC<ModuleComponentProps<VisualCompo
     for (const childId of vcRefNode.children) {
       const child = pageNodes[childId]
       if (child?.moduleId === 'base.slot-instance') {
-        const slotName =
-          typeof child.props.slotName === 'string' && child.props.slotName
-            ? child.props.slotName
-            : 'children'
-        slotInstancesByName[slotName] = child.children
+        slotInstancesByName[resolveSlotName(child.props)] = child.children
       }
     }
   }

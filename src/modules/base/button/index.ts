@@ -22,9 +22,9 @@ const ButtonPropsSchema = Type.Object({
   disabled: Type.Boolean({ default: false }),
 })
 
-type ButtonProps = Static<typeof ButtonPropsSchema>
+export type ButtonStoredProps = Static<typeof ButtonPropsSchema>
 
-export const ButtonModule: ModuleDefinition<ButtonProps> = {
+export const ButtonModule: ModuleDefinition<ButtonStoredProps> = {
   id: 'base.button',
   name: 'Button',
   description: 'A button or call-to-action link.',

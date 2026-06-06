@@ -27,14 +27,9 @@ import { resolveHtmlTag } from '@modules/base/utils/htmlTag'
 import { ReadOnlyNodeTree } from '@modules/base/utils/ReadOnlyNodeTree'
 import { CanvasModulePlaceholder } from '@ui/components/CanvasModulePlaceholder'
 import { TextPlusIcon } from 'pixel-art-icons/icons/text-plus'
+import type { OutletStoredProps } from './index'
 
-interface OutletProps extends Record<string, unknown> {
-  tag: string
-  customTag: string
-  html: string
-}
-
-export const OutletEditor: React.FC<ModuleComponentProps<OutletProps>> = ({
+export const OutletEditor: React.FC<ModuleComponentProps<OutletStoredProps>> = ({
   props,
   mcClassName,
   nodeWrapperProps,

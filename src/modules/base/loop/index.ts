@@ -62,6 +62,10 @@ const LoopModule: ModuleDefinition<LoopProps> = {
   trusted: true,
   canHaveChildren: true,
 
+  // The publisher intercepts loop nodes with `renderLoop()` instead of the
+  // standard walk — declared here so the dispatch is visible on the definition.
+  publishBehavior: 'special',
+
   // Loop properties are NOT panel-edited via the generic schema renderer
   // because filterSchema is dynamic per source. The Properties Panel
   // branches on moduleId === 'base.loop' and renders LoopPropertiesView,
@@ -69,7 +73,7 @@ const LoopModule: ModuleDefinition<LoopProps> = {
   schema: {},
 
   propsSchema: LoopPropsSchema,
-  defaults: Value.Create(LoopPropsSchema) as LoopProps,
+  defaults: Value.Create(LoopPropsSchema),
 
   component: LoopEditor,
 

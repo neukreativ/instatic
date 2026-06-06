@@ -25,9 +25,9 @@ const SvgPropsSchema = Type.Object({
   title: Type.String({ default: '' }),
 })
 
-type SvgProps = Static<typeof SvgPropsSchema>
+export type SvgStoredProps = Static<typeof SvgPropsSchema>
 
-export const SvgModule: ModuleDefinition<SvgProps> = {
+export const SvgModule: ModuleDefinition<SvgStoredProps> = {
   id: 'base.svg',
   name: 'SVG',
   description: 'Inline vector graphic (logo or icon).',

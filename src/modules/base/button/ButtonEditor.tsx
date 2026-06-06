@@ -11,15 +11,9 @@
  */
 import React from 'react'
 import type { ModuleComponentProps } from '@core/module-engine'
+import type { ButtonStoredProps } from './index'
 
-interface ButtonProps extends Record<string, unknown> {
-  label: string
-  href: string
-  target: '_blank' | '_self' | '_parent'
-  disabled: boolean
-}
-
-export const ButtonEditor: React.FC<ModuleComponentProps<ButtonProps>> = ({
+export const ButtonEditor: React.FC<ModuleComponentProps<ButtonStoredProps>> = ({
   props,
   mcClassName,
   nodeWrapperProps,

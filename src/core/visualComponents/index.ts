@@ -27,3 +27,5 @@ export type { VCDeletionImpact, VCRefUsage } from './deletionImpact'
 export { findParamOrigin } from './origin'
 
 export { flattenVCToVirtualPage, parseVirtualVCPageId } from './virtualPage'
+
+export { resolveSlotName, safePropOverrides } from './propGuards'

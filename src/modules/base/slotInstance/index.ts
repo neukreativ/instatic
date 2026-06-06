@@ -20,15 +20,15 @@ import type { ModuleDefinition } from '@core/module-engine'
 import { registry } from '@core/module-engine'
 import { TargetSolidIcon } from 'pixel-art-icons/icons/target-solid'
 import { SlotInstanceEditor } from './SlotInstanceEditor'
-import { Type } from '@core/utils/typeboxHelpers'
+import { Type, Value } from '@core/utils/typeboxHelpers'
 import type { Static } from '@core/utils/typeboxHelpers'
 
 const SlotInstancePropsSchema = Type.Object({
   slotName: Type.String({ default: 'children' }),
 })
-type SlotInstanceProps = Static<typeof SlotInstancePropsSchema>
+export type SlotInstanceStoredProps = Static<typeof SlotInstancePropsSchema>
 
-const SlotInstanceModule: ModuleDefinition<SlotInstanceProps> = {
+const SlotInstanceModule: ModuleDefinition<SlotInstanceStoredProps> = {
   id: 'base.slot-instance',
   name: 'Slot',
   description: 'A materialized slot for component content',
@@ -37,6 +37,11 @@ const SlotInstanceModule: ModuleDefinition<SlotInstanceProps> = {
   icon: TargetSolidIcon,
   trusted: true,
   canHaveChildren: true,
+
+  // The slot-instance never renders as a standalone element — its children are
+  // emitted at the matching slot-outlet position by the vc-ref renderer. Its
+  // own render() returns empty (validated at registration).
+  publishBehavior: 'transparent',
 
   schema: {
     slotName: {
@@ -48,9 +53,9 @@ const SlotInstanceModule: ModuleDefinition<SlotInstanceProps> = {
   },
 
   propsSchema: SlotInstancePropsSchema,
-  defaults: {
-    slotName: 'children',
-  },
+  // Defaults derive from the schema so a new field can never be silently
+  // dropped by a stale hand-written default.
+  defaults: Value.Create(SlotInstancePropsSchema),
 
   component: SlotInstanceEditor,
 

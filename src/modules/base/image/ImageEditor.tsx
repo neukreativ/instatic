@@ -23,11 +23,7 @@ import {
 import { useCmsMediaAssetByPath } from '@admin/pages/media/hooks/useCmsMediaAssetByPath'
 import { CanvasModulePlaceholder } from '@ui/components/CanvasModulePlaceholder'
 import { ImageSolidIcon } from 'pixel-art-icons/icons/image-solid'
-
-interface ImageProps extends Record<string, unknown> {
-  src: string
-  loading: 'lazy' | 'eager'
-}
+import type { ImageStoredProps } from './index'
 
 // Best-guess CSS width for the canvas preview tile. Triggers DPR-aware
 // variant pick: 1× → w320, 2× → w640. The browser still uses srcset to
@@ -35,7 +31,7 @@ interface ImageProps extends Record<string, unknown> {
 // initial `src`.
 const CANVAS_CSS_WIDTH = 320
 
-export const ImageEditor: React.FC<ModuleComponentProps<ImageProps>> = ({ props, mcClassName, nodeWrapperProps }) => {
+export const ImageEditor: React.FC<ModuleComponentProps<ImageStoredProps>> = ({ props, mcClassName, nodeWrapperProps }) => {
   // Resolve the asset row server-side metadata is cached in a module-
   // level map, so dozens of image modules on one page share a single
   // round trip. `null` until the cache is populated — render shows the

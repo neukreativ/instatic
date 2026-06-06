@@ -14,14 +14,10 @@
  */
 import React from 'react'
 import type { ModuleComponentProps } from '@core/module-engine'
-import { normalizeTag, type TextTag } from './tags'
+import { normalizeTag } from './tags'
+import type { TextStoredProps } from './index'
 
-interface TextProps extends Record<string, unknown> {
-  text: string
-  tag: TextTag
-}
-
-export const TextEditor: React.FC<ModuleComponentProps<TextProps>> = ({
+export const TextEditor: React.FC<ModuleComponentProps<TextStoredProps>> = ({
   props,
   mcClassName,
   nodeWrapperProps,

@@ -20,7 +20,8 @@ import { Type, Value } from '@core/utils/typeboxHelpers'
 import type { Static } from '@core/utils/typeboxHelpers'
 import { registry } from '@core/module-engine'
 import { ImageSolidIcon } from 'pixel-art-icons/icons/image-solid'
-import { safeUrl } from '@modules/base/utils/escape'
+import { escapeHtml, safeUrl } from '@modules/base/utils/escape'
+import { buildMediaSrcset } from '@modules/base/utils/mediaAttrs'
 import { ImageEditor } from './ImageEditor'
 
 // ---------------------------------------------------------------------------
@@ -53,7 +54,7 @@ export const ImagePropsSchema = Type.Object({
 })
 
 /** Authored (stored) props — shape the user edits and the database persists. */
-type ImageStoredProps = Static<typeof ImagePropsSchema>
+export type ImageStoredProps = Static<typeof ImagePropsSchema>
 
 /**
  * Full render-time props. Intersects the authored schema shape with
@@ -136,29 +137,6 @@ function blurHashToCssBackground(hash: string): string | null {
   return `url('data:image/svg+xml,${encodeURIComponent(svg)}')`
 }
 
-/**
- * Build the `srcset` attribute from a variant ladder. Includes the
- * original as the largest entry so the browser can pick the full-size
- * file for high-DPI displays.
- */
-function buildSrcset(media: RenderResolvedMedia): string | null {
-  if (!media.variants.length) return null
-  const entries = media.variants
-    .slice()
-    .sort((a, b) => a.width - b.width)
-    .map((v) => `${safeUrl(v.path)} ${v.width}w`)
-  if (media.width) entries.push(`${safeUrl(media.publicPath)} ${media.width}w`)
-  return entries.join(', ')
-}
-
-function escapeAttr(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-}
-
 export const ImageModule: ModuleDefinition<ImageProps> = {
   id: 'base.image',
   name: 'Image',
@@ -226,7 +204,7 @@ export const ImageModule: ModuleDefinition<ImageProps> = {
     // The resolved-media payload is raw (not run through the publisher's
     // `escapeProps`), so we HTML-escape here at the boundary.
     const media = props._resolvedMediaByKey?.src
-    const alt = escapeAttr(media?.altText?.trim() ?? '')
+    const alt = escapeHtml(media?.altText?.trim() ?? '')
 
     const loading = props.loading === 'eager' ? 'eager' : 'lazy'
     const decoding = props.decoding === 'sync' ? 'sync' : props.decoding === 'auto' ? 'auto' : 'async'
@@ -234,9 +212,9 @@ export const ImageModule: ModuleDefinition<ImageProps> = {
       ? 'high'
       : props.fetchPriority === 'low' ? 'low' : 'auto'
 
-    // `buildSrcset` already runs each variant path through `safeUrl`
+    // `buildMediaSrcset` already runs each variant path through `safeUrl`
     // (which HTML-escapes + sanitises). No extra escape needed.
-    const srcset = media ? buildSrcset(media) : null
+    const srcset = media ? buildMediaSrcset(media) : null
     // `sizes` is a plain-string user prop → already escaped by escapeProps.
     // `_resolvedAutoSizes` comes from the publisher pre-pass and is a
     // pure attribute-safe string (numbers + `min-width` keyword + `px`),

@@ -38,6 +38,23 @@ const BUILTIN_HTML_TAGS = [
 /** Sentinel select-value indicating "use the user-typed `customTag` instead". */
 export const CUSTOM_HTML_TAG_VALUE = 'custom'
 
+/**
+ * The complete set of HTML void elements (lowercase) — they have no closing
+ * tag and no children. Shared by:
+ *   - the publisher render path (`base.container`), where emitting
+ *     `<br></br>` is a bug: the parser reinterprets the end tag as a second
+ *     start tag, doubling the element.
+ *   - the editor preview (`ContainerEditor`), where React throws if a void
+ *     element is given children (or the empty-container placeholder).
+ *
+ * One list so canvas and published HTML can never disagree about which tags
+ * are self-closing.
+ */
+export const VOID_HTML_ELEMENTS: ReadonlySet<string> = new Set([
+  'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+  'link', 'meta', 'param', 'source', 'track', 'wbr',
+])
+
 const BUILTIN_HTML_TAG_SET: ReadonlySet<string> = new Set(BUILTIN_HTML_TAGS)
 
 /** HTML element names: ASCII letter, then letters/digits/hyphens. 1–32 chars. */

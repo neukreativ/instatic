@@ -14,15 +14,15 @@ import type { ModuleDefinition } from '@core/module-engine'
 import { registry } from '@core/module-engine'
 import { TargetSolidIcon } from 'pixel-art-icons/icons/target-solid'
 import { SlotOutletEditor } from './SlotOutletEditor'
-import { Type } from '@core/utils/typeboxHelpers'
+import { Type, Value } from '@core/utils/typeboxHelpers'
 import type { Static } from '@core/utils/typeboxHelpers'
 
 const SlotOutletPropsSchema = Type.Object({
   slotName: Type.String({ default: 'children' }),
 })
-type SlotOutletProps = Static<typeof SlotOutletPropsSchema>
+export type SlotOutletStoredProps = Static<typeof SlotOutletPropsSchema>
 
-export const SlotOutletModule: ModuleDefinition<SlotOutletProps> = {
+export const SlotOutletModule: ModuleDefinition<SlotOutletStoredProps> = {
   id: 'base.slot-outlet',
   name: 'Slot',
   description: 'A slot placeholder for component content',
@@ -31,6 +31,10 @@ export const SlotOutletModule: ModuleDefinition<SlotOutletProps> = {
   icon: TargetSolidIcon,
   trusted: true,
   canHaveChildren: false,
+
+  // The slot-outlet is a placeholder — the consumer's slot content is injected
+  // at its position. Its own render() returns empty (validated at registration).
+  publishBehavior: 'transparent',
 
   schema: {
     slotName: {
@@ -42,9 +46,9 @@ export const SlotOutletModule: ModuleDefinition<SlotOutletProps> = {
   },
 
   propsSchema: SlotOutletPropsSchema,
-  defaults: {
-    slotName: 'children',
-  },
+  // Defaults derive from the schema so a new field can never be silently
+  // dropped by a stale hand-written default.
+  defaults: Value.Create(SlotOutletPropsSchema),
 
   component: SlotOutletEditor,
 

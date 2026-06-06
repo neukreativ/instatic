@@ -14,7 +14,12 @@
 
 import type { Page, PageNode } from '@core/page-tree'
 import { reindexNodeParents, selectVisualComponentById } from '@core/page-tree'
-import { instantiateVCAtRef, type InstantiatedVCNode } from '@core/visualComponents'
+import {
+  instantiateVCAtRef,
+  resolveSlotName,
+  safePropOverrides,
+  type InstantiatedVCNode,
+} from '@core/visualComponents'
 import { injectNodeClassIds, injectNodeId, injectNodeInlineStyles } from './classInjection'
 import { escapeHtml } from './utils'
 import type { RenderConfig, RenderAccumulators, RenderNodeFn } from './renderConfig'
@@ -72,12 +77,7 @@ export function renderVisualComponentRef(
     return '<!-- instatic: visual-component-ref missing componentId -->'
   }
 
-  const propOverrides =
-    node.props.propOverrides !== null &&
-    typeof node.props.propOverrides === 'object' &&
-    !Array.isArray(node.props.propOverrides)
-      ? (node.props.propOverrides as Record<string, unknown>)
-      : {}
+  const propOverrides = safePropOverrides(node.props)
 
   const vc = selectVisualComponentById(config.site, componentId)
   if (!vc) {
@@ -90,11 +90,7 @@ export function renderVisualComponentRef(
   for (const childId of node.children ?? []) {
     const child = config.page.nodes[childId]
     if (child?.moduleId === 'base.slot-instance') {
-      const slotName =
-        typeof child.props.slotName === 'string' && child.props.slotName
-          ? child.props.slotName
-          : 'children'
-      slotInstancesByName[slotName] = child.children ?? []
+      slotInstancesByName[resolveSlotName(child.props)] = child.children ?? []
     }
   }
 

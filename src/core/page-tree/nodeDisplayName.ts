@@ -26,6 +26,7 @@
 import type { PageNode } from './pageNode'
 import type { VisualComponent } from '@core/visualComponents'
 import type { AnyModuleDefinition } from '@core/module-engine'
+import { resolveHtmlTagBadge } from '@core/module-engine'
 import { classNamesForClassIds, type StyleRuleRegistry } from './classNames'
 
 export function getNodeDisplayName(
@@ -67,14 +68,7 @@ export function getNodeHtmlTag(
   node: Pick<PageNode, 'props'>,
   definition: AnyModuleDefinition | undefined,
 ): string | null {
-  const hint = definition?.htmlTag
-  if (hint === undefined) return null
-
-  const props = (node.props ?? {}) as Record<string, unknown>
-  const raw = typeof hint === 'function' ? hint(props) : hint
-  if (typeof raw !== 'string') return null
-  const trimmed = raw.trim()
-  return trimmed.length > 0 ? trimmed.toLowerCase() : null
+  return resolveHtmlTagBadge(definition, (node.props ?? {}) as Record<string, unknown>)
 }
 
 /**

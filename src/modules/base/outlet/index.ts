@@ -36,9 +36,9 @@ const OutletPropsSchema = Type.Object({
   html: Type.String({ default: '' }),
 })
 
-type OutletProps = Static<typeof OutletPropsSchema>
+export type OutletStoredProps = Static<typeof OutletPropsSchema>
 
-export const OutletModule: ModuleDefinition<OutletProps> = {
+export const OutletModule: ModuleDefinition<OutletStoredProps> = {
   id: 'base.outlet',
   name: 'Content Outlet',
   description: 'Where matched content (a page or the current entry body) flows in.',
@@ -63,7 +63,7 @@ export const OutletModule: ModuleDefinition<OutletProps> = {
   },
 
   propsSchema: OutletPropsSchema,
-  defaults: Value.Create(OutletPropsSchema) as OutletProps,
+  defaults: Value.Create(OutletPropsSchema),
 
   component: OutletEditor,
 

@@ -8,7 +8,7 @@
 export { publishPage } from './render'
 export type { PublishedRuntimePackageImportmap } from './render'
 
-export { renderNode } from './renderNode'
+export { renderNode, resolveSpecialRenderer, getSpecialRendererModuleIds } from './renderNode'
 
 export type {
   RenderConfig,

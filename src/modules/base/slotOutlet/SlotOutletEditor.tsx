@@ -12,20 +12,18 @@
  */
 import React from 'react'
 import type { ModuleComponentProps } from '@core/module-engine'
+import { resolveSlotName } from '@core/visualComponents'
 import { useEditorStore } from '@site/store/store'
 import { CanvasModulePlaceholder } from '@ui/components/CanvasModulePlaceholder'
 import { TargetSolidIcon } from 'pixel-art-icons/icons/target-solid'
+import type { SlotOutletStoredProps } from './index'
 
-interface SlotOutletProps extends Record<string, unknown> {
-  slotName: string
-}
-
-export const SlotOutletEditor: React.FC<ModuleComponentProps<SlotOutletProps>> = ({ props, nodeWrapperProps }) => {
+export const SlotOutletEditor: React.FC<ModuleComponentProps<SlotOutletStoredProps>> = ({ props, nodeWrapperProps }) => {
   const isVCEditMode = useEditorStore((s) => s.activeDocument?.kind === 'visualComponent')
 
   if (!isVCEditMode) return null
 
-  const slotName = typeof props.slotName === 'string' && props.slotName ? props.slotName : 'children'
+  const slotName = resolveSlotName(props)
 
   return (
     <CanvasModulePlaceholder

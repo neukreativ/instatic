@@ -19,7 +19,7 @@ import { registry } from '@core/module-engine'
 import type { ModuleDefinition } from '@core/module-engine'
 import { BracesIcon } from 'pixel-art-icons/icons/braces'
 import { VisualComponentRefEditor } from './VisualComponentRefEditor'
-import { Type } from '@core/utils/typeboxHelpers'
+import { Type, Value } from '@core/utils/typeboxHelpers'
 import type { Static } from '@core/utils/typeboxHelpers'
 
 const VisualComponentRefPropsSchema = Type.Object({
@@ -27,9 +27,9 @@ const VisualComponentRefPropsSchema = Type.Object({
   /** Per-param value overrides — keyed by VCParam.id (stable across renames) */
   propOverrides: Type.Record(Type.String(), Type.Unknown(), { default: {} }),
 })
-type VisualComponentRefProps = Static<typeof VisualComponentRefPropsSchema>
+export type VisualComponentRefStoredProps = Static<typeof VisualComponentRefPropsSchema>
 
-export const VisualComponentRefModule: ModuleDefinition<VisualComponentRefProps> = {
+export const VisualComponentRefModule: ModuleDefinition<VisualComponentRefStoredProps> = {
   id: 'base.visual-component-ref',
   name: 'Component',
   description: 'A reference to a Visual Component',
@@ -39,15 +39,19 @@ export const VisualComponentRefModule: ModuleDefinition<VisualComponentRefProps>
   trusted: true,
   canHaveChildren: true,
 
+  // The publisher intercepts vc-ref nodes with `renderVisualComponentRef()`
+  // instead of the standard walk — declared here so the dispatch is visible on
+  // the definition.
+  publishBehavior: 'special',
+
   // Props are not panel-edited — PropertiesPanel branches on moduleId and
   // renders ComponentRefView instead (Contribution #619 §8.5).
   schema: {},
 
   propsSchema: VisualComponentRefPropsSchema,
-  defaults: {
-    componentId: '',
-    propOverrides: {},
-  },
+  // Defaults derive from the schema so a new field can never be silently
+  // dropped by a stale hand-written default.
+  defaults: Value.Create(VisualComponentRefPropsSchema),
 
   component: VisualComponentRefEditor,
 

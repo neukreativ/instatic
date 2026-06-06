@@ -30,6 +30,7 @@ import { Type, Value } from '@core/utils/typeboxHelpers'
 import type { Static } from '@core/utils/typeboxHelpers'
 import { VideoSolidIcon } from 'pixel-art-icons/icons/video-solid'
 import { safeUrl } from '@modules/base/utils/escape'
+import { buildMediaSrcset, pickMediaVariantUrl } from '@modules/base/utils/mediaAttrs'
 import { VideoEditor } from './VideoEditor'
 import { parseYoutubeId, youtubeEmbedUrl } from './youtube'
 
@@ -67,7 +68,7 @@ export const VideoPropsSchema = Type.Object({
 })
 
 /** Authored (stored) props — shape the user edits and the database persists. */
-type VideoStoredProps = Static<typeof VideoPropsSchema>
+export type VideoStoredProps = Static<typeof VideoPropsSchema>
 
 /**
  * Full render-time props. Intersects the authored schema shape with the
@@ -166,7 +167,7 @@ export const VideoModule: ModuleDefinition<VideoProps> = {
     // own width — keeps the still file lightweight while staying sharp
     // at the rendered size. Falls back to the raw publicPath if no
     // variant ladder is available yet.
-    const posterSrc = pickPosterVariantUrl(posterMedia, videoMedia?.width ?? null)
+    const posterSrc = pickMediaVariantUrl(posterMedia, videoMedia?.width ?? null)
       ?? safeUrl(String(props.poster ?? ''))
 
     const width = videoMedia?.width ?? null
@@ -236,7 +237,7 @@ function renderYoutube(input: YoutubeRenderInput): { html: string; css?: string 
   // 16:9 by default, so 1280 is the sensible "rendered hero width" hint.
   const posterTargetWidth = input.posterMedia?.width ?? 1280
   const posterSrc =
-    pickPosterVariantUrl(input.posterMedia, posterTargetWidth)
+    pickMediaVariantUrl(input.posterMedia, posterTargetWidth)
     ?? safeUrl(input.posterUrl)
 
   if (!posterSrc) {
@@ -245,7 +246,7 @@ function renderYoutube(input: YoutubeRenderInput): { html: string; css?: string 
     return { html: iframeHtml }
   }
 
-  const posterSrcset = input.posterMedia ? buildPosterSrcset(input.posterMedia) : null
+  const posterSrcset = input.posterMedia ? buildMediaSrcset(input.posterMedia) : null
   const posterWidth = input.posterMedia?.width ?? null
   const posterHeight = input.posterMedia?.height ?? null
 
@@ -301,43 +302,5 @@ const YOUTUBE_FACADE_CSS = `
   z-index: 1;
 }
 `.trim()
-
-// ---------------------------------------------------------------------------
-// Poster helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Pick the smallest variant ≥ the asset's intrinsic width (or the
- * caller's target hint). Returns `null` when no usable URL is available.
- *
- * `safeUrl` is applied so the result is HTML-attribute-safe.
- */
-function pickPosterVariantUrl(
-  media: RenderResolvedMedia | null,
-  targetWidth: number | null,
-): string | null {
-  if (!media) return null
-  if (!media.variants.length) {
-    return media.publicPath ? safeUrl(media.publicPath) : null
-  }
-  const target = targetWidth ?? media.width ?? 1280
-  const ladder = media.variants.slice().sort((a, b) => a.width - b.width)
-  const pick = ladder.find((v) => v.width >= target) ?? ladder[ladder.length - 1]
-  return safeUrl(pick.path)
-}
-
-/**
- * Build a `srcset` attribute from the variant ladder, plus the original
- * as the largest entry (so high-DPI displays can pick the full file).
- */
-function buildPosterSrcset(media: RenderResolvedMedia): string | null {
-  if (!media.variants.length) return null
-  const entries = media.variants
-    .slice()
-    .sort((a, b) => a.width - b.width)
-    .map((v) => `${safeUrl(v.path)} ${v.width}w`)
-  if (media.width) entries.push(`${safeUrl(media.publicPath)} ${media.width}w`)
-  return entries.join(', ')
-}
 
 registry.registerOrReplace(VideoModule)

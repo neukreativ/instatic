@@ -20,9 +20,9 @@ const LinkPropsSchema = Type.Object({
   ),
 })
 
-type LinkProps = Static<typeof LinkPropsSchema>
+export type LinkStoredProps = Static<typeof LinkPropsSchema>
 
-export const LinkModule: ModuleDefinition<LinkProps> = {
+export const LinkModule: ModuleDefinition<LinkStoredProps> = {
   id: 'base.link',
   name: 'Link',
   description: 'An anchor element.',

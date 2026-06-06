@@ -17,7 +17,7 @@ const ListPropsSchema = Type.Object({
   }),
 })
 
-type ListProps = Static<typeof ListPropsSchema>
+export type ListStoredProps = Static<typeof ListPropsSchema>
 
 function parseItems(raw: string): string[] {
   return raw
@@ -26,7 +26,7 @@ function parseItems(raw: string): string[] {
     .filter((s) => s.length > 0)
 }
 
-export const ListModule: ModuleDefinition<ListProps> = {
+export const ListModule: ModuleDefinition<ListStoredProps> = {
   id: 'base.list',
   name: 'List',
   description: 'An ordered or unordered list.',
@@ -54,7 +54,7 @@ export const ListModule: ModuleDefinition<ListProps> = {
   },
 
   propsSchema: ListPropsSchema,
-  defaults: Value.Create(ListPropsSchema) as ListProps,
+  defaults: Value.Create(ListPropsSchema),
 
   component: ListEditor,
 

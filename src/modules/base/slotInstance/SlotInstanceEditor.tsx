@@ -10,20 +10,17 @@
  */
 import React from 'react'
 import type { ModuleComponentProps } from '@core/module-engine'
+import { resolveSlotName } from '@core/visualComponents'
 import { TargetSolidIcon } from 'pixel-art-icons/icons/target-solid'
 import styles from './SlotInstance.module.css'
+import type { SlotInstanceStoredProps } from './index'
 
-interface SlotInstanceProps extends Record<string, unknown> {
-  slotName: string
-}
-
-export const SlotInstanceEditor: React.FC<ModuleComponentProps<SlotInstanceProps>> = ({
+export const SlotInstanceEditor: React.FC<ModuleComponentProps<SlotInstanceStoredProps>> = ({
   props,
   children,
   nodeWrapperProps,
 }) => {
-  const slotName =
-    typeof props.slotName === 'string' && props.slotName ? props.slotName : 'children'
+  const slotName = resolveSlotName(props)
 
   return (
     <div {...nodeWrapperProps} className={styles.container} data-instatic-slot-instance="">
