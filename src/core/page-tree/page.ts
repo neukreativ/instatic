@@ -21,6 +21,7 @@ import { Type, type Static } from '@core/utils/typeboxHelpers'
 import { NodeTreeSchema } from './treeSchema'
 import { PageNodeSchema, type PageNode, parsePageNode } from './pageNode'
 import { PageTemplateConfigSchema, parsePageTemplate } from './pageTemplate'
+import { reindexNodeParents } from './parentIndex'
 
 // ---------------------------------------------------------------------------
 // PageSchema
@@ -85,6 +86,10 @@ export function parsePage(raw: unknown, pageIndex: number): Page {
     const node = parsePageNode(rawNode, `${pagePathPrefix}.nodes.${nodeId}`)
     nodes[nodeId] = node
   }
+
+  // Derive the parentId index from the children arrays — never trust a stored
+  // parentId value. Backfills data persisted before this field existed.
+  reindexNodeParents(nodes)
 
   const template = parsePageTemplate(r.template)
 

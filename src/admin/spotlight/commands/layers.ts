@@ -22,18 +22,6 @@ import type { Command } from '../types'
 const hasSelection = (ctx: { editor?: { selectedNodeIds: ReadonlyArray<string> } }) =>
   (ctx.editor?.selectedNodeIds.length ?? 0) > 0
 
-/**
- * Find the parent node id of `nodeId` by scanning the node map.
- * The tree stores children (not parentId), so we scan once.
- * Returns null if nodeId is the root or not found.
- */
-function findParentId(nodes: Record<string, { children?: string[] }>, nodeId: string): string | null {
-  for (const [candidateId, candidate] of Object.entries(nodes)) {
-    if (candidate.children?.includes(nodeId)) return candidateId
-  }
-  return null
-}
-
 export function getLayersCommands(): Command[] {
   return [
     // ── Duplicate layer ──────────────────────────────────────────────────────
@@ -302,7 +290,7 @@ export function getLayersCommands(): Command[] {
           const store = useEditorStore.getState()
           const page = store.site?.pages.find((p) => p.id === store.activePageId)
           if (!page) return
-          const parentId = findParentId(page.nodes, nodeId)
+          const parentId = page.nodes[nodeId]?.parentId
           if (!parentId) return
           const parent = page.nodes[parentId]
           if (!parent) return
@@ -336,7 +324,7 @@ export function getLayersCommands(): Command[] {
           const store = useEditorStore.getState()
           const page = store.site?.pages.find((p) => p.id === store.activePageId)
           if (!page) return
-          const parentId = findParentId(page.nodes, nodeId)
+          const parentId = page.nodes[nodeId]?.parentId
           if (!parentId) return
           const parent = page.nodes[parentId]
           if (!parent) return
@@ -371,7 +359,7 @@ export function getLayersCommands(): Command[] {
           const store = useEditorStore.getState()
           const page = store.site?.pages.find((p) => p.id === store.activePageId)
           if (!page) return
-          const parentId = findParentId(page.nodes, nodeId)
+          const parentId = page.nodes[nodeId]?.parentId
           if (!parentId) return
           store.selectNode(parentId)
         } catch (err) {

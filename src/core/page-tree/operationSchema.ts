@@ -7,6 +7,7 @@ import { compiledCheck, compiledDecode } from '@core/utils/typeboxCompiler'
 import type { BaseNode } from './baseNode'
 import { PageNodeSchema, type PageNode } from './pageNode'
 import { NodeTreeSchema, type NodeTree } from './treeSchema'
+import { reindexNodeParents } from './parentIndex'
 
 export const TreeOperationSchema = Type.Union([
   Type.Object({
@@ -121,5 +122,8 @@ export function parsePageNodeTree(value: unknown, path = 'tree'): NodeTree<PageN
   }
   const tree = compiledDecode(NodeTreeSchema, value) as NodeTree<PageNode>
   assertValidNodeTree(tree, path)
+  // Derive the parentId index from the children arrays — keeps plugin/test
+  // entry trees consistent without trusting a stored parentId value.
+  reindexNodeParents(tree.nodes)
   return tree
 }

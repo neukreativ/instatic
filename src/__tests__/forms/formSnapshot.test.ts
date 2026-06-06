@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import type { Page, PageNode } from '@core/page-tree'
+import { reindexNodeParents } from '@core/page-tree'
 import { derivePageFormSnapshots } from '@core/forms'
 
 function node(id: string, moduleId: string, props: Record<string, unknown>, children: string[] = []): PageNode {
@@ -42,6 +43,7 @@ const page: Page = {
     'outside-input': node('outside-input', 'base.input', { fieldId: 'ignored' }),
   },
 }
+reindexNodeParents(page.nodes)
 
 describe('derivePageFormSnapshots', () => {
   it('derives trusted form/control metadata from the page tree', () => {
@@ -100,6 +102,7 @@ describe('derivePageFormSnapshots', () => {
         }),
       },
     }
+    reindexNodeParents(spacedIdPage.nodes)
 
     const [snapshot] = derivePageFormSnapshots(spacedIdPage)
 

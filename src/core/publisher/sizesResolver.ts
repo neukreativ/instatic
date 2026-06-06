@@ -98,35 +98,23 @@ function nodeCaps(
 }
 
 /**
- * Build `nodeId → parentNodeId` map for one page. O(N) over the flat node
- * map, cached on the page reference so multi-image pages amortize the
- * cost across all images on the page.
- */
-const parentMapCache = new WeakMap<Page, Map<string, string>>()
-function getParentMap(page: Page): Map<string, string> {
-  const cached = parentMapCache.get(page)
-  if (cached) return cached
-  const map = new Map<string, string>()
-  for (const [parentId, node] of Object.entries(page.nodes)) {
-    for (const childId of node.children ?? []) map.set(childId, parentId)
-  }
-  parentMapCache.set(page, map)
-  return map
-}
-
-/**
  * Walk from `nodeId` outward. Returns `[node, parent, grandparent, …,
  * root]` — innermost first.
+ *
+ * Uses the node's denormalised `parentId` pointer (O(depth)), so no per-page
+ * parent map needs building. Every page reaching the publisher — real, synthetic
+ * VC, or composed template — has its parentId index derived first.
  */
 function ancestorChain(nodeId: string, page: Page): PageNode[] {
-  const parents = getParentMap(page)
   const out: PageNode[] = []
-  let current: string | undefined = nodeId
-  while (current) {
-    const node = page.nodes[current]
+  const visited = new Set<string>()
+  let current: string | null | undefined = nodeId
+  while (current && !visited.has(current)) {
+    visited.add(current)
+    const node: PageNode | undefined = page.nodes[current]
     if (!node) break
     out.push(node)
-    current = parents.get(current)
+    current = node.parentId
   }
   return out
 }

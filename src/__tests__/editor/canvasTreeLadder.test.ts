@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import type { NodeTree, PageNode } from '@core/page-tree'
+import { reindexNodeParents } from '@core/page-tree'
 import {
   buildCanvasTreeLadderRows,
   commitCanvasTreeLadderSelection,
@@ -37,6 +38,7 @@ const tree: NodeTree<PageNode> = {
     email: node('email', 'base.forms.input'),
   },
 }
+reindexNodeParents(tree.nodes)
 
 const ladderCss = readFileSync(
   new URL('../../admin/pages/site/canvas/BreakpointSelectionOverlay.module.css', import.meta.url),

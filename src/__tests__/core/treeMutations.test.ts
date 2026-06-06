@@ -23,6 +23,7 @@ import {
   renameNode,
   toggleNodeLocked,
   toggleNodeHidden,
+  reindexNodeParents,
 } from '@core/page-tree'
 
 // ---------------------------------------------------------------------------
@@ -48,6 +49,8 @@ function makeTree(
   nodes: Record<string, PageNode>,
   rootNodeId = 'root',
 ): NodeTree<PageNode> {
+  // Derive the parentId index — mirrors what parse/loadSite do for real trees.
+  reindexNodeParents(nodes)
   return { nodes, rootNodeId }
 }
 

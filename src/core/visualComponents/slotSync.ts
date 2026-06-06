@@ -232,6 +232,8 @@ export function syncSlotInstances(
       breakpointOverrides: {},
       classIds: [],
       locked: true,
+      // A slot-instance is always a direct child of its VC ref.
+      parentId: vcRefNode.id,
     }
     ops.push({ kind: 'insert', slotInstanceId, slotName: targetName })
     matchedByName.set(targetName, slotInstanceId)
@@ -282,10 +284,14 @@ export function applySlotSyncResult(
     // insert ops: handled by adding to newNodes above
   }
 
-  // 4. Set ordered children
+  // 4. Set ordered children and re-point each slot-instance at the VC ref.
   const vcRefNode = treeNodes[vcRefNodeId]
   if (vcRefNode) {
     vcRefNode.children = result.orderedChildIds
+    for (const childId of result.orderedChildIds) {
+      const child = treeNodes[childId]
+      if (child) child.parentId = vcRefNodeId
+    }
   }
 }
 

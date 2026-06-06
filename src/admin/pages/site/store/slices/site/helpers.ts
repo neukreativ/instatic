@@ -13,7 +13,7 @@ import type { StoreApi } from 'zustand'
 import type { FrameworkColorToken } from '@core/framework-schema'
 import type { NodeTree, Page, PageNode, StyleRule, SiteDocument } from '@core/page-tree'
 import type { SiteRuntimeConfig } from '@core/site-runtime'
-import { addPage, createNode, reconcileSiteExplorerInPlace } from '@core/page-tree'
+import { addPage, createNode, reconcileSiteExplorerInPlace, reindexNodeParents } from '@core/page-tree'
 import { syncAllVCRefSlotInstances, allTreeNodeMaps } from '../vcSlotReconcile'
 import { create } from 'mutative'
 import type { Draft, Patches } from 'mutative'
@@ -341,6 +341,7 @@ export function buildSiteHelpers(
             }
           }
           page.nodes[page.rootNodeId]!.children = [...nodeFragment.rootIds]
+          reindexNodeParents(page.nodes)
           didMutate = true
           return page.id
         },
@@ -386,6 +387,7 @@ export function buildSiteHelpers(
           }
 
           // Replace tree fields; preserve identity + ownership fields.
+          reindexNodeParents(newNodes)
           page.rootNodeId = rootNode.id
           page.nodes = newNodes
           page.title = title

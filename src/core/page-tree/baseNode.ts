@@ -61,6 +61,19 @@ export const BaseNodeSchema = Type.Object({
   // time (mirrors validatePageNode assertArray behaviour — Constraint #230).
   children: Type.Array(Type.String()),
 
+  // Denormalised pointer to this node's parent — `null` for the root node (and
+  // for a freshly-created, not-yet-inserted node). It is a DERIVED CACHE of the
+  // `children` arrays (which remain the structural source of truth): every tree
+  // mutation that changes parentage updates it, and every load/parse/compose
+  // entry point recomputes it via `reindexNodeParents`. It exists so `getParent`
+  // is O(1) instead of scanning every node — see selectors.getParent.
+  //
+  // Optional at the schema level so persisted data predating this field, and
+  // transient detached nodes, still validate; the runtime invariant (enforced
+  // by reindex on every load and by every mutation) guarantees it is fully and
+  // consistently populated for any tree that has entered the system.
+  parentId: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+
   // Optional user-facing label — overrides the module name in the DOM tree panel
   label: Type.Optional(Type.String()),
 

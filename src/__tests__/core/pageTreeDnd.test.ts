@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import type { Page, PageNode } from '@core/page-tree'
-import { resolvePageTreeDropTarget } from '@core/page-tree'
+import { resolvePageTreeDropTarget, reindexNodeParents } from '@core/page-tree'
 
 function node(id: string, moduleId: string, children: string[] = [], locked = false): PageNode {
   return {
@@ -14,6 +14,7 @@ function node(id: string, moduleId: string, children: string[] = [], locked = fa
 }
 
 function page(nodes: Record<string, PageNode>, rootNodeId = 'root'): Page {
+  reindexNodeParents(nodes)
   return {
     id: 'page',
     slug: 'index',

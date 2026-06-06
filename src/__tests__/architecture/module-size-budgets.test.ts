@@ -99,7 +99,11 @@ const GRANDFATHERED: Record<string, number> = {
   'server/repositories/media.ts': 704,
   'server/handlers/cms/auth.ts': 854,
   'src/core/loops/sources/dataRows.ts': 903,
-  'src/core/page-tree/mutations.ts': 882,
+  // Raised 882 → 940: the O(1) parentId pointer is a denormalised cache that
+  // every parentage-changing primitive (insert/move/duplicate/wrap/paste) must
+  // maintain inline — the maintenance is intrinsic to each mutation and has no
+  // separate module to extract to. See docs/reference/page-tree.md (parentId).
+  'src/core/page-tree/mutations.ts': 940,
   'server/plugins/host/handlers/content.ts': 848,
   'src/core/siteImport/cssToStyleRules.ts': 829,
   'src/admin/pages/site/panels/TypographyPanel/FontsSection/AddGoogleFontDialog.tsx': 750,

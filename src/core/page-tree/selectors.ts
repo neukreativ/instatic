@@ -42,14 +42,19 @@ export function getChildren<TNode extends BaseNode>(tree: NodeTree<TNode>, nodeI
 // ---------------------------------------------------------------------------
 
 /**
- * Find the parent of a node.
- * O(n) — use sparingly on hot paths (prefer caching or denormalising parentId if needed).
+ * Find the parent of a node — O(1) via the denormalised `parentId` pointer.
+ *
+ * `parentId` is a derived cache of the `children` arrays, maintained by every
+ * tree mutation and (re)stamped by `reindexNodeParents` at every load/parse/
+ * compose boundary. It is `null` for the root node (and for detached nodes), so
+ * this returns `undefined` for them. It deliberately does NOT scan
+ * `tree.nodes` — that O(N) scan was the single highest-cost engine hot path
+ * (called per pointer-move during drag, and in O(M·D) mutation loops).
  */
 export function getParent<TNode extends BaseNode>(tree: NodeTree<TNode>, nodeId: string): TNode | undefined {
-  for (const node of Object.values(tree.nodes)) {
-    if (node.children.includes(nodeId)) return node
-  }
-  return undefined
+  const node = tree.nodes[nodeId]
+  if (!node || !node.parentId) return undefined
+  return tree.nodes[node.parentId]
 }
 
 /** Get ordered ancestor chain from root down to (but not including) nodeId. */

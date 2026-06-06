@@ -17,7 +17,6 @@ const FORM_CONTROL_MODULES = new Set([
 ])
 
 export function derivePageFormSnapshots(page: Page): PublishedFormSnapshot[] {
-  const parentByNodeId = buildParentMap(page)
   const snapshots: PublishedFormSnapshot[] = []
 
   for (const nodeId of walkTree(page, page.rootNodeId)) {
@@ -25,7 +24,7 @@ export function derivePageFormSnapshots(page: Page): PublishedFormSnapshot[] {
     if (!node || node.moduleId !== 'base.form') continue
     const mode = stringProp(node, 'mode', 'cms')
     if (mode !== 'cms') continue
-    snapshots.push(deriveFormSnapshot(page, node, parentByNodeId))
+    snapshots.push(deriveFormSnapshot(page, node))
   }
 
   return snapshots
@@ -34,7 +33,6 @@ export function derivePageFormSnapshots(page: Page): PublishedFormSnapshot[] {
 export function deriveFormSnapshot(
   page: Page,
   formNode: PageNode,
-  parentByNodeId: Map<string, string> = buildParentMap(page),
 ): PublishedFormSnapshot {
   const fallbackFormId = normalizeIdentifierValue(formNode.id, 'form')
   const formId = normalizeIdentifierValue(stringProp(formNode, 'formId', formNode.id), fallbackFormId)
@@ -55,7 +53,7 @@ export function deriveFormSnapshot(
     }
 
     if (node.moduleId === 'base.label') {
-      const targetNodeId = inferLabelTarget(page, node, formNode.id, parentByNodeId)
+      const targetNodeId = inferLabelTarget(page, node, formNode.id)
       if (targetNodeId) {
         labels.push({
           nodeId: node.id,
@@ -125,7 +123,6 @@ function inferLabelTarget(
   page: Page,
   labelNode: PageNode,
   formNodeId: string,
-  parentByNodeId: Map<string, string>,
 ): string | null {
   const targetMode = stringProp(labelNode, 'targetMode', 'auto')
   const explicit = stringProp(labelNode, 'targetId', '')
@@ -134,7 +131,7 @@ function inferLabelTarget(
     return target?.id ?? explicit
   }
 
-  const parentId = parentByNodeId.get(labelNode.id)
+  const parentId = page.nodes[labelNode.id]?.parentId
   if (!parentId) return null
   const parent = page.nodes[parentId]
   if (!parent) return null
@@ -148,14 +145,6 @@ function inferLabelTarget(
     }
   }
   return null
-}
-
-function buildParentMap(page: Page): Map<string, string> {
-  const map = new Map<string, string>()
-  for (const node of Object.values(page.nodes)) {
-    for (const childId of node.children) map.set(childId, node.id)
-  }
-  return map
 }
 
 function walkTree(page: Page, startNodeId: string): string[] {

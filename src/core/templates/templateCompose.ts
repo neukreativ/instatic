@@ -1,4 +1,5 @@
 import type { Page, PageNode } from '@core/page-tree'
+import { reindexNodeParents } from '@core/page-tree'
 
 export type TerminalContent =
   | { kind: 'page'; page: Page }
@@ -42,7 +43,15 @@ function rekey(nodes: Nodes, rootId: string, prefix: string): { nodes: Nodes; ro
   return { nodes: out, rootId: map.get(rootId)! }
 }
 
-/** Find the parent id + index of `childId` within `nodes`. */
+/**
+ * Find the parent id + index of `childId` within `nodes`.
+ *
+ * Intentionally scans `children` rather than reading `node.parentId`: during
+ * composition `rekey()` prefixes every node id, so any copied `parentId` points
+ * at a pre-prefix id and is stale until `reindexNodeParents` runs at the end of
+ * `composeTemplateChain`. This runs once per outlet (not a hot path), so the
+ * scan is fine.
+ */
 function locate(nodes: Nodes, childId: string): { parentId: string; index: number } | null {
   for (const id in nodes) {
     const i = nodes[id].children.indexOf(childId)
@@ -139,6 +148,12 @@ export function composeTemplateChain(chain: Page[], terminal: TerminalContent): 
     const outer = effective[i]
     acc = spliceIntoOutlet({ ...outer.nodes }, outer.rootNodeId, acc.nodes, acc.rootId, `t${i}_`)
   }
+
+  // The merged tree rekeys node ids (prefixing) and splices subtrees across
+  // outlets, so any parentId copied from the source pages is now stale. Derive
+  // it fresh from the composed children arrays before the page is rendered
+  // (the publisher's sizes resolver reads parentId).
+  reindexNodeParents(acc.nodes)
 
   return {
     id: innermost.id, // identifies "what was rendered" for the publish.html filter

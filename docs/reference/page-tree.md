@@ -51,6 +51,7 @@ export const BaseNodeSchema = Type.Object({
   props:               withFallback(Type.Record(Type.String(), Type.Unknown()), {}),
   breakpointOverrides: withFallback(Type.Record(Type.String(), Type.Record(Type.String(), Type.Unknown())), {}),
   children:            Type.Array(Type.String()),   // ordered child node IDs
+  parentId:            Type.Optional(Type.Union([Type.String(), Type.Null()])), // O(1) parent pointer; see invariant below
   label:               Type.Optional(Type.String()),
   locked:              Type.Optional(Type.Boolean()),
   hidden:              Type.Optional(Type.Boolean()),
@@ -59,6 +60,17 @@ export const BaseNodeSchema = Type.Object({
   // ... propBindings, etc.
 })
 ```
+
+#### The `parentId` invariant
+
+`parentId` is a **denormalised pointer to a node's parent** — `null` for the root node (and for a freshly-created, not-yet-inserted node). It makes `getParent` O(1) instead of an O(N) scan of every node in the map — the single highest-impact engine perf fix (the old scan fired on every pointer-move during a drag, and inside O(M·D) multi-select mutation loops).
+
+The rules:
+
+- **`children` is the structural source of truth; `parentId` is a derived cache of it.** The two must always agree: for every `parent.children` entry `childId`, `nodes[childId].parentId === parent.id`.
+- **Always fully consistent — never half-populated.** Every parentage-changing mutation maintains it inline (`insertNode`, `deleteNode`, `moveNode`/`moveNodes`, `duplicateNode`, `wrapNode`/`wrapNodes`, `pasteSubtree`, `addPage`, `duplicatePage`, slot materialization). The invariant is enforced after every mutation (and after undo/redo) by `src/__tests__/page-tree/parentIndex.test.ts`.
+- **Derived on entry, stored value never trusted.** `reindexNodeParents(nodes)` recomputes `parentId` for a whole flat map purely from the `children` arrays. It runs at every boundary where a tree enters the system — `parsePage`, `parseVisualComponent`, `parsePageNodeTree`, the editor store's `loadSite`/`createSite`, `composeTemplateChain`, the HTML-import bulk-merge paths, and runtime VC-tree construction. This is the backfill: data persisted before `parentId` existed is healed on load, and a stored `parentId` is always overwritten from the children arrays. (`parentId` IS persisted on save — it's a redundant-but-harmless cache that is recomputed, not relied upon, on the next load.)
+- **Optional at the schema level** so persisted data predating the field and transient detached nodes still validate. The runtime invariant guarantees full population for any tree that has entered the system, so `getParent` reads the pointer directly with no scan fallback.
 
 `inlineStyles` is the per-node **inline-style layer**: a camelCase CSS bag (same shape as a `StyleRule`'s `styles`) that the publisher emits as a literal `style="…"` attribute on the node's root element (or on `<body>` for the root `base.body` node). It is independent of `classIds` (a node can have both) and is **base-only** — like a real HTML `style=""` attribute it cannot be breakpoint- or condition-scoped. Values are sanitised at the publish boundary by `bagToInlineStyle` → `sanitiseCssValue`. Edited via the Properties panel's "Style inline" mode (store actions `setNodeInlineStyles` / `removeNodeInlineStyleProperty`); the HTML importer also writes it when it harvests an element's inline background image.
 
@@ -127,8 +139,10 @@ All mutations live in `src/core/page-tree/mutations.ts`. They take a `NodeTree<P
 
 `src/core/page-tree/selectors.ts`:
 
-- `getParent(tree, nodeId)` — returns `{ parentId, index }` or `null`.
-- `isAncestor(tree, ancestorId, descendantId)` — true if `ancestor` is on the path to `descendant`.
+- `getParent(tree, nodeId)` — returns the parent **node** (`TNode`) or `undefined` for the root. O(1) via the node's `parentId` pointer (see "The `parentId` invariant" above) — no node-map scan.
+- `getAncestors(tree, nodeId)` — ordered `[root, …, parent]` chain. O(depth) by walking `parentId`.
+- `isAncestor(tree, ancestorId, descendantId)` — true if `ancestor` is on the path to `descendant`. O(depth) via `parentId`.
+- `reindexNodeParents(nodes)` — recompute every node's `parentId` from the `children` arrays (the backfill / derive-on-entry helper). Tree-agnostic: takes a `Record<string, BaseNode>` directly.
 
 `src/core/page-tree/scopedClassClone.ts`:
 
@@ -209,13 +223,14 @@ The flat map plus children-as-ids makes traversal trivial in either direction.
 ```ts
 import { getParent } from '@core/page-tree'
 
-const parent = getParent(tree, nodeId)
+const parent = getParent(tree, nodeId)        // the parent node, or undefined
 if (parent) {
-  console.log('node', nodeId, 'lives under', parent.parentId, 'at index', parent.index)
+  const index = parent.children.indexOf(nodeId)
+  console.log('node', nodeId, 'lives under', parent.id, 'at index', index)
 }
 ```
 
-`getParent` returns `null` for the root.
+`getParent` returns `undefined` for the root. It is O(1) (reads `node.parentId`) — do NOT hand-roll an `Object.values(tree.nodes).find(n => n.children.includes(id))` scan; that was the hot path this pointer replaced.
 
 ### Insert a freshly-created node
 

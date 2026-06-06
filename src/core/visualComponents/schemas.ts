@@ -9,7 +9,7 @@
  */
 
 import { Type, type Static, withFallback } from '@core/utils/typeboxHelpers'
-import { BaseNodeSchema, NodeTreeSchema, type BaseNode, parsePropBindings } from '@core/page-tree'
+import { BaseNodeSchema, NodeTreeSchema, type BaseNode, parsePropBindings, reindexNodeParents } from '@core/page-tree'
 
 // ---------------------------------------------------------------------------
 // VCParamType — valid param type values
@@ -260,6 +260,10 @@ export function parseVisualComponent(raw: unknown): VisualComponent | null {
     : []
 
   const createdAt = typeof r.createdAt === 'number' ? r.createdAt : Date.now()
+
+  // Derive the parentId index from the children arrays — never trust a stored
+  // parentId value. Backfills VC trees persisted before this field existed.
+  reindexNodeParents(nodes)
 
   return {
     id: r.id,

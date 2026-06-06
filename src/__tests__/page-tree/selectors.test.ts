@@ -10,6 +10,7 @@ import {
   isAncestor,
   resolveProps,
   evaluateCondition,
+  reindexNodeParents,
 } from '@core/page-tree'
 
 // ---------------------------------------------------------------------------
@@ -27,6 +28,8 @@ function makeNode(id: string, children: string[] = [], props: Record<string, unk
 }
 
 function makePage(nodes: Record<string, PageNode>, rootNodeId = 'root'): Page {
+  // Derive the parentId index — mirrors what parse/loadSite do for real trees.
+  reindexNodeParents(nodes)
   return {
     id: 'page-1',
     slug: 'index',

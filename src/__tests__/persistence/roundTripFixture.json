@@ -29,7 +29,8 @@
           "children": ["heading-1"],
           "classIds": [],
           "label": "Root Container",
-          "locked": false
+          "locked": false,
+          "parentId": null
         },
         "heading-1": {
           "id": "heading-1",
@@ -46,7 +47,8 @@
           "propBindings": {
             "text":  { "paramId": "param-title" },
             "extra": { "paramId": "param-desc" }
-          }
+          },
+          "parentId": "root"
         }
       },
       "template": {
@@ -67,7 +69,8 @@
           "props": {},
           "breakpointOverrides": {},
           "children": [],
-          "classIds": []
+          "classIds": [],
+          "parentId": null
         }
       }
     }
@@ -90,7 +93,8 @@
             "classIds": [],
             "propBindings": {
               "richtext": { "paramId": "param-content" }
-            }
+            },
+            "parentId": null
           },
           "vc-child-1": {
             "id": "vc-child-1",
@@ -98,7 +102,8 @@
             "props": { "text": "Inner text" },
             "breakpointOverrides": {},
             "children": [],
-            "classIds": []
+            "classIds": [],
+            "parentId": "vc-root"
           }
         }
       },

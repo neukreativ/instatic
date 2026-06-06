@@ -23,6 +23,7 @@
  */
 
 import type { VisualComponent, VCNode } from '@core/visualComponents'
+import { reindexNodeParents } from '@core/page-tree'
 
 let counter = 0
 function nextId(prefix: string): string {
@@ -179,6 +180,7 @@ function flattenTree(root: NodeBuilder): {
   }
 
   const rootNodeId = visit(root)
+  reindexNodeParents(nodes)
   return { rootNodeId, nodes }
 }
 

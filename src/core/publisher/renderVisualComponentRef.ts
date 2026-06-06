@@ -13,7 +13,7 @@
  */
 
 import type { Page, PageNode } from '@core/page-tree'
-import { selectVisualComponentById } from '@core/page-tree'
+import { reindexNodeParents, selectVisualComponentById } from '@core/page-tree'
 import { instantiateVCAtRef, type InstantiatedVCNode } from '@core/visualComponents'
 import { injectNodeClassIds, injectNodeId, injectNodeInlineStyles } from './classInjection'
 import { escapeHtml } from './utils'
@@ -113,6 +113,9 @@ export function renderVisualComponentRef(
   for (const [id, vcNode] of Object.entries(instantiatedNodes)) {
     syntheticNodes[id] = instantiatedNodeToPageNode(vcNode)
   }
+  // The synthetic page is walked by the publisher and probed by
+  // `resolveAutoSizes` (which reads `parentId`), so derive the parent index.
+  reindexNodeParents(syntheticNodes)
 
   const syntheticPage: Page = {
     id: `vc:${node.id}`,

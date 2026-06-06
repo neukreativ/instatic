@@ -2,7 +2,8 @@
  * SiteDocument lifecycle actions: createSite, loadSite, clearSite, updateSiteName.
  */
 
-import { findHomePage, reconcileSiteExplorerInPlace } from '@core/page-tree'
+import { findHomePage, reconcileSiteExplorerInPlace, reindexNodeParents } from '@core/page-tree'
+import type { SiteDocument } from '@core/page-tree'
 import { renderCache } from '@site/canvas/renderCache'
 import {
   clonePackageJson,
@@ -22,6 +23,18 @@ export type LifecycleActions = Pick<
   'createSite' | 'loadSite' | 'clearSite' | 'updateSiteName'
 >
 
+/**
+ * Derive the `parentId` index for every page tree and Visual Component tree in
+ * a site about to be hydrated into the store. Sites reach `loadSite` already
+ * validated (the persistence layer reindexes on parse) OR hand-assembled (tests,
+ * `createDefaultSiteDocument`); reindexing here is idempotent and guarantees the
+ * O(1) `getParent` pointer is consistent before any mutation runs.
+ */
+function reindexSiteTreeParents(site: SiteDocument): void {
+  for (const page of site.pages) reindexNodeParents(page.nodes)
+  for (const vc of site.visualComponents ?? []) reindexNodeParents(vc.tree.nodes)
+}
+
 export function createLifecycleActions({
   set,
   mutateSite,
@@ -30,6 +43,7 @@ export function createLifecycleActions({
     createSite: (name) => {
       const site = createDefaultSiteDocument(name)
       reconcileSiteExplorerInPlace(site)
+      reindexSiteTreeParents(site)
       const siteRuntime = cloneSiteRuntimeConfig(site.runtime)
       set((state) => {
         state.site = { ...site, runtime: siteRuntime }
@@ -59,6 +73,7 @@ export function createLifecycleActions({
       renderCache.clear()
       reconcileFrameworkClasses(site)
       reconcileSiteExplorerInPlace(site)
+      reindexSiteTreeParents(site)
       const packageJson = clonePackageJson(site.packageJson)
       const siteRuntime = cloneSiteRuntimeConfig(site.runtime)
       set((state) => {

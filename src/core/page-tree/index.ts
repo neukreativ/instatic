@@ -122,6 +122,8 @@ export {
   applyTreeOperation,
 } from './mutations'
 
+export { reindexNodeParents } from './parentIndex'
+
 export { removeNodeSubtrees } from './subtreeRemoval'
 
 export { cloneScopedClassesForNodeMap } from './scopedClassClone'

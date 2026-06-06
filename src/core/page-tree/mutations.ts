@@ -7,6 +7,27 @@ import type { TreeOperation } from './operationSchema'
 import { getParent, isAncestor } from './selectors'
 import { normalizePageSlug, uniquePageSlug } from './slugs'
 import { cloneScopedClassesForNodeMap } from './scopedClassClone'
+import { reindexNodeParents } from './parentIndex'
+
+// ---------------------------------------------------------------------------
+// parentId maintenance helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Stamp `parentId = parentNodeId` on every direct child of `parentNodeId`.
+ * Used by the clone mutations (duplicateNode / pasteSubtree) to re-link a
+ * freshly inserted subtree's internal parentage in O(subtree) without
+ * rescanning the whole tree. The clone-subtree root's own parentId is set
+ * separately by the caller (its parent lives outside the cloned set).
+ */
+function linkChildrenParents(nodes: Record<string, PageNode>, parentNodeId: string): void {
+  const parent = nodes[parentNodeId]
+  if (!parent) return
+  for (const childId of parent.children) {
+    const child = nodes[childId]
+    if (child) child.parentId = parentNodeId
+  }
+}
 
 /**
  * Pure Immer-compatible mutation helpers for the page tree.
@@ -38,6 +59,8 @@ export function createNode(
     breakpointOverrides: {},
     children: [],
     classIds: [],
+    // Detached until insertNode/wrapNode attaches it and stamps the real parent.
+    parentId: null,
   }
 }
 
@@ -63,6 +86,7 @@ export function insertNode(
     throw new Error(`[PageTree] Parent node "${parentId}" not found`)
   }
   tree.nodes[node.id] = node
+  node.parentId = parentId
   if (index === undefined || index >= parent.children.length) {
     parent.children.push(node.id)
   } else {
@@ -202,6 +226,10 @@ export function moveNode(
   // Insert at new location
   const clampedIndex = Math.max(0, Math.min(newIndex, newParent.children.length))
   newParent.children.splice(clampedIndex, 0, nodeId)
+
+  // Re-point the moved node at its new parent.
+  const moved = tree.nodes[nodeId]
+  if (moved) moved.parentId = newParentId
 }
 
 // ---------------------------------------------------------------------------
@@ -268,6 +296,13 @@ export function duplicateNode(
     }
   }
 
+  // Re-link parentId across the cloned subtree: every clone's children point
+  // at the clone. The subtree root's own parent is set below (its parent lives
+  // outside the cloned set).
+  for (const newId of idMap.values()) {
+    linkChildrenParents(tree.nodes, newId)
+  }
+
   // Insert the new root clone after the original in its parent
   const newRootId = idMap.get(nodeId)!
   const parent = getParent(tree, nodeId)
@@ -275,6 +310,8 @@ export function duplicateNode(
     const idx = parent.children.indexOf(nodeId)
     parent.children.splice(idx + 1, 0, newRootId)
   }
+  const newRoot = tree.nodes[newRootId]
+  if (newRoot) newRoot.parentId = parent ? parent.id : (tree.nodes[nodeId]?.parentId ?? null)
 
   return newRootId
 }
@@ -375,6 +412,12 @@ export function pasteSubtree(
     }
   }
 
+  // Re-link parentId across the freshly inserted subtree from its children
+  // arrays — never trust any parentId carried in the foreign payload.
+  for (const newId of idMap.values()) {
+    linkChildrenParents(tree.nodes, newId)
+  }
+
   // Insert the new root under its target parent.
   const newRootId = idMap.get(payload.rootNodeId)
   if (!newRootId) {
@@ -385,6 +428,8 @@ export function pasteSubtree(
   } else {
     parent.children.splice(Math.max(0, index), 0, newRootId)
   }
+  const newRoot = tree.nodes[newRootId]
+  if (newRoot) newRoot.parentId = parentId
 
   return newRootId
 }
@@ -415,9 +460,12 @@ export function wrapNode(
   // Insert wrapper at the node's position
   tree.nodes[wrapper.id] = wrapper
   parent.children[idx] = wrapper.id
+  wrapper.parentId = parent.id
 
   // Make the original node the wrapper's first child
   wrapper.children.push(nodeId)
+  const wrapped = tree.nodes[nodeId]
+  if (wrapped) wrapped.parentId = wrapper.id
 
   return wrapper.id
 }
@@ -522,6 +570,13 @@ export function wrapNodes(
   cca.children = cca.children.filter((childId) => !branchSet.has(childId))
   cca.children.splice(firstBranchIdx, 0, wrapper.id)
   wrapper.children = branchesInOrder
+  wrapper.parentId = cca.id
+
+  // The branches are now children of the wrapper.
+  for (const branchId of branchesInOrder) {
+    const branch = tree.nodes[branchId]
+    if (branch) branch.parentId = wrapper.id
+  }
 
   return wrapper.id
 }
@@ -591,6 +646,12 @@ export function moveNodes(
   // Insert into newParent at newIndex, preserving topLevel order.
   const clamped = Math.max(0, Math.min(newIndex, newParent.children.length))
   newParent.children.splice(clamped, 0, ...topLevel)
+
+  // Re-point every moved branch at its new parent.
+  for (const id of topLevel) {
+    const moved = tree.nodes[id]
+    if (moved) moved.parentId = newParentId
+  }
 }
 
 /**
@@ -862,6 +923,9 @@ export function duplicatePage(
   if (!newRootId) {
     throw new Error('[PageTree] Source page root node missing from page.nodes')
   }
+
+  // Derive parentId for the cloned page from its (remapped) children arrays.
+  reindexNodeParents(newNodes)
 
   const newPage: Page = {
     id: nanoid(),

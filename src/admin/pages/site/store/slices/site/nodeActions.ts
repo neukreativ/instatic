@@ -29,6 +29,7 @@ import {
   duplicateNode,
   wrapNode,
   wrapNodes,
+  reindexNodeParents,
 } from '@core/page-tree'
 import type { NodeTree, PageNode, SiteDocument } from '@core/page-tree'
 import { wouldCreateCycle, syncSlotInstances, applySlotSyncResult } from '@core/visualComponents'
@@ -223,6 +224,12 @@ export function createNodeActions(helpers: SiteSliceHelpers): NodeActions {
         const insertAt = opts?.index ?? parent.children.length
         parent.children.splice(insertAt, 0, ...fragment.rootIds)
         insertedRootIds.push(...fragment.rootIds)
+        // The fragment was bulk-merged into tree.nodes (not via insertNode), so
+        // derive the parentId index across the active tree to keep the inserted
+        // subtree's pointers consistent. Deliberately O(active-tree), not a
+        // targeted O(fragment) update: import is an infrequent path, and a full
+        // reindex is the simplest bulletproof way to stay consistent.
+        reindexNodeParents(tree.nodes)
         return true
       })
       return insertedRootIds

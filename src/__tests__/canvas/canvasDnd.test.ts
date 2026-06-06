@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import type { Page, PageNode } from '@core/page-tree'
+import { reindexNodeParents } from '@core/page-tree'
 import {
   getCanvasDropZone,
   resolveCanvasInsertionTarget,
@@ -19,6 +20,7 @@ function node(id: string, moduleId: string, children: string[] = [], locked = fa
 }
 
 function page(nodes: Record<string, PageNode>, rootNodeId = 'root'): Page {
+  reindexNodeParents(nodes)
   return {
     id: 'page',
     slug: 'index',

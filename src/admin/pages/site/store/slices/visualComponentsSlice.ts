@@ -19,7 +19,7 @@ import { nanoid } from 'nanoid'
 import type { EditorStoreSliceCreator } from '@site/store/types'
 import type { VisualComponent, VCParam, VCNode } from '@core/visualComponents'
 import type { BaseNode, PageNode, StyleRule } from '@core/page-tree'
-import { removeNodeSubtrees } from '@core/page-tree'
+import { reindexNodeParents, removeNodeSubtrees } from '@core/page-tree'
 import {
   validateComponentName,
   validateParamName,
@@ -382,6 +382,7 @@ export const createVisualComponentsSlice: EditorStoreSliceCreator<VisualComponen
       children: [],
       breakpointOverrides: {},
       classIds: [],
+      parentId: null,
     }
 
     const newVC: VisualComponent = {
@@ -843,6 +844,8 @@ export const createVisualComponentsSlice: EditorStoreSliceCreator<VisualComponen
         }
         clonedTree.nodes[wrapperId] = wrapperNode
         clonedTree.rootNodeId = wrapperId
+        // Derive parentId across the freshly assembled VC tree (clone + wrapper).
+        reindexNodeParents(clonedTree.nodes)
 
         // 5d. Build the new VisualComponent
         const newVc: VisualComponent = {

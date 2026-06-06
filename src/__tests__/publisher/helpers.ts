@@ -6,7 +6,7 @@ import type { Page, PageNode, SiteDocument, Breakpoint } from '@core/page-tree'
 import type { ModuleDefinition, IModuleRegistry, AnyModuleDefinition } from '@core/module-engine'
 import type { RenderAccumulators } from '@core/publisher'
 import { SquareSolidIcon } from 'pixel-art-icons/icons/square-solid'
-import { DEFAULT_SITE_SETTINGS } from '@core/page-tree'
+import { DEFAULT_SITE_SETTINGS, reindexNodeParents } from '@core/page-tree'
 
 // Re-exported because legacy publisher tests still reference it.
 export { DEFAULT_SITE_SETTINGS }
@@ -115,6 +115,9 @@ export function makePage(
       ...(spec.inlineStyles ? { inlineStyles: spec.inlineStyles } : {}),
     }
   }
+  // Derive the parentId index — mirrors what parse/loadSite do for real trees
+  // (the publisher's sizes resolver walks ancestors via parentId).
+  reindexNodeParents(full)
   return {
     id: 'page-1',
     slug: 'index',

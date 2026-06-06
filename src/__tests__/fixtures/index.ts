@@ -12,7 +12,7 @@
 
 import { nanoid } from 'nanoid'
 import type { Page, PageNode, SiteDocument } from '@core/page-tree'
-import { DEFAULT_BREAKPOINTS, DEFAULT_SITE_SETTINGS, createDefaultSiteExplorerOrganization } from '@core/page-tree'
+import { DEFAULT_BREAKPOINTS, DEFAULT_SITE_SETTINGS, createDefaultSiteExplorerOrganization, reindexNodeParents } from '@core/page-tree'
 import type { AnyModuleDefinition } from '@core/module-engine'
 import type { VisualComponent, VCNode } from '@core/visualComponents'
 import { SquareSolidIcon } from 'pixel-art-icons/icons/square-solid'
@@ -94,6 +94,7 @@ export function makeVCTree(
 ): { nodes: Record<string, VCNode>; rootNodeId: string } {
   const map: Record<string, VCNode> = {}
   for (const n of nodes) map[n.id] = n
+  reindexNodeParents(map)
   return { nodes: map, rootNodeId: rootId }
 }
 
@@ -121,12 +122,16 @@ export function makePage(overrides: Partial<Page> = {}): Page {
   const defaultNodes: Record<string, PageNode> = {
     [rootId]: makeNode({ id: rootId, moduleId: 'base.body', children: [] }),
   }
+  const nodes = overrides.nodes ?? defaultNodes
+  // Derive the parentId index so fixtures set directly into store state (without
+  // going through loadSite) have a consistent O(1) getParent pointer.
+  reindexNodeParents(nodes)
   return {
     id: overrides.id ?? 'page-1',
     slug: overrides.slug ?? 'index',
     title: overrides.title ?? 'Home',
     rootNodeId: rootId,
-    nodes: overrides.nodes ?? defaultNodes,
+    nodes,
     template: overrides.template,
   }
 }
