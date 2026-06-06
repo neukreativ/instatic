@@ -112,13 +112,14 @@ All mutations live in `src/core/page-tree/mutations.ts`. They take a `NodeTree<P
 | `insertNode(tree, node, parentId, index?)`                        | Insert under `parentId` at `index` (append if omitted)      |
 | `deleteNode(tree, nodeId)`                                        | Remove a node and its entire subtree                        |
 | `updateNodeProps(tree, nodeId, patch)`                            | Shallow merge `patch` into the node's `props`               |
-| `setBreakpointOverride(tree, nodeId, breakpointId, propKey, value)` | Set a per-breakpoint prop override                        |
-| `clearBreakpointOverride(tree, nodeId, breakpointId, propKey)`    | Remove a per-breakpoint override                            |
+| `setBreakpointOverride(tree, nodeId, breakpointId, patch)`        | Shallow-merge `patch` into the node's breakpoint overrides for `breakpointId` |
+| `clearBreakpointOverride(tree, nodeId, breakpointId)`             | Remove ALL overrides for `breakpointId` on that node       |
 | `renameNode(tree, nodeId, label)`                                 | Set the user-facing `label`                                 |
 | `toggleNodeLocked(tree, nodeId)`                                  | Flip `locked`                                               |
 | `toggleNodeHidden(tree, nodeId)`                                  | Flip `hidden`                                               |
 | `moveNode(tree, nodeId, newParentId, newIndex)`                   | Re-parent + re-order                                        |
 | `moveNodes(tree, nodeIds, newParentId, newIndex)`                 | Same, multi-select                                          |
+| `buildSubtreeNodeIdMap(rootNodeId, nodes)`                        | Build a `Map<oldId, newId>` for all nodes reachable from `rootNodeId`. Used by callers that need the id map before pasting (e.g. to remap scoped class `scope.nodeId`). |
 | `duplicateNode(tree, nodeId, ...)`                                | Deep-clone with fresh ids, place after the original         |
 | `wrapNode(tree, nodeId, wrapperModuleId)`                         | Wrap a node in a new container                              |
 | `wrapNodes(tree, nodeIds, wrapperModuleId)`                       | Same, multi-select                                          |
@@ -139,9 +140,18 @@ All mutations live in `src/core/page-tree/mutations.ts`. They take a `NodeTree<P
 
 `src/core/page-tree/selectors.ts`:
 
+- `getNode(tree, id)` — O(1) node lookup by id; returns `undefined` if not found.
+- `getNodeOrThrow(tree, id)` — same as `getNode` but throws `[PageTree] Node "<id>" not found`.
+- `getChildren(tree, nodeId)` — returns all direct children of a node as typed `TNode[]`.
 - `getParent(tree, nodeId)` — returns the parent **node** (`TNode`) or `undefined` for the root. O(1) via the node's `parentId` pointer (see "The `parentId` invariant" above) — no node-map scan.
 - `getAncestors(tree, nodeId)` — ordered `[root, …, parent]` chain. O(depth) by walking `parentId`.
+- `flattenSubtree(tree, nodeId)` — returns all node IDs in depth-first pre-order starting at `nodeId`. Used by virtual-scroll flattening in the DOM tree panel.
 - `isAncestor(tree, ancestorId, descendantId)` — true if `ancestor` is on the path to `descendant`. O(depth) via `parentId`.
+- `resolveProps(node, breakpointId?, schema?)` — merge base props with breakpoint overrides, filtering to `breakpointOverridable: true` keys when `schema` is provided.
+- `evaluateCondition(condition, props)` — evaluate a declarative `PropertyCondition` against a props object. Used by the Properties Panel to show/hide controls.
+
+`src/core/page-tree/parentIndex.ts`:
+
 - `reindexNodeParents(nodes)` — recompute every node's `parentId` from the `children` arrays (the backfill / derive-on-entry helper). Tree-agnostic: takes a `Record<string, BaseNode>` directly.
 
 `src/core/page-tree/scopedClassClone.ts`:
@@ -156,7 +166,6 @@ All mutations live in `src/core/page-tree/mutations.ts`. They take a `NodeTree<P
 - `normalizePageSlug(value)` — lowercases, strips invalid characters, and collapses hyphens.
 - `pageSlugError(slug)` — returns a validation error message or `null` if the slug is valid.
 - `pageSlugDuplicateError(slug, pages, currentPageId?)` — checks for slug collisions across the page list.
-- `uniquePageSlug(desired, pages, excludePageId?)` — makes a desired slug unique by auto-suffixing (`-2`, `-3`, …) when a collision exists. `excludePageId` skips the page being renamed so re-saving its own slug is a no-op. Used by `addPage`, `duplicatePage`, and `renamePage`.
 - `createUniquePageSlug(title, pages)` — generates a collision-free slug from a page title (normalises + reserved-slug guard + uniqueness).
 
 ---
@@ -293,11 +302,13 @@ const tree = parsePageNodeTree(raw)
   - `src/core/page-tree/pageNode.ts` — `PageNode` (extends `BaseNode`)
   - `src/core/page-tree/page.ts` — `Page` (is `NodeTree<PageNode>` + metadata)
   - `src/core/page-tree/mutations.ts` — all node + site mutations
-  - `src/core/page-tree/selectors.ts` — `getParent`, `isAncestor`, etc.
+  - `src/core/page-tree/selectors.ts` — `getNode`, `getParent`, `getAncestors`, `isAncestor`, `flattenSubtree`, `resolveProps`, `evaluateCondition`
+  - `src/core/page-tree/parentIndex.ts` — `reindexNodeParents` (derive-on-entry backfill)
   - `src/core/visualComponents/schemas.ts` — `VCNode` (= `BaseNode`)
   - `src/admin/pages/site/store/slices/site/nodeActions.ts` — store actions calling `mutateActiveTree`
 - Gate tests:
   - `src/__tests__/persistence/treeSchemaShape.test.ts`
+  - `src/__tests__/page-tree/parentIndex.test.ts` — `parentId` invariant: every mutation keeps it consistent; undo/redo preserves it; `reindexNodeParents` derives from children only; `getParent` is O(1) not O(N)
   - `src/__tests__/architecture/no-vc-mode-branches-in-mutations.test.ts`
   - `src/__tests__/architecture/centralized-site-mutation-history.test.ts`
   - `src/__tests__/architecture/visual-components-mutation-contract.test.ts`
