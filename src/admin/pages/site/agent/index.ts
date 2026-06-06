@@ -25,7 +25,7 @@ export type { SiteAgentSnapshot } from './siteAgentSnapshot'
 
 // Browser-side tool dispatch + render evidence + markdown rendering.
 export { executeAgentTool } from './executor'
-export { captureAgentRenderSnapshot } from './renderEvidence'
+export { captureAgentRenderSnapshot, SnapshotNodeNotFoundError } from './renderEvidence'
 export { renderMarkdownToHtml } from './markdown'
 
 // Store handle wiring.

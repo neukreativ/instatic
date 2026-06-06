@@ -41,7 +41,19 @@ describe('agent-tool-surface gate', () => {
     expect(toolNames).toContain('replaceNodeHtml')
   })
 
-  it('total tool count is 17 (15 mutation tools + render_snapshot + getNodeHtml)', () => {
-    expect(toolNames).toHaveLength(17)
+  it('design-system token tools are present', () => {
+    expect(toolNames).toContain('set_color_tokens')
+    expect(toolNames).toContain('set_font_tokens')
+    expect(toolNames).toContain('set_type_scale')
+    expect(toolNames).toContain('set_spacing_scale')
+  })
+
+  it('template tools are present', () => {
+    expect(toolNames).toContain('setPageTemplate')
+    expect(toolNames).toContain('clearPageTemplate')
+  })
+
+  it('total tool count is 23 (15 mutation + 2 template + 4 token + render_snapshot + getNodeHtml)', () => {
+    expect(toolNames).toHaveLength(23)
   })
 })

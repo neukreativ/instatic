@@ -109,6 +109,13 @@ export async function* runToolLoop<TMessage>(
   const messages = adapter.mapHistory(req)
   const headers = adapter.buildHeaders(req)
 
+  // Track tool-result messages that carry heavy evidence (screenshots,
+  // full-page HTML/CSS). Once superseded they describe stale page state and are
+  // worthless, so we keep only the LATEST per heavy tool name at full fidelity
+  // and stub the rest — this is what bounds context growth across a long build
+  // loop (a single screenshot inlined as text was blowing past 1M tokens).
+  const heavyMessages: { index: number; results: TurnToolResult[] }[] = []
+
   // Usage is reported per API call; aggregate across the whole loop so the
   // runner persists a single total (and prices it via pricing.ts when the
   // provider omits costUsd).
@@ -169,6 +176,16 @@ export async function* runToolLoop<TMessage>(
       cacheReadTokens += turn.usage.cacheReadTokens ?? 0
       cacheCreationTokens += turn.usage.cacheCreationTokens ?? 0
       if (turn.usage.costUsd != null) costUsd = (costUsd ?? 0) + turn.usage.costUsd
+      // Live meter: emit THIS round's input as the current context size. Each
+      // round (including the final one, before the break below) reports the
+      // running context — the handler normalises + forwards it so the meter
+      // updates mid-turn instead of only at the end.
+      yield {
+        type: 'context',
+        promptTokens: turn.usage.promptTokens,
+        cacheReadTokens: turn.usage.cacheReadTokens,
+        cacheCreationTokens: turn.usage.cacheCreationTokens,
+      }
     }
 
     if (turn.stop || turn.toolCalls.length === 0) {
@@ -184,8 +201,9 @@ export async function* runToolLoop<TMessage>(
     const results: TurnToolResult[] = []
     for (const call of turn.toolCalls) {
       const tool = toolsByName.get(call.name)
+      const input = prepareToolInput(call, req)
       const output: AiToolOutput = tool
-        ? await executeAiTool(tool, call.input, req.bridge, req.signal, req.toolContextBase)
+        ? await executeAiTool(tool, input, req.bridge, req.signal, req.toolContextBase)
         : { ok: false, error: `Unknown tool: ${call.name}` }
       yield {
         type: 'toolResult',
@@ -198,7 +216,11 @@ export async function* runToolLoop<TMessage>(
       if (req.signal.aborted) return
     }
 
-    messages.push(adapter.buildToolResultMessage(results))
+    const msgIndex = messages.push(adapter.buildToolResultMessage(results)) - 1
+    if (results.some(isHeavyResult)) {
+      heavyMessages.push({ index: msgIndex, results })
+      applyHeavyElision(messages, heavyMessages, adapter)
+    }
   }
 
   yield {
@@ -208,5 +230,79 @@ export async function* runToolLoop<TMessage>(
     costUsd,
     cacheReadTokens: cacheReadTokens || undefined,
     cacheCreationTokens: cacheCreationTokens || undefined,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Per-tool input preparation
+// ---------------------------------------------------------------------------
+
+/**
+ * Hook for server-controlled tool inputs the model shouldn't drive. Currently
+ * just `render_snapshot`: the server injects `captureScreenshot` from the
+ * active model's vision capability so a non-vision model never pays the
+ * html-to-image cost for a screenshot it can't consume.
+ */
+function prepareToolInput(call: TurnToolCall, req: AiStreamRequest): unknown {
+  if (call.name === 'render_snapshot') {
+    const base = call.input && typeof call.input === 'object' ? call.input : {}
+    return { ...base, captureScreenshot: req.modelCapabilities.visionInput }
+  }
+  return call.input
+}
+
+// ---------------------------------------------------------------------------
+// Stale heavy-evidence elision
+// ---------------------------------------------------------------------------
+
+/**
+ * Tools whose results carry heavy, snapshot-in-time payloads (a full page's
+ * HTML/CSS, a node subtree, a screenshot). Older copies describe page state the
+ * model has since mutated — useless to re-send. Any result with an image
+ * attachment is heavy regardless of tool name.
+ */
+const HEAVY_TOOL_NAMES = new Set(['render_snapshot', 'read_page', 'getNodeHtml'])
+
+function isHeavyResult(r: TurnToolResult): boolean {
+  return (r.output.images?.length ?? 0) > 0 || HEAVY_TOOL_NAMES.has(r.name)
+}
+
+/** Replace a heavy payload with a one-line breadcrumb pointing back at the tool. */
+function stubHeavyResult(r: TurnToolResult): TurnToolResult {
+  return {
+    ...r,
+    output: {
+      ok: r.output.ok,
+      data: {
+        elided: true,
+        note: `Earlier ${r.name} output removed to conserve context. Call ${r.name} again if you need the current state.`,
+      },
+    },
+  }
+}
+
+/**
+ * Rewrite every tracked heavy tool-result message so that, per heavy tool name,
+ * only the most recent message keeps full fidelity; all earlier heavy results
+ * are stubbed. Non-heavy results in the same message are left untouched (a turn
+ * can mix a heavy `read_page` with a cheap `updateNodeProps`). Messages are
+ * rebuilt through the adapter so this stays provider-agnostic.
+ */
+function applyHeavyElision<TMessage>(
+  messages: TMessage[],
+  heavyMessages: { index: number; results: TurnToolResult[] }[],
+  adapter: ProviderAdapter<TMessage>,
+): void {
+  const lastIndexByTool = new Map<string, number>()
+  for (const m of heavyMessages) {
+    for (const r of m.results) {
+      if (isHeavyResult(r)) lastIndexByTool.set(r.name, m.index)
+    }
+  }
+  for (const m of heavyMessages) {
+    const rebuilt = m.results.map((r) =>
+      isHeavyResult(r) && lastIndexByTool.get(r.name) !== m.index ? stubHeavyResult(r) : r,
+    )
+    messages[m.index] = adapter.buildToolResultMessage(rebuilt)
   }
 }

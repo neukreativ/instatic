@@ -21,6 +21,7 @@ import type {
   AiContentBlock,
   AiMessage,
   AiStreamEvent,
+  AiToolOutput,
 } from '../runtime/types'
 import type { AiStreamRequest } from './types'
 import {
@@ -144,9 +145,16 @@ function assistantItems(blocks: AiContentBlock[]): ResponsesTurn {
   return items
 }
 
-function toolOutputToString(output: { ok: boolean; data?: unknown; error?: string }): string {
-  if (output.ok) return JSON.stringify(output.data ?? { ok: true })
-  return output.error ?? 'Tool call failed.'
+function toolOutputToString(output: AiToolOutput): string {
+  if (!output.ok) return output.error ?? 'Tool call failed.'
+  const text = JSON.stringify(output.data ?? { ok: true })
+  // The Responses `function_call_output` item is text-only — images can't ride
+  // in a tool result here (they'd need a separate user message). Drop with a
+  // note so the model knows visual evidence exists.
+  if (output.images && output.images.length > 0) {
+    return `${text}\n\n[${output.images.length} screenshot(s) omitted: this provider delivers tool results as text only.]`
+  }
+  return text
 }
 
 // ---------------------------------------------------------------------------

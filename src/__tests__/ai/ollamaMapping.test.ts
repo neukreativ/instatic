@@ -144,6 +144,7 @@ function makeRequest(serverCalls: unknown[]): AiStreamRequest {
     messages: [{ role: 'user', content: [{ kind: 'text', text: 'go' }] }],
     tools: [echoTool],
     modelId: 'llama3.3',
+    modelCapabilities: { toolCalling: true, visionInput: false, promptCache: false, streaming: true },
     credentials: { id: 'cr', providerId: 'ollama', authMode: 'baseUrl', apiKey: null, baseUrl: 'http://localhost:11434' },
     signal: new AbortController().signal,
     bridge,

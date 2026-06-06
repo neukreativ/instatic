@@ -168,7 +168,7 @@ export { isSafeFontSrc }
  * One font installed in the site library.
  * Invalid entries are silently dropped at the SiteFontsSettings level.
  */
-const FontEntrySchema = Type.Object({
+export const FontEntrySchema = Type.Object({
   id: Type.String({ minLength: 1 }),
   source: withFallback(FontSourceSchema, 'google' as const),
   family: Type.String({ minLength: 1 }),

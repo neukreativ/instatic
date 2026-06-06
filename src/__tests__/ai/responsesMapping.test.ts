@@ -208,6 +208,7 @@ describe('runToolLoop via openaiDriver (Responses)', () => {
       messages: [{ role: 'user', content: [{ kind: 'text', text: 'go' }] }],
       tools: [echoTool],
       modelId: 'gpt-5.4',
+      modelCapabilities: { toolCalling: true, visionInput: true, promptCache: false, streaming: true },
       credentials: { id: 'cr', providerId: 'openai', authMode: 'apiKey', apiKey: 'sk-test', baseUrl: null },
       signal: new AbortController().signal,
       bridge,

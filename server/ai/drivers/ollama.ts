@@ -23,6 +23,7 @@ import type {
   AiMessage,
   AiProviderId,
   AiStreamEvent,
+  AiToolOutput,
 } from '../runtime/types'
 import type {
   AiProvider,
@@ -231,9 +232,16 @@ function assistantMessage(blocks: AiContentBlock[]): ChatMessage {
     : { role: 'assistant', content: text }
 }
 
-function toolOutputToString(output: { ok: boolean; data?: unknown; error?: string }): string {
-  if (output.ok) return JSON.stringify(output.data ?? { ok: true })
-  return output.error ?? 'Tool call failed.'
+function toolOutputToString(output: AiToolOutput): string {
+  if (!output.ok) return output.error ?? 'Tool call failed.'
+  const text = JSON.stringify(output.data ?? { ok: true })
+  // The OpenAI-compatible `role:'tool'` message is text-only — an image can't
+  // ride in a tool result here. Drop it with a note so the model knows visual
+  // evidence exists but wasn't delivered through this channel.
+  if (output.images && output.images.length > 0) {
+    return `${text}\n\n[${output.images.length} screenshot(s) omitted: this provider delivers tool results as text only.]`
+  }
+  return text
 }
 
 // ---------------------------------------------------------------------------

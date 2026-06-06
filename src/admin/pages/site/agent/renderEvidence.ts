@@ -11,15 +11,48 @@ import type {
 const MAX_TEXT_LENGTH = 300
 const OVERFLOW_TOLERANCE_PX = 2
 
+// Anthropic rejects any image dimension > 8000px outright (400), and internally
+// downsizes the long edge to ~1568px before the model ever sees it. So we cap
+// the long edge of the capture here: a tall landing-page screenshot stays under
+// the hard limit AND we never ship more pixels than the model actually uses.
+const MAX_IMAGE_EDGE = 1568
+
 interface CaptureRenderSnapshotOptions {
   /** Configured breakpoint id to capture. Defaults to the first canvas frame. */
   breakpointId?: string
+  /**
+   * Scope the capture to a single node's subtree. When set, the screenshot and
+   * layout report cover only that node (coordinates relative to its box).
+   * Omit to capture the whole breakpoint frame.
+   */
+  nodeId?: string
   /** When false, only layout is collected (no html-to-image) — faster. */
   captureScreenshot?: boolean
 }
 
 /**
- * Capture a single canvas frame on demand: layout report + optional screenshot.
+ * Thrown when a `nodeId`-scoped capture is requested but the node isn't present
+ * in the resolved breakpoint frame. Lets the tool dispatcher return a clear,
+ * recoverable `aiToolError` (vs. the "no frame at all" null case).
+ */
+export class SnapshotNodeNotFoundError extends Error {
+  readonly nodeId: string
+  readonly breakpointId: string
+
+  constructor(nodeId: string, breakpointId: string) {
+    super(`Node ${nodeId} not found in the ${breakpointId || 'active'} breakpoint frame.`)
+    this.name = 'SnapshotNodeNotFoundError'
+    this.nodeId = nodeId
+    this.breakpointId = breakpointId
+  }
+}
+
+/**
+ * Capture the rendered canvas on demand: layout report + optional screenshot.
+ *
+ * By default captures the whole breakpoint frame. Pass `nodeId` to scope the
+ * capture to a single node's subtree — a sharper, cheaper image than a tall
+ * full-page screenshot, and a layout report narrowed to that section.
  *
  * Called by the browser-bridge `render_snapshot` tool path when Claude
  * actually asks for visual feedback — never on every prompt build (that's
@@ -27,9 +60,11 @@ interface CaptureRenderSnapshotOptions {
  *
  * Returns null when no matching canvas frame exists in the DOM (e.g. when
  * the editor isn't mounted, or the requested breakpoint isn't on screen).
+ * Throws SnapshotNodeNotFoundError when the frame exists but `nodeId` doesn't.
  */
 export async function captureAgentRenderSnapshot({
   breakpointId,
+  nodeId,
   captureScreenshot = true,
 }: CaptureRenderSnapshotOptions = {}): Promise<AgentRenderSnapshotPayload | null> {
   if (typeof document === 'undefined') return null
@@ -38,15 +73,25 @@ export async function captureAgentRenderSnapshot({
   if (!frame) return null
 
   const resolvedBreakpointId = frame.dataset.breakpointId ?? breakpointId ?? ''
-  const layout = collectLayoutReport(frame, resolvedBreakpointId)
+
+  // The capture root is the frame, or — when scoped — the target node element.
+  let root: HTMLElement = frame
+  if (nodeId) {
+    const target = frame.querySelector<HTMLElement>(`[data-node-id="${cssAttrEscape(nodeId)}"]`)
+    if (!target) throw new SnapshotNodeNotFoundError(nodeId, resolvedBreakpointId)
+    root = target
+  }
+
+  const layout = collectLayoutReport(root, resolvedBreakpointId, nodeId)
   const screenshot = captureScreenshot
-    ? await captureFrameScreenshot(frame)
+    ? await captureElementScreenshot(root)
     : unavailableScreenshot('Screenshot capture not requested.')
 
   return {
     breakpointId: resolvedBreakpointId,
-    label: resolvedBreakpointId,
-    width: Math.round(frame.getBoundingClientRect().width),
+    ...(nodeId ? { nodeId } : {}),
+    label: nodeId ? `${resolvedBreakpointId} · ${nodeId}` : resolvedBreakpointId,
+    width: Math.round(root.getBoundingClientRect().width),
     capturedAt: Date.now(),
     screenshot,
     layout,
@@ -69,39 +114,50 @@ function cssAttrEscape(value: string): string {
   return value.replace(/[\\"]/g, '\\$&')
 }
 
-function collectLayoutReport(frame: HTMLElement, breakpointId: string): AgentLayoutReportContext {
-  const frameRect = frame.getBoundingClientRect()
+function collectLayoutReport(
+  root: HTMLElement,
+  breakpointId: string,
+  nodeId?: string,
+): AgentLayoutReportContext {
+  const rootRect = root.getBoundingClientRect()
   const viewport = {
-    width: Math.round(frameRect.width || frame.clientWidth),
-    height: Math.round(frameRect.height || frame.clientHeight),
-    scrollWidth: frame.scrollWidth,
-    scrollHeight: frame.scrollHeight,
+    width: Math.round(rootRect.width || root.clientWidth),
+    height: Math.round(rootRect.height || root.clientHeight),
+    scrollWidth: root.scrollWidth,
+    scrollHeight: root.scrollHeight,
   }
 
   const warnings: AgentLayoutWarningContext[] = []
-  if (frame.scrollWidth > frame.clientWidth + OVERFLOW_TOLERANCE_PX) {
+  if (root.scrollWidth > root.clientWidth + OVERFLOW_TOLERANCE_PX) {
     warnings.push({
       type: 'horizontal-overflow',
       severity: 'warning',
-      message: 'The breakpoint viewport has horizontal overflow.',
+      message: 'The captured region has horizontal overflow.',
     })
   }
-  if (frame.scrollHeight > frame.clientHeight + OVERFLOW_TOLERANCE_PX) {
+  if (root.scrollHeight > root.clientHeight + OVERFLOW_TOLERANCE_PX) {
     warnings.push({
       type: 'vertical-overflow',
       severity: 'info',
-      message: 'The breakpoint viewport has vertical overflow.',
+      message: 'The captured region has vertical overflow.',
     })
   }
 
-  const nodes = Array.from(frame.querySelectorAll<HTMLElement>('[data-node-id]'))
-    .map((nodeEl) => collectNodeLayout(frameRect, viewport, nodeEl, warnings))
+  // querySelectorAll only returns descendants, so include the root itself when
+  // it carries a data-node-id (the node-scoped capture case).
+  const nodeEls: HTMLElement[] = []
+  if (root.dataset.nodeId) nodeEls.push(root)
+  nodeEls.push(...Array.from(root.querySelectorAll<HTMLElement>('[data-node-id]')))
+  const nodes = nodeEls.map((nodeEl) => collectNodeLayout(rootRect, viewport, nodeEl, warnings))
 
-  const images = Array.from(frame.querySelectorAll<HTMLImageElement>('img'))
-    .map((img) => collectImageLayout(frameRect, img, warnings))
+  const imgEls: HTMLImageElement[] = []
+  if (root.tagName === 'IMG') imgEls.push(root as HTMLImageElement)
+  imgEls.push(...Array.from(root.querySelectorAll<HTMLImageElement>('img')))
+  const images = imgEls.map((img) => collectImageLayout(rootRect, img, warnings))
 
   return {
     breakpointId,
+    ...(nodeId ? { nodeId } : {}),
     viewport,
     nodes,
     images,
@@ -140,7 +196,7 @@ function collectNodeLayout(
     warnings.push({
       type: 'horizontal-overflow',
       severity: 'warning',
-      message: 'Node extends beyond the breakpoint viewport.',
+      message: 'Node extends beyond the captured region.',
       nodeId,
     })
   }
@@ -206,16 +262,22 @@ function collectImageLayout(
   return image
 }
 
-async function captureFrameScreenshot(frame: HTMLElement): Promise<AgentScreenshotContext> {
+async function captureElementScreenshot(root: HTMLElement): Promise<AgentScreenshotContext> {
   try {
     const { toPng } = await import('html-to-image')
-    const rect = frame.getBoundingClientRect()
+    const rect = root.getBoundingClientRect()
     if (rect.width <= 0 || rect.height <= 0) {
-      return unavailableScreenshot('Frame has no visible size.')
+      return unavailableScreenshot('Captured element has no visible size.')
     }
 
-    const pixelRatio = Math.min(1, 900 / Math.max(1, rect.width))
-    const dataUrl = await toPng(frame, {
+    // Cap BOTH dimensions at MAX_IMAGE_EDGE (never upscale past 1:1). A tall
+    // page is constrained by its height; a wide one by its width.
+    const pixelRatio = Math.min(
+      1,
+      MAX_IMAGE_EDGE / Math.max(1, rect.width),
+      MAX_IMAGE_EDGE / Math.max(1, rect.height),
+    )
+    const dataUrl = await toPng(root, {
       cacheBust: true,
       pixelRatio,
       backgroundColor: '#ffffff',
