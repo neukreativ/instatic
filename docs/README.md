@@ -223,6 +223,7 @@ Quick map from "where do I look for X?" to the canonical file:
 | Plugin manifest parser           | `src/core/plugins/manifest.ts`                           |
 | Plugin sandbox host              | `server/plugins/quickjs/vm.ts`, `server/plugins/modulePackVm.ts` |
 | Publisher                        | `src/core/publisher/`                                    |
+| CSS value sanitiser              | `src/core/css-sanitize/sanitiseCssValue.ts`              |
 | TypeBox helpers                  | `src/core/utils/typeboxHelpers.ts`                       |
 | Error message extraction         | `src/core/utils/errorMessage.ts`                         |
 | Architecture gate tests          | `src/__tests__/architecture/*.test.ts`                   |

@@ -40,7 +40,7 @@ src/core/publisher/
 ├── siteCssBundle.ts                — hash-named bundle composition (reset + framework + style)
 ├── sizesResolver.ts                — `<img sizes>` auto-resolution from viewport contexts
 ├── dynamicDetection.ts             — Single walker for the 4 auto-detection rules; powers Layers A and C
-└── utils.ts                        — escapeHtml, isSafeUrl
+└── utils.ts                        — escapeHtml, isSafeUrl, sanitiseCssValue (re-exported from @core/css-sanitize)
 
 server/publish/
 ├── publicRouter.ts                 — gateway: Layer A disk fast-path → Layer B LRU → live resolver
@@ -228,9 +228,13 @@ This is what shrinks published CSS by ~60–80% on typical pages (Decision #308)
 
 ### CSS sanitization
 
-`sanitizeModuleCSS(css)` (`src/core/publisher/cssCollector.ts`) neutralises the `</style` sequence in CSS before injection into a `<style>` block. The substitution replaces `</style` with `<\/style` — the HTML5 RAWTEXT tokenizer never recognises the end tag regardless of the trailer character, and CSS string literals resolve `\/` back to `/` so URL values round-trip correctly. This prevents stored XSS via user stylesheets or module CSS that would otherwise close the `<style>` element early and inject script (CWE-79, Constraint #228).
+Two sanitizers run in the publisher pipeline, each guarding a different injection surface.
 
-Two passes run at publish time (inline mode):
+**Value-level: `sanitiseCssValue`** (`src/core/css-sanitize/sanitiseCssValue.ts`) — the canonical CSS value sanitizer shared across the entire codebase. Blocks `expression(...)`, `javascript:`, `behavior:`, `-moz-binding`, `data:text/...`, `{}` (selector breakout), and `</` (RAWTEXT end-tag escape). Every CSS property value passes through it before being emitted — in `bagToCSS` / `bagToInlineStyle` (publisher), in `ClassStyleInjector` (editor live preview), and in `formatCssVariableDeclarations` (framework `:root {}` variable block). The canonical implementation lives in `src/core/css-sanitize/`, a dependency-free leaf module both `@core/publisher` and `@core/framework` depend on; `@core/publisher` re-exports it from `utils.ts` for publisher-side consumers that haven't switched import paths. Framework CSS variable emission adds a second guard: values containing `;` are also dropped, because in a custom-property context a bare `;` terminates the declaration and could inject a sibling — unlike the publisher's declaration-block context, where `;` is valid inside a quoted `url("data:image/png;base64,…")`.
+
+**Block-level: `sanitizeModuleCSS`** (`src/core/publisher/cssCollector.ts`) — neutralises the `</style` sequence in CSS blocks before injection into a `<style>` element. The substitution replaces `</style` with `<\/style` — the HTML5 RAWTEXT tokenizer never recognises the end tag regardless of the trailer character, and CSS string literals resolve `\/` back to `/` so URL values round-trip correctly. This prevents stored XSS via user stylesheets or module CSS that would otherwise close the `<style>` element early and inject script (CWE-79, Constraint #228).
+
+Two block-level passes run at publish time (inline mode):
 
 1. **Per-module pass** — inside `renderStandardNode` when storing module CSS in `cssMap`. Module CSS is sanitised before dedup storage.
 2. **Full-assembly pass** — in `buildStyleHead` after concatenating reset + framework + module + class + user stylesheets into the final `<style>` block. This pass protects user-authored stylesheets, which are the higher-risk vector (stored user content). The second pass is idempotent on already-sanitised module CSS.
@@ -480,8 +484,9 @@ This is rare and requires architectural review — most "new behavior" fits with
   - `src/core/publisher/renderConfig.ts` — `RenderConfig` + `RenderAccumulators` + `RenderNodeFn`
   - `src/core/publisher/renderVisualComponentRef.ts` — VC inlining + config/accumulator threading
   - `src/core/publisher/dynamicDetection.ts` — `findDynamicNodeIds` (all detection rules)
-  - `src/core/publisher/cssCollector.ts` — `CssCollector` + sanitization
+  - `src/core/publisher/cssCollector.ts` — `CssCollector` + block-level sanitization
   - `src/core/publisher/escapeProps.ts` — Constraint #211 enforcement
+  - `src/core/css-sanitize/sanitiseCssValue.ts` — canonical CSS value sanitizer (shared with `@core/framework`)
   - `server/publish/publishedHtmlPipeline.ts` — plugin filter point
   - `server/publish/publicRenderer.ts` — server wrappers
   - `server/publish/renderTreeWalk.ts` — `walkRenderTree` (shared render-tree visitor)

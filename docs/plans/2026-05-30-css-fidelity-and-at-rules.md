@@ -18,7 +18,7 @@ Real-world CSS imports surface two systemic gaps:
 The unifying realization: **the property-name allowlist was never the security boundary** — `sanitiseCssValue` is. It blocks the actual injection vectors at the *value* level:
 
 ```ts
-// src/core/publisher/utils.ts — the REAL guard
+// src/core/css-sanitize/sanitiseCssValue.ts — the REAL guard (shared leaf)
 if (/expression\s*\(/i.test(v)) return null
 if (/javascript\s*:/i.test(v)) return null
 if (/behavior\s*:/i.test(v)) return null
@@ -214,6 +214,6 @@ The two parts are independent but share the "faithful escape hatch" theme. Recom
 - [`docs/plans/2026-05-29-super-import.md`](2026-05-29-super-import.md) — the import pipeline whose warnings motivated this; Part 2a directly removes its `unmatched-media-query` folding.
 - [`docs/features/publisher.md`](../features/publisher.md) — `generateClassCSS` / `bagToCSS`, touched by both parts.
 - `src/core/publisher/classCss.ts` — `ALLOWED_PROPS` → `DENIED_PROPS`, `@media` emission → conditional-layer emission.
-- `src/core/publisher/utils.ts` — `sanitiseCssValue`, the actual security boundary (unchanged).
+- `src/core/css-sanitize/sanitiseCssValue.ts` — `sanitiseCssValue`, the actual security boundary. Canonical implementation now lives in the dependency-free leaf `@core/css-sanitize`; `@core/publisher` re-exports it from `utils.ts`.
 - `src/core/siteImport/cssToStyleRules.ts` — importer property filter + @-rule routing.
 - `src/core/page-tree/styleRule.ts` / `breakpoint.ts` — schema home for `conditionalLayers`; breakpoint model kept as-is.
