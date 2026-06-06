@@ -25,7 +25,7 @@ Every interactive control in `src/admin/` goes through one of these. Bare `<butt
 | `Button`           | **Every** action button                                              | `variant: 'ghost' \| 'secondary' \| 'primary' \| 'destructive'`, `size: 'micro' \| 'xs' \| 'sm' \| 'md' \| 'lg'`, `iconOnly`, `pressed`, `tooltip` |
 | `Switch`           | Boolean toggle (on / off)                                            | `checked`, `onChange`, `disabled`                          |
 | `Checkbox`         | Boolean inside a list / form                                         | `checked`, `onChange`, `indeterminate`                     |
-| `SegmentedControl` | A few mutually exclusive options shown inline                        | `options`, `value`, `onChange`                             |
+| `SegmentedControl` | A few mutually exclusive options shown inline; `value` can be `undefined` for an unset state where no segment appears pressed | `options`, `value`, `onChange`, `onClear?` (deselectable — clicking the active segment fires `onClear` and shows a hover close-icon overlay) |
 | `Tabs`             | Top-level tab navigation within a workspace                          | `tabs`, `activeId`, `onChange`                             |
 | `RangeTabs`        | Tabbed numeric range selectors (spacing scales, etc.)                | `ranges`, `value`, `onChange`                              |
 
