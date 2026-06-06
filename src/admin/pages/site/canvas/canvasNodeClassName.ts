@@ -1,4 +1,4 @@
-import type { ClassPreviewAssignment } from '@site/store/slices/classSlice'
+import type { ClassPreviewAssignment } from '@site/store/slices/styleRuleSlice'
 import { classNamesForClassIds, type StyleRuleRegistry } from '@core/page-tree'
 import { isEmittableProperty, sanitiseCssValue } from '@core/publisher'
 

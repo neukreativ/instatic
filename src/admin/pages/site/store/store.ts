@@ -8,7 +8,7 @@ import { createSiteSlice } from './slices/siteSlice'
 import { createSelectionSlice } from './slices/selectionSlice'
 import { createCanvasSlice } from './slices/canvasSlice'
 import { createUiSlice } from './slices/uiSlice'
-import { createClassSlice } from './slices/classSlice'
+import { createStyleRuleSlice } from './slices/styleRuleSlice'
 import { createFilesSlice } from './slices/filesSlice'
 import { createVisualComponentsSlice } from './slices/visualComponentsSlice'
 import { createSettingsSlice, bindSettingsBridgeStoreApi } from './slices/settingsSlice'
@@ -28,7 +28,7 @@ import { restoreStoredEditorLayout } from '@site/hooks/useEditorLayoutPersistenc
  *   - selectionSlice:      selectedNodeId, hoveredNodeId
  *   - canvasSlice:         zoom, pan, activeBreakpointId, canvasMode (Constraint #317)
  *   - uiSlice:             panel visibility, unsaved-changes flag, insert picker
- *   - classSlice:          CSS class CRUD + node↔class assignment (Phase C)
+ *   - styleRuleSlice:      style-rule (class + ambient) CRUD + node↔class assignment
  *   - filesSlice:          SiteFile CRUD (Contribution #595 / Task #429)
  *   - visualComponentsSlice: VisualComponent CRUD (Contribution #619 / Task #436)
  *   - settingsSlice:       settings modal open/close + active section (Guideline #193/#323)
@@ -61,7 +61,7 @@ export const useEditorStore = create<EditorStore>()(
         ...createSelectionSlice(...args),
         ...createCanvasSlice(...args),
         ...createUiSlice(...args),
-        ...createClassSlice(...args),
+        ...createStyleRuleSlice(...args),
         ...createFilesSlice(...args),
         ...createVisualComponentsSlice(...args),
         ...createSettingsSlice(...args),

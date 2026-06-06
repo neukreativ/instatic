@@ -1,5 +1,5 @@
 /**
- * classSlice tests — Phase C CSS Class System
+ * styleRuleSlice tests — CSS style-rule (class + ambient) system
  *
  * Covers:
  * - createClass / renameClass / deleteClass CRUD
@@ -59,7 +59,7 @@ function historyLength() {
 // createClass
 // ---------------------------------------------------------------------------
 
-describe('classSlice.createClass', () => {
+describe('styleRuleSlice.createClass', () => {
   it('creates a class and adds it to site.styleRules', () => {
     setupSite()
     const cls = getStore().createClass('btn')
@@ -110,7 +110,7 @@ describe('classSlice.createClass', () => {
 // updateClassStyles
 // ---------------------------------------------------------------------------
 
-describe('classSlice.updateClassStyles', () => {
+describe('styleRuleSlice.updateClassStyles', () => {
   it('shallow-merges a patch into base styles', () => {
     setupSite()
     const cls = getStore().createClass('btn')
@@ -149,7 +149,7 @@ describe('classSlice.updateClassStyles', () => {
 // clearClassStyleProperties — batch prune (orphan-prune scenario)
 // ---------------------------------------------------------------------------
 
-describe('classSlice.clearClassStyleProperties', () => {
+describe('styleRuleSlice.clearClassStyleProperties', () => {
   it('clears several properties from base + every context in one undo step', () => {
     setupSite()
     const cls = getStore().createClass('row')
@@ -183,7 +183,7 @@ describe('classSlice.clearClassStyleProperties', () => {
 // setClassContextStyles
 // ---------------------------------------------------------------------------
 
-describe('classSlice.setClassContextStyles', () => {
+describe('styleRuleSlice.setClassContextStyles', () => {
   it('creates a breakpoint override entry and patches it', () => {
     setupSite()
     const cls = getStore().createClass('btn')
@@ -224,7 +224,7 @@ describe('classSlice.setClassContextStyles', () => {
 // removeClassStyleProperty
 // ---------------------------------------------------------------------------
 
-describe('classSlice.removeClassStyleProperty', () => {
+describe('styleRuleSlice.removeClassStyleProperty', () => {
   it('removes the property from base styles', () => {
     setupSite()
     const cls = getStore().createClass('btn')
@@ -284,7 +284,7 @@ describe('classSlice.removeClassStyleProperty', () => {
 // renameClass
 // ---------------------------------------------------------------------------
 
-describe('classSlice.renameClass', () => {
+describe('styleRuleSlice.renameClass', () => {
   it('renames a class', () => {
     setupSite()
     const cls = getStore().createClass('btn')
@@ -329,7 +329,7 @@ describe('classSlice.renameClass', () => {
 // deleteClass
 // ---------------------------------------------------------------------------
 
-describe('classSlice.deleteClass', () => {
+describe('styleRuleSlice.deleteClass', () => {
   it('removes the class from the registry', () => {
     setupSite()
     const cls = getStore().createClass('btn')
@@ -373,7 +373,7 @@ describe('classSlice.deleteClass', () => {
 // duplicateClass
 // ---------------------------------------------------------------------------
 
-describe('classSlice.duplicateClass', () => {
+describe('styleRuleSlice.duplicateClass', () => {
   it('copies styles and breakpoint styles without copying node assignments', () => {
     const { childId } = setupSite()
     const original = getStore().createClass('card', { padding: '16px', color: '#111' })
@@ -412,7 +412,7 @@ describe('classSlice.duplicateClass', () => {
 // addNodeClass / removeNodeClass / reorderNodeClasses
 // ---------------------------------------------------------------------------
 
-describe('classSlice — node class assignment', () => {
+describe('styleRuleSlice — node class assignment', () => {
   it('addNodeClass appends a classId to the node', () => {
     const { childId } = setupSite()
     const cls = getStore().createClass('btn')
@@ -483,7 +483,7 @@ describe('classSlice — node class assignment', () => {
 // class hover preview
 // ---------------------------------------------------------------------------
 
-describe('classSlice — class hover preview', () => {
+describe('styleRuleSlice — class hover preview', () => {
   it('stores a preview assignment without mutating node classIds or site timestamps', () => {
     const { childId } = setupSite()
     const cls = getStore().createClass('preview-me')
@@ -521,7 +521,7 @@ describe('classSlice — class hover preview', () => {
 // activeClassId
 // ---------------------------------------------------------------------------
 
-describe('classSlice.setActiveClass', () => {
+describe('styleRuleSlice.setActiveClass', () => {
   it('sets activeClassId to a string value', () => {
     freshStore()
     getStore().setActiveClass('abc')
@@ -551,7 +551,7 @@ describe('classSlice.setActiveClass', () => {
 // undo / redo integration for class mutations
 // ---------------------------------------------------------------------------
 
-describe('classSlice — undo / redo', () => {
+describe('styleRuleSlice — undo / redo', () => {
   it('createClass is undoable and redoable', () => {
     const { childId } = setupSite()
     const cls = getStore().createClass('undoable')
@@ -688,7 +688,7 @@ describe('classSlice — undo / redo', () => {
 // working because it doesn't touch the tree at all.
 // ---------------------------------------------------------------------------
 
-describe('classSlice — node class assignment in VC canvas', () => {
+describe('styleRuleSlice — node class assignment in VC canvas', () => {
   /**
    * Set up a site that already contains one Visual Component with a root
    * node and a child node. Returns the relevant ids so tests can drive

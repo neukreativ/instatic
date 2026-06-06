@@ -12,7 +12,12 @@ import { join, relative } from 'path'
 
 const ROOT = join(import.meta.dir, '../../../')
 const SLICE_FILES = [
-  'src/admin/pages/site/store/slices/classSlice.ts',
+  'src/admin/pages/site/store/slices/styleRuleSlice.ts',
+  'src/admin/pages/site/store/slices/styleRule/crudActions.ts',
+  'src/admin/pages/site/store/slices/styleRule/conditionActions.ts',
+  'src/admin/pages/site/store/slices/styleRule/propertyActions.ts',
+  'src/admin/pages/site/store/slices/styleRule/registryActions.ts',
+  'src/admin/pages/site/store/slices/styleRule/assignmentActions.ts',
   'src/admin/pages/site/store/slices/clipboardSlice.ts',
   'src/admin/pages/site/store/slices/sitePanelSlice.ts',
 ]
