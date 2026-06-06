@@ -10,12 +10,14 @@ import type {
   SaveDataRowDraftInput,
   DataMeta,
 } from '@core/data/schemas'
+import type { DeletedRowSummary } from '@core/data/schemas'
 import {
   DataMetaSchema,
   DataRowSchema,
   DataTableListItemSchema,
   DataTableSchema,
   DataUserReferenceSchema,
+  DeletedRowSummarySchema,
 } from '@core/data/schemas'
 import type { SiteBundle } from '@core/data/bundleSchema'
 import { SiteBundleSchema } from '@core/data/bundleSchema'
@@ -52,6 +54,11 @@ const TableEnvelope = Type.Object(
 
 const RowEnvelope = Type.Object(
   { row: Type.Optional(DataRowSchema) },
+  { additionalProperties: true },
+)
+
+const DeletedRowEnvelope = Type.Object(
+  { row: Type.Optional(DeletedRowSummarySchema) },
   { additionalProperties: true },
 )
 
@@ -199,12 +206,16 @@ export async function deleteCmsDataRow(
   rowId: string,
   fetchImpl: FetchLike = globalThis.fetch.bind(globalThis),
   basePath = '/admin/api/cms',
-): Promise<DataRow> {
+): Promise<DeletedRowSummary> {
   const res = await fetchImpl(`${basePath}/data/rows/${encodeURIComponent(rowId)}`, {
     method: 'DELETE',
     credentials: 'include',
   })
-  const body = await readEnvelope(res, RowEnvelope, `CMS data row delete failed with ${res.status}`)
+  const body = await readEnvelope(
+    res,
+    DeletedRowEnvelope,
+    `CMS data row delete failed with ${res.status}`,
+  )
   if (!body.row) throw new Error('CMS data row delete response was missing row')
   return body.row
 }

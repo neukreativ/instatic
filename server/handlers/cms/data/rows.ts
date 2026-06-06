@@ -86,7 +86,9 @@ async function recordRowAuditEvent(
   user: AuthUser,
   req: Request,
   action: DataRowAuditAction,
-  row: DataRow,
+  // Only the identity fields are logged, so both a hydrated `DataRow` and the
+  // narrow `DeletedRowSummary` from a soft-delete satisfy this.
+  row: Pick<DataRow, 'id' | 'tableId' | 'slug'>,
   extraMetadata?: Record<string, unknown>,
 ): Promise<void> {
   await createAuditEvent(db, {

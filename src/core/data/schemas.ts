@@ -379,6 +379,25 @@ export const DataRowSchema = Type.Object({
 export type DataRow = Static<typeof DataRowSchema>
 
 // ---------------------------------------------------------------------------
+// DeletedRowSummary — the narrow shape returned by a soft-delete.
+//
+// A soft-deleted row is filtered out by the hydrated read (`deleted_at is null`),
+// so the delete mutation maps straight from `RETURNING` with NO user-ref joins.
+// The result therefore cannot carry `author` / `createdBy` / … — this type says
+// so honestly instead of pretending to be a fully-hydrated `DataRow`.
+// ---------------------------------------------------------------------------
+
+export const DeletedRowSummarySchema = Type.Object({
+  id: Type.String(),
+  tableId: Type.String(),
+  slug: Type.String(),
+  status: DataRowStatusSchema,
+  deletedAt: Type.Union([Type.String(), Type.Null()]),
+})
+
+export type DeletedRowSummary = Static<typeof DeletedRowSummarySchema>
+
+// ---------------------------------------------------------------------------
 // DataRowVersion — one row in data_row_versions.
 // ---------------------------------------------------------------------------
 

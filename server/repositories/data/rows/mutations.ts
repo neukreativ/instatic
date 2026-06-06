@@ -12,14 +12,16 @@
  * hydrated row through `getDataRow` so callers receive consistently populated
  * user references. Soft-delete is the exception: a soft-deleted row is filtered
  * out by `getDataRow`'s `deleted_at is null` clause, so the row is mapped
- * directly from RETURNING (without user references — the delete handler only
- * consumes id / tableId / slug for audit logging).
+ * directly from RETURNING. Because RETURNING carries no user-ref joins, the
+ * result is a narrow `DeletedRowSummary` (not a `DataRow`) — the delete callers
+ * only consume id / tableId / slug / status / deletedAt.
  */
 import { nanoid } from 'nanoid'
 import type { DbClient } from '../../../db/client'
-import type { DataRow } from '@core/data/schemas'
-import { bumpPublishVersion, withPublishLock } from '../../../publish/renderCache'
-import { mapRow, type DataRowRow, type CreateDataRowInput, type SaveDataRowDraftInput } from './mapper'
+import type { DataRow, DataRowStatus, DeletedRowSummary } from '@core/data/schemas'
+import { bumpPublishVersion, withPublishLock } from '../../../publish/publishState'
+import { type InsertDataRowInput, type UpdateDataRowDraftInput } from './mapper'
+import { toIsoOrNull } from '../shared'
 import { getDataRow } from './read'
 
 export type UpdateDataRowTableResult =
@@ -28,7 +30,7 @@ export type UpdateDataRowTableResult =
 
 export async function createDataRow(
   db: DbClient,
-  input: CreateDataRowInput,
+  input: InsertDataRowInput,
   actorUserId: string | null = null,
   pluginActorId: string | null = null,
 ): Promise<DataRow> {
@@ -65,7 +67,7 @@ export async function createDataRow(
 export async function saveDataRowDraft(
   db: DbClient,
   rowId: string,
-  input: SaveDataRowDraftInput,
+  input: UpdateDataRowDraftInput,
   actorUserId: string | null = null,
   pluginActorId: string | null = null,
 ): Promise<DataRow | null> {
@@ -87,27 +89,40 @@ export async function saveDataRowDraft(
  * Soft-delete is the one mutation that returns the row directly from
  * RETURNING rather than re-reading via `getDataRow`: the row now has
  * `deleted_at` set, so `getDataRow`'s `deleted_at is null` filter would mask
- * it. The handler only consumes id / tableId / slug for audit logging, so the
- * absence of hydrated user references on the returned shape is acceptable.
+ * it. RETURNING carries no user-ref joins, so the result cannot be a hydrated
+ * `DataRow` — it is a narrow `DeletedRowSummary` (id / tableId / slug / status /
+ * deletedAt), which is all the soft-delete callers consume (audit logging +
+ * artefact pruning).
  */
 export async function softDeleteDataRow(
   db: DbClient,
   rowId: string,
   actorUserId: string | null = null,
-): Promise<DataRow | null> {
-  const { rows } = await db<DataRowRow>`
+): Promise<DeletedRowSummary | null> {
+  const { rows } = await db<{
+    id: string
+    table_id: string
+    slug: string
+    status: DataRowStatus
+    deleted_at: string | Date | null
+  }>`
     update data_rows
     set deleted_at = current_timestamp,
         updated_by_user_id = ${actorUserId},
         updated_at = current_timestamp
     where id = ${rowId}
       and deleted_at is null
-    returning id, table_id, cells_json, slug, status,
-              author_user_id, created_by_user_id,
-              updated_by_user_id, published_by_user_id,
-              created_at, updated_at, published_at, deleted_at
+    returning id, table_id, slug, status, deleted_at
   `
-  return rows[0] ? mapRow(rows[0]) : null
+  const row = rows[0]
+  if (!row) return null
+  return {
+    id: row.id,
+    tableId: row.table_id,
+    slug: row.slug,
+    status: row.status,
+    deletedAt: toIsoOrNull(row.deleted_at),
+  }
 }
 
 /**

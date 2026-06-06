@@ -59,11 +59,11 @@ interface DataTableRow {
   primary_field_id: string
   fields_json?: unknown
   /**
-   * Optional until the Step 2 migration adds the column. The DB column
-   * (`integer not null default 0`) is absent until then; repositories default
-   * to `false` via `Boolean(row.system ?? 0)` in `mapTable`.
+   * The `system` column is `not null default 0` (SQLite) / `default false`
+   * (Postgres), so every read carries a concrete value. SQLite surfaces it as
+   * `0`/`1`, Postgres as a boolean — `mapTable` coerces both via `Boolean`.
    */
-  system?: number | boolean
+  system: number | boolean
   created_by_user_id: string | null
   updated_by_user_id: string | null
   /**
@@ -85,9 +85,7 @@ function mapTable(row: DataTableRow): DataTable {
     pluralLabel: row.plural_label,
     primaryFieldId: row.primary_field_id,
     fields: normalizeDataTableFields(row.fields_json),
-    // `system` column is added in the Step 2 migration. Until then, the row
-    // won't carry the field and we default to false via the nullish fallback.
-    system: Boolean(row.system ?? 0),
+    system: Boolean(row.system),
     createdByUserId: row.created_by_user_id ?? null,
     updatedByUserId: row.updated_by_user_id ?? null,
     createdAt: toIso(row.created_at),
@@ -194,7 +192,7 @@ export async function createDataTable(
       ${input.updatedByUserId ?? input.createdByUserId ?? null}
     )
     returning id, name, slug, kind, route_base, singular_label, plural_label,
-              primary_field_id, fields_json,
+              primary_field_id, fields_json, system,
               created_by_user_id, updated_by_user_id, created_at, updated_at
   `
   const table = mapTable(rows[0])
@@ -237,7 +235,7 @@ export async function updateDataTable(
     where id = ${tableId}
       and deleted_at is null
     returning id, name, slug, kind, route_base, singular_label, plural_label,
-              primary_field_id, fields_json,
+              primary_field_id, fields_json, system,
               created_by_user_id, updated_by_user_id, created_at, updated_at
   `
   return rows[0] ? mapTable(rows[0]) : null
@@ -293,9 +291,8 @@ export async function insertDataTableIfAbsent(
  * rows. Both guards live in the repository so other callers (CLI tools,
  * future migrations) inherit the safety check.
  *
- * System status is determined by `table.system === true`. The `system` column
- * is added to `data_tables` in the Step 2 migration; until then all rows have
- * `system: false` in the TypeScript representation (see `mapTable`).
+ * System status is determined by `table.system === true` (the `system` column,
+ * `not null default false`, surfaced through `mapTable`).
  */
 export async function softDeleteDataTable(
   db: DbClient,
@@ -322,7 +319,7 @@ export async function softDeleteDataTable(
     where id = ${tableId}
       and deleted_at is null
     returning id, name, slug, kind, route_base, singular_label, plural_label,
-              primary_field_id, fields_json,
+              primary_field_id, fields_json, system,
               created_by_user_id, updated_by_user_id, created_at, updated_at
   `
   return rows[0] ? mapTable(rows[0]) : null
