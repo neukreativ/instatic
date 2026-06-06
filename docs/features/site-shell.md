@@ -133,10 +133,10 @@ type SiteSettings = {
 ```
 
 `framework` holds the structured design token system (`src/core/framework/`). When present it carries:
-- `colors.tokens` — `FrameworkColorToken[]`, each with a slug (becomes a CSS var like `--primary`), light/dark values, utility generation flags (text/background/border/fill), shade/tint variant counts.
+- `colors.tokens` — `FrameworkColorToken[]`, each with a slug (becomes a CSS var like `--primary`), light/dark values, utility generation flags (text/background/border/fill), shade/tint variant counts. Slugs are normalized by `normalizeFrameworkColorSlug` (trim, lowercase, strip leading `--`, replace non-alphanumeric runs with `-`). When two tokens normalize to the same root slug, the second receives a `-2` suffix, the third `-3`, and so on — resolved in generation order via `buildColorSlugMap` so the earlier token keeps the base name.
 - `typography` — `FrameworkTypographySettings` with fluid scale groups, each emitting `font-size` vars + optional utility classes.
 - `spacing` — `FrameworkSpacingSettings` with fluid spacing scale groups, each emitting spacing vars + optional utility classes.
-- `preferences` — root font size, fluid clamp anchors, tree-shake flag.
+- `preferences` — root font size (`rootFontSize`, constrained `>= 1` at schema level to guard the `px → rem` divisor), fluid clamp screen-width anchors (`minScreenWidth`, `maxScreenWidth`), `isRem` (emit `rem` vs `px`), and `treeShakeGeneratedFrameworkUtilities` flag.
 
 The Colors / Framework Scale / Typography panels write to these sub-trees. All values are emitted into the published `framework.css` by `buildSiteFrameworkCss(site)` via `buildFrameworkPlan(settings)`, which returns the merged `:root` variable block and the locked utility classes from a single ordered traversal per family. (`generateFrameworkRootCss` / `generateFrameworkUtilityClasses` remain for single-output callers such as the canvas preview and the editor's class reconciler.)
 
@@ -465,7 +465,7 @@ A plugin canvas module can then `import * as THREE from 'three'` and it resolves
   - `src/core/page-tree/breakpoint.ts` — `BreakpointSchema`, `DEFAULT_BREAKPOINTS`
   - `src/core/page-tree/condition.ts` — `ConditionDefSchema`, `conditionId`, `conditionLabel`, `makeConditionDef`, `parseConditions`
   - `src/core/page-tree/styleRule.ts` — `StyleRuleSchema`
-  - `src/core/framework-schema/schemas.ts` — `FrameworkSettingsSchema`, `FrameworkColorToken`, `FrameworkColorSettings`, `GeneratedClassMetadataSchema` (pure leaf — no engine dependency)
+  - `src/core/framework-schema/schemas.ts` — `FrameworkSettingsSchema`, `FrameworkColorToken`, `FrameworkColorSettings`, `FrameworkPreferencesSettingsSchema`, `GeneratedClassMetadataSchema` (pure leaf — no engine dependency)
   - `src/core/framework/generate.ts` — `buildFrameworkPlan`, `generateFrameworkRootCss`, `generateFrameworkUtilityClasses`
   - `src/core/fonts/schemas.ts` — `SiteFontsSettingsSchema`, `FontEntry`, `FontToken`
   - `src/core/fonts/css.ts` — `generateFontsCss`
