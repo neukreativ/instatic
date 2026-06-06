@@ -109,7 +109,54 @@ Class order matters — drag-reorder is supported for assigned class pills.
 
 At render time, `classNamesForClassIds(classIds, registry)` returns the rendered class names that go onto the element's `class=` attribute. `injectNodeClassIds(html, node, site)` in the publisher splices them into the root tag.
 
-When the user selects a rule from the Selectors Panel, the Properties Panel enters **selector-editing mode** — the panel body shows style controls for that rule instead of a page node. The panel header renders `SelectorHeader`, which displays the rule's CSS selector and (for non-generated, non-locked rules) provides inline rename and delete actions. Delete opens `DeleteSelectorDialog` for confirmation. Both actions are gated by `canEditStyle && !isGeneratedClassLocked(cls)`.
+When the user selects a rule from the Selectors Panel, the Properties Panel enters **selector-editing mode** — the panel body shows style controls for that rule instead of a page node. The panel header renders `SelectorHeader`, which displays the rule's CSS selector and a usage badge (`resolveSelectorUsage` → `{ label: string | null }`; `null` renders no badge). For non-generated, non-locked rules, the header also provides inline rename and delete actions. `DeleteSelectorDialog` repeats the usage string so the user understands the impact before confirming. Both actions are gated by `canEditStyle && !isGeneratedClassLocked(cls)`.
+
+---
+
+## Selectors Panel
+
+The Selectors Panel (`src/admin/pages/site/panels/SelectorsPanel/SelectorsPanel.tsx`) is the global style rule browser. It lists every rule that passes `isUserVisibleClass` (user-defined and framework-generated; scoped instance rules are excluded).
+
+**Filter bar — four tabs:**
+
+| Tab     | Shows                                                          |
+|---------|----------------------------------------------------------------|
+| All     | All reusable rules                                             |
+| User    | Rules where `!isGeneratedClass(cls)`                           |
+| Utility | Rules where `isGeneratedClass(cls)`                            |
+| Unused  | Rules where `resolveSelectorUsage(...).unused === true`         |
+
+**Search** (`normalizeSelectorQuery` + `selectorMatchesQuery`) matches against:
+1. The rule's selector token (name or ambient selector text).
+2. All declared CSS property names (`font-size`, `background-color`).
+3. `name:value` pairs (`font-size:16px`) across base styles and every context override.
+
+Searching `font-size: 16px` (with or without the space) matches only rules with that exact declaration — not just by name.
+
+**Usage badges:** each row receives `usage: string | null` from `resolveSelectorUsage`. `null` renders no badge. Class rules show the exact reference count (`"Used 2 times"`, `"Unused"`); ambient rules show `"Unused"` only when provably dead (see **Usage tracking** below), `null` otherwise.
+
+**Multi-select:** clicking a row's checkbox enters multi-select mode. The Properties Panel switches to the bulk inspector (`MultiSelectorInspector`), which exposes Apply-to-element, Duplicate, and Delete. "Select all" selects every row passing the current filter, not the whole registry.
+
+**Rendering:** rows are mounted in batches of 100 (`SELECTOR_PAGE_SIZE`). An `IntersectionObserver` on a tail sentinel reveals the next batch as the user scrolls. `useDeferredValue` defers the real rows by one commit so a skeleton appears instantly on panel open.
+
+---
+
+## Usage tracking
+
+All usage logic lives in `src/admin/pages/site/panels/selectorUsage.ts`.
+
+**Class rules** are referenced via `node.classIds`, so the count is exact. `buildSelectorUsageMap(site)` makes a single O(pages × nodes) pass over every `page.nodes`, tallying each `classId` in one `Map<classId, count>`. Classes with zero references are absent (callers default to 0). This map is shared between the Selectors Panel and `usePropertiesPanelData` — the cost is paid once per render.
+
+**Ambient rules** are not referenced in `classIds`; they match elements by CSS selector. Their per-id count is always 0, which made every ambient row show a misleading "Unused". The panel now uses a conservative heuristic: a rule is only claimed unused when provably dead — when EVERY comma-separated group is anchored on a class token that no node uses.
+
+`buildClassTokenUsageMap(classes, usageById)` maps each class-kind rule's `.name` selector token to its node count. `isAmbientSelectorProvablyDead(cls, classTokenUsage)` splits the ambient selector on commas and tests each group: it extracts class tokens (`.foo`, `.nav-links`), looks them up in the token map, and returns `true` only if at least one class token in EVERY group has count 0. Groups with no evaluable class token (tag-only, `*`, `:nth-child`, unknown tokens) are treated as possibly-live — the function never claims a false "Unused".
+
+`resolveSelectorUsage(cls, usageById, classTokenUsage)` → `SelectorUsage { label: string | null; unused: boolean }`:
+
+- **Class rule**: `label = formatSelectorUsage(count)` (`"Unused"` / `"Used 1 time"` / `"Used N times"`); `unused = count === 0`.
+- **Ambient rule**: provably dead → `{ label: 'Unused', unused: true }`; otherwise → `{ label: null, unused: false }`.
+
+`label: null` is the explicit "no badge" signal — the usage cannot be assessed accurately, not that the rule is live.
 
 ---
 
@@ -357,9 +404,10 @@ Nodes that reference the rule by id keep working — only the rendered CSS outpu
   - `src/admin/pages/site/panels/PropertiesPanel/useClassPickerDerivedState.ts` — derives selector model, suggestions, and keyboard-nav indices
   - `src/admin/pages/site/panels/PropertiesPanel/ClassPillContextMenu.tsx` — context menu portal for class pill right-click / keyboard-menu actions
   - `src/admin/pages/site/panels/PropertiesPanel/ClassRenameDialog.tsx` — rename dialog for class selectors
-  - `src/admin/pages/site/panels/PropertiesPanel/SelectorHeader.tsx` — selector name, inline rename, and delete shown in the Properties Panel header during selector-editing mode
+  - `src/admin/pages/site/panels/PropertiesPanel/SelectorHeader.tsx` — selector name, inline rename, delete, and usage badge shown in the Properties Panel header during selector-editing mode
   - `src/admin/pages/site/panels/SelectorDialogs.tsx` — `SelectorNameDialog`, `DeleteSelectorDialog`; shared dialog components for selector editing surfaces
   - `src/admin/pages/site/panels/SelectorsPanel/SelectorContextMenu.tsx` — right-click context menu for selector rows
+  - `src/admin/pages/site/panels/selectorUsage.ts` — `buildSelectorUsageMap`, `buildClassTokenUsageMap`, `resolveSelectorUsage`, `isAmbientSelectorProvablyDead`, `formatSelectorUsage`, `normalizeSelectorQuery`, `selectorMatchesQuery`, `getSelectorStyleSummary`; all usage tracking and search logic for the Selectors Panel
 - Gate tests:
   - `src/__tests__/architecture/framework-typography-spacing.test.ts`
   - `src/__tests__/architecture/task427-preview-class-css.test.ts`
