@@ -4,13 +4,13 @@ import type {
   FrameworkColorSettings,
   FrameworkColorToken,
   FrameworkColorUtilityType,
-} from './schemas'
+} from '@core/framework-schema'
 import { formatCssVariableBlock } from './cssVariables'
 
 export type {
   FrameworkColorSettings,
   FrameworkColorUtilityType,
-} from './schemas'
+} from '@core/framework-schema'
 
 export interface FrameworkColorVariable {
   name: string
@@ -38,7 +38,8 @@ interface FrameworkColorVariant {
   suffix: string
   variantName?: string
   variableName: (slug: string) => string
-  value: (base: string) => string
+  /** Returns the resolved CSS value, or null when the base color can't be parsed. */
+  value: (base: string) => string | null
 }
 
 const TRANSPARENT_STEPS = [5, 10, 20, 30, 40, 50, 60, 70, 80, 90] as const
@@ -69,9 +70,13 @@ export function generateFrameworkColorVariableSets(
     const slug = normalizeFrameworkColorSlug(token.slug)
     const variants = buildColorVariants(token)
     for (const variant of variants) {
-      light.push(toVariable(token, slug, variant, token.lightValue))
+      // An unparseable color (e.g. a non-hex/hsl format or garbage) yields null
+      // and emits no variable — we never raw-pass an unvalidated string.
+      const lightVariable = toVariable(token, slug, variant, token.lightValue)
+      if (lightVariable) light.push(lightVariable)
       if (token.darkModeEnabled) {
-        dark.push(toVariable(token, slug, variant, token.darkValue))
+        const darkVariable = toVariable(token, slug, variant, token.darkValue)
+        if (darkVariable) dark.push(darkVariable)
       }
     }
   }
@@ -105,7 +110,10 @@ export function formatFrameworkColorThemeCss(sets: FrameworkColorVariableSets): 
 }
 
 export function generateDefaultDarkColor(lightValue: string): string {
-  return shiftLightness(lightValue, 1, 1, 'shade')
+  // Best-effort default for the stored `darkValue` field (a string). When the
+  // light color can't be parsed there's no meaningful shade, so fall back to the
+  // trimmed light value — emission re-validates it through the sanitiser anyway.
+  return shiftLightness(lightValue, 1, 1, 'shade') ?? lightValue.trim()
 }
 
 export function generateFrameworkColorUtilityClasses(
@@ -170,10 +178,12 @@ function toVariable(
   slug: string,
   variant: FrameworkColorVariant,
   baseValue: string,
-): FrameworkColorVariable {
+): FrameworkColorVariable | null {
+  const value = variant.value(baseValue)
+  if (value === null) return null
   return {
     name: variant.variableName(slug),
-    value: variant.value(baseValue),
+    value,
     tokenId: token.id,
     slug,
     variantId: variant.id,
@@ -265,14 +275,18 @@ function utilityStyles(
   }
 }
 
-function normalizeColorValue(value: string): string {
+// All three color transforms validate at the boundary: they return null for any
+// value `parseColor` can't understand (anything that isn't hex or hsl/hsla —
+// e.g. rgb()/oklch()/named/color-mix). Callers skip null rather than raw-passing
+// an unvalidated string into the emitted `:root {}` block.
+function normalizeColorValue(value: string): string | null {
   const channels = parseColor(value)
-  return channels ? formatHsla(channels) : value.trim()
+  return channels ? formatHsla(channels) : null
 }
 
-function withAlpha(value: string, alpha: number): string {
+function withAlpha(value: string, alpha: number): string | null {
   const channels = parseColor(value)
-  if (!channels) return value.trim()
+  if (!channels) return null
   return formatHsla({ ...channels, a: alpha })
 }
 
@@ -281,9 +295,9 @@ function shiftLightness(
   index: number,
   count: number,
   mode: 'shade' | 'tint',
-): string {
+): string | null {
   const channels = parseColor(value)
-  if (!channels) return value.trim()
+  if (!channels) return null
   const ratio = index / (count + 1)
   const nextLightness = mode === 'shade'
     ? channels.l * (1 - ratio * 0.8)

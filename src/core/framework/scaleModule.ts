@@ -22,7 +22,7 @@
 
 import type { StyleRule, CSSPropertyBag } from '@core/page-tree'
 import { classKindSelector } from '@core/page-tree'
-import type { FrameworkScaleManualSize, FrameworkScaleMode } from './schemas'
+import type { FrameworkScaleManualSize, FrameworkScaleMode } from '@core/framework-schema'
 import {
   computeFluidScale,
   convertToVariableDeclarationName,
@@ -266,7 +266,11 @@ export function createFrameworkScaleModule<
 
         const styles = buildUtilityStyles(propertyKeymap, generator.property, `var(${variableName})`)
         const id = `framework:${family}:${group.id}:${generator.id}:${step}`
-        const now = group.updatedAt || Date.now()
+        // Static-0 contract: generated utility classes must be a pure function of
+        // settings. `updatedAt` defaults to 0 in the schema; the reconciler
+        // preserves real timestamps, so falling back to 0 (not Date.now()) keeps
+        // generateUtilityClasses deterministic.
+        const now = group.updatedAt || 0
         classes[id] = {
           id,
           name: className,

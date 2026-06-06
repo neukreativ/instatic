@@ -88,39 +88,9 @@ export function safeUrl(value: unknown): string {
 // CSS value sanitisation
 // ---------------------------------------------------------------------------
 
-/**
- * Sanitise a CSS property value — block dangerous CSS injection patterns.
- *
- * This is the CANONICAL implementation. Both ClassStyleInjector.tsx (editor live
- * preview) and buildStyle() in escape.ts (module CSS) must import and call THIS
- * function. No per-file reimplementations (Constraint #228 / same pattern that
- * fixed CWE-116 for HTML escaping in Contribution #393).
- *
- * Guards against:
- * - `expression(...)` — IE CSS expression(), executes JS (CWE-79 via CSS)
- * - `javascript:` — invalid in CSS but historically exploited in some parsers
- * - `behavior:` / `-moz-binding:` — legacy IE/Gecko CSS code execution
- * - `data:text/` — data URI in CSS `url()` loads arbitrary HTML in some browsers
- * - `{` or `}` — closes/opens the surrounding class selector block,
- *               enabling injection of arbitrary CSS rules (CWE-74, Medium)
- * - `</` — close-tag-open bigram. Defence-in-depth against HTML5 RAWTEXT
- *          escape (`</style/>`, `</style/foo>`, etc.) breaking out of the
- *          inline `<style>` block. Legitimate CSS values never contain `</`
- *          — even URLs with paths use bare `/`. Pairs with the block-level
- *          neutraliser in `sanitizeModuleCSS` (CWE-79).
- *
- * Numbers are always safe — they are stringified and returned directly.
- * Returns the trimmed string value if safe, or `null` if the value must be dropped.
- */
-export function sanitiseCssValue(value: string | number): string | null {
-  if (typeof value === 'number') return String(value)
-  const v = value.trim()
-  if (/expression\s*\(/i.test(v)) return null
-  if (/javascript\s*:/i.test(v)) return null
-  if (/behavior\s*:/i.test(v)) return null
-  if (/-moz-binding/i.test(v)) return null
-  if (/data\s*:\s*text/i.test(v)) return null
-  if (/[{}]/.test(v)) return null
-  if (/<\//.test(v)) return null
-  return v
-}
+// The canonical `sanitiseCssValue` now lives in the dependency-free
+// `@core/css-sanitize` leaf so the framework engine can share it without a
+// framework→publisher cycle. Re-exported here so publisher-side consumers
+// (classCss, base modules, editor canvas) keep importing it from
+// `@core/publisher` unchanged. See `@core/css-sanitize` for the full doc.
+export { sanitiseCssValue } from '@core/css-sanitize'
