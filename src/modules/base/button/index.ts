@@ -8,17 +8,15 @@
 import type { ModuleDefinition } from '@core/module-engine'
 import { registry } from '@core/module-engine'
 import { CursorClickSolidIcon } from 'pixel-art-icons/icons/cursor-click-solid'
-import { safeUrl } from '@modules/base/utils/escape'
 import { Type, Value, type Static } from '@core/utils/typeboxHelpers'
+import { AnchorTargetSchema, ANCHOR_TARGET_OPTIONS, anchorRel } from '@modules/base/shared/anchorTarget'
+import { resolveButtonAnchor } from './anchor'
 import { ButtonEditor } from './ButtonEditor'
 
 const ButtonPropsSchema = Type.Object({
   label: Type.String({ default: 'Get Started' }),
   href: Type.String({ default: '' }),
-  target: Type.Union(
-    [Type.Literal('_self'), Type.Literal('_blank'), Type.Literal('_parent')],
-    { default: '_self' },
-  ),
+  target: AnchorTargetSchema,
   disabled: Type.Boolean({ default: false }),
 })
 
@@ -44,11 +42,7 @@ export const ButtonModule: ModuleDefinition<ButtonStoredProps> = {
       // structural one — exposed to the Client role.
       category: 'content',
       condition: { field: 'href', notEq: '' },
-      options: [
-        { label: 'Same tab', value: '_self' },
-        { label: 'New tab', value: '_blank' },
-        { label: 'Parent', value: '_parent' },
-      ],
+      options: [...ANCHOR_TARGET_OPTIONS],
     },
     disabled: { type: 'toggle', label: 'Disabled' },
   },
@@ -59,17 +53,15 @@ export const ButtonModule: ModuleDefinition<ButtonStoredProps> = {
 
   component: ButtonEditor,
 
-  htmlTag: (props) => {
-    const href = safeUrl(props.href)
-    return href && href !== '#' ? 'a' : 'button'
-  },
+  htmlTag: (props) => (resolveButtonAnchor(props.href) ? 'a' : 'button'),
 
   render: (props) => {
-    const href = safeUrl(props.href)
     const label = String(props.label ?? '')
-    const rel = props.target === '_blank' ? ' rel="noopener noreferrer"' : ''
-    if (href && href !== '#') {
-      return { html: `<a href="${href}" target="${String(props.target)}"${rel}>${label}</a>` }
+    const anchor = resolveButtonAnchor(props.href)
+    if (anchor) {
+      const rel = anchorRel(props.target)
+      const relAttr = rel ? ` rel="${rel}"` : ''
+      return { html: `<a href="${anchor.href}" target="${String(props.target)}"${relAttr}>${label}</a>` }
     }
     const disabledAttr = props.disabled ? ' disabled aria-disabled="true"' : ''
     return { html: `<button type="button"${disabledAttr}>${label}</button>` }

@@ -8,6 +8,7 @@ import type { ModuleDefinition } from '@core/module-engine'
 import { registry } from '@core/module-engine'
 import { Type, Value, type Static } from '@core/utils/typeboxHelpers'
 import { ListBoxSolidIcon } from 'pixel-art-icons/icons/list-box-solid'
+import { parseItems } from './items'
 import { ListEditor } from './ListEditor'
 
 const ListPropsSchema = Type.Object({
@@ -18,13 +19,6 @@ const ListPropsSchema = Type.Object({
 })
 
 export type ListStoredProps = Static<typeof ListPropsSchema>
-
-function parseItems(raw: string): string[] {
-  return raw
-    .split('\n')
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0)
-}
 
 export const ListModule: ModuleDefinition<ListStoredProps> = {
   id: 'base.list',

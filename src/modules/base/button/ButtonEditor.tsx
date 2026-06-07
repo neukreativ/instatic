@@ -11,6 +11,8 @@
  */
 import React from 'react'
 import type { ModuleComponentProps } from '@core/module-engine'
+import { anchorRel } from '@modules/base/shared/anchorTarget'
+import { resolveButtonAnchor } from './anchor'
 import type { ButtonStoredProps } from './index'
 
 export const ButtonEditor: React.FC<ModuleComponentProps<ButtonStoredProps>> = ({
@@ -19,14 +21,14 @@ export const ButtonEditor: React.FC<ModuleComponentProps<ButtonStoredProps>> = (
   nodeWrapperProps,
 }) => {
   const label = props.label || 'Button'
-  if (props.href) {
-    const rel = props.target === '_blank' ? 'noopener noreferrer' : undefined
+  const anchor = resolveButtonAnchor(props.href)
+  if (anchor) {
     return (
       <a
         {...nodeWrapperProps}
-        href={props.href}
+        href={anchor.href}
         target={props.target}
-        rel={rel}
+        rel={anchorRel(props.target) ?? undefined}
         className={mcClassName}
       >
         {label}

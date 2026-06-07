@@ -9,15 +9,14 @@ import { registry } from '@core/module-engine'
 import { LinkIcon } from 'pixel-art-icons/icons/link'
 import { safeUrl } from '@modules/base/utils/escape'
 import { Type, Value, type Static } from '@core/utils/typeboxHelpers'
+import { AnchorTargetSchema, ANCHOR_TARGET_OPTIONS, anchorRel } from '@modules/base/shared/anchorTarget'
+import { linkUsesChildren } from './content'
 import { LinkEditor } from './LinkEditor'
 
 const LinkPropsSchema = Type.Object({
   href: Type.String({ default: '#' }),
   text: Type.String({ default: 'Click here' }),
-  target: Type.Union(
-    [Type.Literal('_self'), Type.Literal('_blank'), Type.Literal('_parent')],
-    { default: '_self' },
-  ),
+  target: AnchorTargetSchema,
 })
 
 export type LinkStoredProps = Static<typeof LinkPropsSchema>
@@ -38,11 +37,7 @@ export const LinkModule: ModuleDefinition<LinkStoredProps> = {
     target: {
       type: 'select',
       label: 'Target',
-      options: [
-        { label: 'Same tab', value: '_self' },
-        { label: 'New tab', value: '_blank' },
-        { label: 'Parent', value: '_parent' },
-      ],
+      options: [...ANCHOR_TARGET_OPTIONS],
     },
   },
 
@@ -56,11 +51,14 @@ export const LinkModule: ModuleDefinition<LinkStoredProps> = {
 
   render: (props, renderedChildren) => {
     const href = safeUrl(props.href)
-    const rel = props.target === '_blank' ? ' rel="noopener noreferrer"' : ''
+    const rel = anchorRel(props.target)
+    const relAttr = rel ? ` rel="${rel}"` : ''
     const targetAttr = ` target="${String(props.target)}"`
-    const content = renderedChildren.length > 0 ? renderedChildren.join('') : String(props.text ?? '')
+    const content = linkUsesChildren(renderedChildren.length)
+      ? renderedChildren.join('')
+      : String(props.text ?? '')
     return {
-      html: `<a href="${href}"${targetAttr}${rel}>${content}</a>`,
+      html: `<a href="${href}"${targetAttr}${relAttr}>${content}</a>`,
     }
   },
 }
