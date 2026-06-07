@@ -61,14 +61,17 @@ It walks an ordered `routes` array of `RouteHandler` functions. Each handler ret
 ```ts
 const routes: readonly RouteHandler[] = [
   tryServeHealth,                  // /health
-  tryServeAgent,                   // /admin/api/agent
-  tryServeAgentToolResult,         // /admin/api/agent/tool-result
-  tryServeCmsApi,                  // /admin/api/cms/*  → handlers/cms/index.ts
-  tryServeLoopRuntimeAsset,        // loop runtime asset (CMS-owned)
+  tryServeAi,                      // /admin/api/ai/*         → server/ai/handlers/
+  tryServeCmsApi,                  // /admin/api/cms/*        → handlers/cms/index.ts
+  tryServeLoopRuntimeAsset,        // /_instatic/loop-runtime.js (fixed CMS asset)
   tryServeLoop,                    // /_instatic/loop/*       → handlers/cms/loop.ts
+  tryServeHoleRuntimeAsset,        // /_instatic/hole-runtime.js (fixed CMS asset)
+  tryServeHole,                    // /_instatic/hole/*       → handlers/cms/hole.ts
+  tryServePublicFormRuntimeAsset,  // /_instatic/form-runtime.js (fixed CMS asset)
+  tryServePublicForm,              // /_instatic/form/*       → forms/handler.ts
   tryServeRuntimeAsset,            // /_instatic/assets/*     → published runtime assets
   tryServeRuntimePackageNamespace, // /_instatic/runtime/cache/<hash>/<...> → bun install workspace
-  tryServeSiteCssNamespace,        // /_instatic/css/* → hashed CSS bundles
+  tryServeSiteCssNamespace,        // /_instatic/css/*        → hashed CSS bundles
   tryServeMediaRedirect,           // /_instatic/media/<adapterId>/<path> → 302 to signed read URL
   tryServeStaticAsset,             // /assets/* → dist/ (admin app)
   tryServeUpload,                  // /uploads/* → uploadsDir (with nosniff hardening)
@@ -83,7 +86,7 @@ const routes: readonly RouteHandler[] = [
 
 Order matters. Two examples:
 
-- `tryServeCmsApi` is matched **after** `tryServeAgent` and `tryServeAgentToolResult` so the agent endpoints (under `/admin/api/agent*` — not `/admin/api/cms/*`) aren't swallowed by the CMS dispatcher.
+- `tryServeAi` is matched **before** `tryServeCmsApi` so the AI endpoints (`/admin/api/ai/*`) aren't swallowed by the broader CMS dispatcher (`/admin/api/cms/*`).
 - `tryServeUpload` is matched **before** `tryServeAdminApp` because `/uploads/...` is a sub-tree the SPA fallback would otherwise consume.
 
 Adding a new endpoint is a one-line edit to `routes` plus a focused `tryServeX` function.
@@ -200,6 +203,17 @@ Conventions:
 | `setCookieHeader(res, value)`    | Appends a `Set-Cookie` header                                        |
 
 `readValidatedBody` is the canonical body parser: it parses JSON and validates the shape against a TypeBox schema in one step, so handlers receive a fully typed value or return `badRequest` immediately.
+
+### Binary helpers (`server/binary.ts`)
+
+`server/binary.ts` provides two helpers for safely handing `Uint8Array` bytes to `Response` bodies and worker `postMessage` transfers:
+
+| Helper                             | Purpose                                                              |
+|------------------------------------|----------------------------------------------------------------------|
+| `toArrayBuffer(bytes: Uint8Array)` | Copies the view's logical range into a fresh, exactly-sized `ArrayBuffer`. Required because a `Uint8Array` is only a view — its `.buffer` may be larger (pooled or sliced backing store) and resolves to `ArrayBuffer \| SharedArrayBuffer` which transfer/body slots reject. |
+| `binaryResponse(bytes, init?)`     | Convenience wrapper: calls `toArrayBuffer` then wraps the result in a `new Response(...)`. Use for every "serve raw bytes" response in route handlers. |
+
+Use `binaryResponse` whenever a route handler returns binary content (runtime assets, CSS bundles, images). Use `toArrayBuffer` when bytes must cross a worker `postMessage` boundary as a transferable.
 
 **Error envelope.** Every CMS handler error returns `{ error: string }` and is validated client-side by `ErrorEnvelopeSchema` in `src/core/http/apiClient.ts` (re-exported from `responseSchemas.ts`). The canonical client `apiRequest` (and `readEnvelope`) extract the message via `responseErrorMessage(res, fallback)` and throw an `ApiError` carrying the HTTP status.
 
@@ -534,7 +548,8 @@ See [docs/reference/typebox-patterns.md](reference/typebox-patterns.md) for boun
 - Source-of-truth files:
   - `server/index.ts` — entrypoint and boot
   - `server/router.ts` — request dispatch
-  - `server/http.ts` — HTTP helpers
+  - `server/http.ts` — JSON / error HTTP helpers
+  - `server/binary.ts` — binary response helpers (`toArrayBuffer`, `binaryResponse`)
   - `server/handlers/cms/index.ts` — CMS dispatcher
   - `server/auth/authz.ts` — `requireCapability` and friends
   - `server/db/client.ts` — `DbClient` interface
