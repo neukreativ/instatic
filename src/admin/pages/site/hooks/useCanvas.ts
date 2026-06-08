@@ -246,48 +246,6 @@ export function useCanvas({ canvasRootRef, transformLayerRef, enabled }: UseCanv
     [canvasRootRef, transformLayerRef, applyTransformToDOM, setCanvasTransform],
   )
 
-  // ─── Prevent browser pinch-zoom on Mac trackpad ──────────────────────────
-  //
-  // @use-gesture/react bind() (without `target`) routes all gesture handlers
-  // through React's synthetic event system, which registers every listener as
-  // passive.  Passive listeners CANNOT call event.preventDefault(), so the
-  // browser applies its native Ctrl+scroll viewport zoom in addition to our
-  // canvas zoom — causing panels, toolbars, and everything else to scale.
-  //
-  // Two separate event families must be blocked:
-  //
-  //  1. WheelEvent with ctrlKey=true — macOS trackpad pinch in Chrome/Firefox.
-  //     Prevented at document level with { passive: false } so preventDefault()
-  //     is honoured.
-  //
-  //  2. GestureEvent (gesturestart / gesturechange) — Safari's proprietary
-  //     gesture API.  Safari routes trackpad pinch through these events before
-  //     (or instead of) WheelEvent.  Without this listener, Safari ignores the
-  //     wheel prevention and applies its native viewport zoom.
-  //
-  // Must be at document scope (not the canvas element) so the listener fires
-  // before the browser claims the gesture, regardless of where the pointer is.
-  // Same pattern used by Figma, Excalidraw, and Miro.
-  useEffect(() => {
-    if (!enabled) return
-    const preventWheelZoom = (e: WheelEvent) => {
-      if (e.ctrlKey || e.metaKey) e.preventDefault()
-    }
-    // Safari proprietary GestureEvent — always prevent when it fires inside
-    // the page; the canvas gesture handler (onPinch) provides the replacement.
-    const preventGestureZoom = (e: Event) => e.preventDefault()
-
-    // { passive: false } required — passive listeners cannot call preventDefault.
-    document.addEventListener('wheel', preventWheelZoom, { passive: false })
-    document.addEventListener('gesturestart', preventGestureZoom, { passive: false } as AddEventListenerOptions)
-    document.addEventListener('gesturechange', preventGestureZoom, { passive: false } as AddEventListenerOptions)
-    return () => {
-      document.removeEventListener('wheel', preventWheelZoom)
-      document.removeEventListener('gesturestart', preventGestureZoom)
-      document.removeEventListener('gesturechange', preventGestureZoom)
-    }
-  }, [enabled])
-
   // ─── Spacebar tracking (for Space+drag pan) ───────────────────────────────
 
   useEffect(() => {
@@ -485,10 +443,9 @@ export function useCanvas({ canvasRootRef, transformLayerRef, enabled }: UseCanv
       },
 
       onPinch: ({ movement: [scaleMovement], origin: [ox, oy], first, last }) => {
-        // event?.preventDefault() intentionally omitted — the document-level
-        // gesturestart/gesturechange listeners above handle Safari, and the
-        // document wheel listener handles Chrome/Firefox.  Calling preventDefault
-        // here would be on a passive React synthetic event and has no effect.
+        // event?.preventDefault() intentionally omitted. AdminZoomGuard blocks
+        // native browser zoom at document scope; this handler applies the
+        // replacement zoom to the canvas transform.
         const t = transformRef.current
         // `origin` is in page coordinates — convert to canvas-relative
         const canvasEl = transformLayerRef.current?.parentElement

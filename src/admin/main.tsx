@@ -4,6 +4,7 @@ import { flushSync } from 'react-dom'
 import { Router } from './lib/routing'
 import { AdminRoutes } from './router'
 import { AdminContextMenuGuard } from './shared/AdminContextMenuGuard'
+import { AdminZoomGuard } from './shared/AdminZoomGuard'
 import { ErrorBoundary, flattenErrorChain, logErrorChain } from '@ui/components/ErrorBoundary'
 import { ToastProvider, pushToast } from '@ui/components/Toast'
 import '../styles/globals.css'
@@ -113,6 +114,7 @@ flushSync(() => {
         <Router>
           <AdminRoutes />
         </Router>
+        <AdminZoomGuard />
         <AdminContextMenuGuard />
       </ErrorBoundary>
       <ToastProvider />
