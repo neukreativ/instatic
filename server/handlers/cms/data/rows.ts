@@ -10,8 +10,9 @@
  *   PATCH  /admin/api/cms/data/rows/:id/author          — reassign the author
  *   PATCH  /admin/api/cms/data/rows/:id/table           — move row to a new table
  *
- * `handleDataRowRoutes` is the dispatcher; one function below per URL pattern
- * owns its own method-routing, body-parsing, and audit emission.
+ * `handleDataRowRoutes` runs a flat `DATA_ROW_ROUTES` table through the shared
+ * `runRouteTable` dispatcher (`../routeTable.ts`); one handler below per
+ * `(method, pattern)` owns its own body-parsing and audit emission.
  */
 import type { DbClient } from '../../../db/client'
 import type { AuthUser } from '../../../repositories/users'
@@ -38,9 +39,10 @@ import {
 } from '../../../repositories/data'
 import { findUserById } from '../../../repositories/users'
 import { slugForTable } from '@core/data/cells'
-import { badRequest, jsonResponse, methodNotAllowed, readValidatedBody } from '../../../http'
+import { badRequest, jsonResponse, readValidatedBody } from '../../../http'
 import type { CmsHandlerOptions } from '../shared'
 import { CMS_API_PREFIX, requestAuditContext } from '../shared'
+import { runRouteTable, type Route, type RouteParams } from '../routeTable'
 import {
   RowAuthorBodySchema,
   RowScheduleBodySchema,
@@ -128,93 +130,103 @@ async function loadRowForAccess(
 async function handleListAuthors(req: Request, db: DbClient): Promise<Response> {
   const user = await requireDataAuthorManager(req, db)
   if (user instanceof Response) return user
-  if (req.method !== 'GET') return methodNotAllowed()
   return jsonResponse({ authors: await listDataAuthorOptions(db) })
 }
 
-async function handleRowItem(
+// GET reads (broader access); PATCH and DELETE mutate (editor-only) — the gate
+// split that used to live inside one multi-method `handleRowItem` now rides the
+// route table, one handler per method.
+async function handleRowItemGet(
   req: Request,
   db: DbClient,
-  rowId: string,
-  options: CmsHandlerOptions,
+  params: RouteParams,
 ): Promise<Response> {
-  // GET reads (broader access); PATCH and DELETE mutate (editor-only).
-  const user =
-    req.method === 'GET'
-      ? await requireDataAccess(req, db)
-      : await requireDataEditor(req, db)
+  const user = await requireDataAccess(req, db)
   if (user instanceof Response) return user
 
-  if (req.method === 'GET') {
-    const row = await loadRowForAccess(db, rowId, user, canReadDataRow)
-    if (row instanceof Response) return row
-    return jsonResponse({ row })
-  }
+  const row = await loadRowForAccess(db, params.id, user, canReadDataRow)
+  if (row instanceof Response) return row
+  return jsonResponse({ row })
+}
 
-  if (req.method === 'PATCH') {
-    const currentRow = await loadRowForAccess(db, rowId, user, canEditDataRow)
-    if (currentRow instanceof Response) return currentRow
+async function handleRowItemPatch(
+  req: Request,
+  db: DbClient,
+  params: RouteParams,
+): Promise<Response> {
+  const rowId = params.id
+  const user = await requireDataEditor(req, db)
+  if (user instanceof Response) return user
 
-    const body = await readValidatedBody(req, RowUpsertBodySchema)
-    if (!body) return badRequest('Invalid row payload')
+  const currentRow = await loadRowForAccess(db, rowId, user, canEditDataRow)
+  if (currentRow instanceof Response) return currentRow
 
-    const table = await getDataTable(db, currentRow.tableId)
-    if (!table) return rowNotFound()
+  const body = await readValidatedBody(req, RowUpsertBodySchema)
+  if (!body) return badRequest('Invalid row payload')
 
-    const rawCells = body.cells ?? currentRow.cells
-    // Run the `content.entry.cells` filter pipeline before persistence so
-    // plugins can validate / normalize / auto-fill cells — the same shared
-    // helper the plugin `cms.content.*` surface applies.
-    const cells = await applyContentEntryCellsFilter(rawCells, {
-      tableSlug: table.slug,
-      entryId: rowId,
-      actor: { kind: 'user', userId: user.id },
+  const table = await getDataTable(db, currentRow.tableId)
+  if (!table) return rowNotFound()
+
+  const rawCells = body.cells ?? currentRow.cells
+  // Run the `content.entry.cells` filter pipeline before persistence so
+  // plugins can validate / normalize / auto-fill cells — the same shared
+  // helper the plugin `cms.content.*` surface applies.
+  const cells = await applyContentEntryCellsFilter(rawCells, {
+    tableSlug: table.slug,
+    entryId: rowId,
+    actor: { kind: 'user', userId: user.id },
+  })
+  const slug = slugForTable(table, cells)
+
+  const row = await saveDataRowDraft(db, rowId, { cells, slug }, user.id)
+  if (!row) return rowNotFound()
+  // Changed cell ids: the patch's own keys plus any keys the filter added
+  // or rewrote. Plugins watch this list to loop-guard their own writes;
+  // false positives are fine, false negatives are not.
+  const patchedIds = body.cells ? Object.keys(body.cells) : []
+  const filterChangedIds = Object.keys(cells).filter((k) => cells[k] !== rawCells[k])
+  const changedFieldIds = [...new Set([...patchedIds, ...filterChangedIds])]
+  await emitContentEntryUpdated(db, rowId, changedFieldIds, { kind: 'user', userId: user.id })
+  await recordRowAuditEvent(db, user, req, 'data.row.update', row)
+  return jsonResponse({ row })
+}
+
+async function handleRowItemDelete(
+  req: Request,
+  db: DbClient,
+  params: RouteParams,
+  options: CmsHandlerOptions,
+): Promise<Response> {
+  const rowId = params.id
+  const user = await requireDataEditor(req, db)
+  if (user instanceof Response) return user
+
+  const currentRow = await loadRowForAccess(db, rowId, user, canEditDataRow)
+  if (currentRow instanceof Response) return currentRow
+
+  const row = await softDeleteDataRow(db, rowId, user.id)
+  if (!row) return rowNotFound()
+  // Prune the baked public artefact — a deleted row must stop being served
+  // by Layer A, which reads the disk slot with no DB awareness (ISS-039).
+  if (options.uploadsDir) {
+    await removeDataRowArtefact(db, options.uploadsDir, rowId, row.slug).catch((err) => {
+      console.error('[publish:row] failed to remove artefact for deleted row', rowId, err)
     })
-    const slug = slugForTable(table, cells)
-
-    const row = await saveDataRowDraft(db, rowId, { cells, slug }, user.id)
-    if (!row) return rowNotFound()
-    // Changed cell ids: the patch's own keys plus any keys the filter added
-    // or rewrote. Plugins watch this list to loop-guard their own writes;
-    // false positives are fine, false negatives are not.
-    const patchedIds = body.cells ? Object.keys(body.cells) : []
-    const filterChangedIds = Object.keys(cells).filter((k) => cells[k] !== rawCells[k])
-    const changedFieldIds = [...new Set([...patchedIds, ...filterChangedIds])]
-    await emitContentEntryUpdated(db, rowId, changedFieldIds, { kind: 'user', userId: user.id })
-    await recordRowAuditEvent(db, user, req, 'data.row.update', row)
-    return jsonResponse({ row })
   }
-
-  if (req.method === 'DELETE') {
-    const currentRow = await loadRowForAccess(db, rowId, user, canEditDataRow)
-    if (currentRow instanceof Response) return currentRow
-
-    const row = await softDeleteDataRow(db, rowId, user.id)
-    if (!row) return rowNotFound()
-    // Prune the baked public artefact — a deleted row must stop being served
-    // by Layer A, which reads the disk slot with no DB awareness (ISS-039).
-    if (options.uploadsDir) {
-      await removeDataRowArtefact(db, options.uploadsDir, rowId, row.slug).catch((err) => {
-        console.error('[publish:row] failed to remove artefact for deleted row', rowId, err)
-      })
-    }
-    await emitContentEntryDeleted(db, rowId, { kind: 'user', userId: user.id })
-    await recordRowAuditEvent(db, user, req, 'data.row.delete', row)
-    return jsonResponse({ row })
-  }
-
-  return methodNotAllowed()
+  await emitContentEntryDeleted(db, rowId, { kind: 'user', userId: user.id })
+  await recordRowAuditEvent(db, user, req, 'data.row.delete', row)
+  return jsonResponse({ row })
 }
 
 async function handleRowPublish(
   req: Request,
   db: DbClient,
-  rowId: string,
+  params: RouteParams,
   options: CmsHandlerOptions,
 ): Promise<Response> {
+  const rowId = params.id
   const user = await requireDataPublisher(req, db)
   if (user instanceof Response) return user
-  if (req.method !== 'POST') return methodNotAllowed()
 
   const currentRow = await loadRowForAccess(db, rowId, user, canPublishDataRow)
   if (currentRow instanceof Response) return currentRow
@@ -227,66 +239,74 @@ async function handleRowPublish(
   return jsonResponse(result)
 }
 
-async function handleRowSchedule(
+// Same RBAC as the publish endpoint — scheduling a publish is conceptually
+// "publish later", not a new permission. POST sets/replaces the schedule;
+// DELETE cancels a pending one. Each method re-runs the (idempotent) publisher
+// gate + row load so the route table can address them as separate entries.
+async function handleRowSchedulePost(
   req: Request,
   db: DbClient,
-  rowId: string,
+  params: RouteParams,
 ): Promise<Response> {
-  // Same RBAC as the existing publish endpoint — scheduling a publish
-  // is conceptually "publish later", not a new permission.
+  const rowId = params.id
   const user = await requireDataPublisher(req, db)
   if (user instanceof Response) return user
 
   const currentRow = await loadRowForAccess(db, rowId, user, canPublishDataRow)
   if (currentRow instanceof Response) return currentRow
 
-  // POST: set / replace the schedule.
-  if (req.method === 'POST') {
-    const body = await readValidatedBody(req, RowScheduleBodySchema)
-    if (!body) return badRequest('Body must be { at: ISO datetime }')
+  const body = await readValidatedBody(req, RowScheduleBodySchema)
+  if (!body) return badRequest('Body must be { at: ISO datetime }')
 
-    const when = new Date(body.at)
-    if (Number.isNaN(when.getTime())) {
-      return badRequest('Invalid datetime — must be a parseable ISO 8601 string')
-    }
-    if (when.getTime() <= Date.now()) {
-      return badRequest('Scheduled time must be in the future')
-    }
-    const whenIso = when.toISOString()
-
-    const row = await scheduleDataRowPublish(db, rowId, whenIso, user.id)
-    if (!row) return rowNotFound()
-    await recordRowAuditEvent(db, user, req, 'data.row.schedule', row, {
-      scheduledPublishAt: whenIso,
-    })
-    return jsonResponse({ row })
+  const when = new Date(body.at)
+  if (Number.isNaN(when.getTime())) {
+    return badRequest('Invalid datetime — must be a parseable ISO 8601 string')
   }
-
-  // DELETE: cancel a pending schedule, revert the row to draft.
-  if (req.method === 'DELETE') {
-    const row = await cancelScheduledPublish(db, rowId, user.id)
-    if (!row) {
-      // Either the row doesn't exist OR it wasn't scheduled. The repo
-      // function gates on `status = 'scheduled'`, so a non-scheduled
-      // row returns null. Surface a meaningful 404.
-      return rowNotFound()
-    }
-    await recordRowAuditEvent(db, user, req, 'data.row.schedule.cancel', row)
-    return jsonResponse({ row })
+  if (when.getTime() <= Date.now()) {
+    return badRequest('Scheduled time must be in the future')
   }
+  const whenIso = when.toISOString()
 
-  return methodNotAllowed()
+  const row = await scheduleDataRowPublish(db, rowId, whenIso, user.id)
+  if (!row) return rowNotFound()
+  await recordRowAuditEvent(db, user, req, 'data.row.schedule', row, {
+    scheduledPublishAt: whenIso,
+  })
+  return jsonResponse({ row })
+}
+
+async function handleRowScheduleDelete(
+  req: Request,
+  db: DbClient,
+  params: RouteParams,
+): Promise<Response> {
+  const rowId = params.id
+  const user = await requireDataPublisher(req, db)
+  if (user instanceof Response) return user
+
+  const currentRow = await loadRowForAccess(db, rowId, user, canPublishDataRow)
+  if (currentRow instanceof Response) return currentRow
+
+  const row = await cancelScheduledPublish(db, rowId, user.id)
+  if (!row) {
+    // Either the row doesn't exist OR it wasn't scheduled. The repo
+    // function gates on `status = 'scheduled'`, so a non-scheduled
+    // row returns null. Surface a meaningful 404.
+    return rowNotFound()
+  }
+  await recordRowAuditEvent(db, user, req, 'data.row.schedule.cancel', row)
+  return jsonResponse({ row })
 }
 
 async function handleRowStatus(
   req: Request,
   db: DbClient,
-  rowId: string,
+  params: RouteParams,
   options: CmsHandlerOptions,
 ): Promise<Response> {
+  const rowId = params.id
   const user = await requireDataEditor(req, db)
   if (user instanceof Response) return user
-  if (req.method !== 'PATCH') return methodNotAllowed()
 
   const body = await readValidatedBody(req, RowStatusBodySchema)
   if (!body) return badRequest('Status must be draft or unpublished')
@@ -310,11 +330,11 @@ async function handleRowStatus(
 async function handleRowAuthor(
   req: Request,
   db: DbClient,
-  rowId: string,
+  params: RouteParams,
 ): Promise<Response> {
+  const rowId = params.id
   const user = await requireDataAuthorManager(req, db)
   if (user instanceof Response) return user
-  if (req.method !== 'PATCH') return methodNotAllowed()
 
   const body = await readValidatedBody(req, RowAuthorBodySchema)
   if (!body || !body.authorUserId.trim()) return badRequest('Author is required')
@@ -345,8 +365,9 @@ async function handleRowAuthor(
 async function handleRowTable(
   req: Request,
   db: DbClient,
-  rowId: string,
+  params: RouteParams,
 ): Promise<Response> {
+  const rowId = params.id
   // Cross-collection move = structurally distinct from cell-level editing.
   // A junior editor with `content.edit.any` should not be able to take a
   // post out of Posts and into Drafts (breaks the URL — different route
@@ -354,7 +375,6 @@ async function handleRowTable(
   // separately. See G2 / B8 in the capabilities review.
   const user = await requireDataRowMover(req, db)
   if (user instanceof Response) return user
-  if (req.method !== 'PATCH') return methodNotAllowed()
 
   const body = await readValidatedBody(req, RowTableBodySchema)
   if (!body || !body.tableId.trim()) return badRequest('Table is required')
@@ -380,69 +400,34 @@ async function handleRowTable(
 }
 
 // ---------------------------------------------------------------------------
-// Route patterns
+// Route table + dispatcher
 // ---------------------------------------------------------------------------
 
-const ROW_PUBLISH_PATTERN = /^\/admin\/api\/cms\/data\/rows\/([^/]+)\/publish$/
-const ROW_SCHEDULE_PATTERN = /^\/admin\/api\/cms\/data\/rows\/([^/]+)\/schedule$/
-const ROW_STATUS_PATTERN = /^\/admin\/api\/cms\/data\/rows\/([^/]+)\/status$/
-const ROW_AUTHOR_PATTERN = /^\/admin\/api\/cms\/data\/rows\/([^/]+)\/author$/
-const ROW_TABLE_PATTERN = /^\/admin\/api\/cms\/data\/rows\/([^/]+)\/table$/
-const ROW_PREVIEW_PATTERN = /^\/admin\/api\/cms\/data\/rows\/([^/]+)\/preview$/
-const ROW_ITEM_PATTERN = /^\/admin\/api\/cms\/data\/rows\/([^/]+)$/
+// `(?<id>[^/]+)` cannot span a `/`, and every parameterised pattern is anchored
+// with `$`, so the sub-routes (`/publish`, `/schedule`, …) are mutually
+// exclusive with the bare `/rows/:id` item route — order is not load-bearing
+// for correctness. They are still declared specific-first to mirror the
+// original dispatcher and read top-down.
+const ROW_ITEM = `${CMS_API_PREFIX}/data/rows/(?<id>[^/]+)`
 
-// ---------------------------------------------------------------------------
-// Dispatcher
-// ---------------------------------------------------------------------------
+const DATA_ROW_ROUTES: readonly Route<[CmsHandlerOptions]>[] = [
+  { method: 'GET', pattern: `${CMS_API_PREFIX}/data/authors`, handler: handleListAuthors },
+  { method: 'POST', pattern: new RegExp(`^${ROW_ITEM}/publish$`), handler: handleRowPublish },
+  { method: 'POST', pattern: new RegExp(`^${ROW_ITEM}/schedule$`), handler: handleRowSchedulePost },
+  { method: 'DELETE', pattern: new RegExp(`^${ROW_ITEM}/schedule$`), handler: handleRowScheduleDelete },
+  { method: 'PATCH', pattern: new RegExp(`^${ROW_ITEM}/status$`), handler: handleRowStatus },
+  { method: 'PATCH', pattern: new RegExp(`^${ROW_ITEM}/author$`), handler: handleRowAuthor },
+  { method: 'PATCH', pattern: new RegExp(`^${ROW_ITEM}/table$`), handler: handleRowTable },
+  { method: 'POST', pattern: new RegExp(`^${ROW_ITEM}/preview$`), handler: handleRowPreview },
+  { method: 'GET', pattern: new RegExp(`^${ROW_ITEM}$`), handler: handleRowItemGet },
+  { method: 'PATCH', pattern: new RegExp(`^${ROW_ITEM}$`), handler: handleRowItemPatch },
+  { method: 'DELETE', pattern: new RegExp(`^${ROW_ITEM}$`), handler: handleRowItemDelete },
+]
 
 export async function handleDataRowRoutes(
   req: Request,
   db: DbClient,
   options: CmsHandlerOptions = {},
 ): Promise<Response | null> {
-  const { pathname } = new URL(req.url)
-
-  if (pathname === `${CMS_API_PREFIX}/data/authors`) {
-    return handleListAuthors(req, db)
-  }
-
-  // Sub-routes (`/publish`, `/status`, `/author`, `/table`) must match before
-  // the bare `/rows/:id` pattern, otherwise the latter swallows them (the
-  // regex `[^/]+` would match e.g. `abc/publish`).
-  const publishMatch = pathname.match(ROW_PUBLISH_PATTERN)
-  if (publishMatch) {
-    return handleRowPublish(req, db, decodeURIComponent(publishMatch[1]), options)
-  }
-
-  const scheduleMatch = pathname.match(ROW_SCHEDULE_PATTERN)
-  if (scheduleMatch) {
-    return handleRowSchedule(req, db, decodeURIComponent(scheduleMatch[1]))
-  }
-
-  const statusMatch = pathname.match(ROW_STATUS_PATTERN)
-  if (statusMatch) {
-    return handleRowStatus(req, db, decodeURIComponent(statusMatch[1]), options)
-  }
-
-  const authorMatch = pathname.match(ROW_AUTHOR_PATTERN)
-  if (authorMatch) {
-    return handleRowAuthor(req, db, decodeURIComponent(authorMatch[1]))
-  }
-
-  const tableMatch = pathname.match(ROW_TABLE_PATTERN)
-  if (tableMatch) {
-    return handleRowTable(req, db, decodeURIComponent(tableMatch[1]))
-  }
-
-  const previewMatch = pathname.match(ROW_PREVIEW_PATTERN)
-  if (previewMatch) {
-    return handleRowPreview(req, db, decodeURIComponent(previewMatch[1]))
-  }
-
-  const itemMatch = pathname.match(ROW_ITEM_PATTERN)
-  if (itemMatch) {
-    return handleRowItem(req, db, decodeURIComponent(itemMatch[1]), options)
-  }
-
-  return null
+  return runRouteTable(req, db, DATA_ROW_ROUTES, options)
 }

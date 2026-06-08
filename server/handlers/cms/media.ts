@@ -30,11 +30,11 @@
  * `uploads/` MUST go through `acceptUploadedMedia` so the byte-level checks
  * stay in one place.
  *
- * Dispatch shape: a small route table maps `(method, pattern)` to a per-route
- * async handler. The dispatcher itself is a short loop — adding a new media
- * endpoint is "new handler function + one row in `MEDIA_ROUTES`", not "edit a
- * giant if/else chain". Parameterised paths use a `RegExp` pattern with a
- * named `id` capture group.
+ * Dispatch shape: a flat `MEDIA_ROUTES` table maps `(method, pattern)` to a
+ * per-route async handler and is run through the shared `runRouteTable`
+ * dispatcher (`./routeTable.ts`). Adding a new media endpoint is "new handler
+ * function + one row in `MEDIA_ROUTES`", not "edit a giant if/else chain".
+ * Parameterised paths use a `RegExp` pattern with a named `id` capture group.
  */
 import type { DbClient } from '../../db/client'
 import { requireCapability } from '../../auth/authz'
@@ -48,9 +48,10 @@ import {
   updateMediaAssetMetadata,
   type UpdateMediaAssetMetadataInput,
 } from '../../repositories/media'
-import { badRequest, jsonResponse, methodNotAllowed, readValidatedBody } from '../../http'
+import { badRequest, jsonResponse, readValidatedBody } from '../../http'
 import { Type } from '@core/utils/typeboxHelpers'
-import { CMS_API_PREFIX, type CmsHandlerOptions } from './shared'
+import { CMS_API_PREFIX } from './shared'
+import { runRouteTable, type Route, type RouteParams } from './routeTable'
 import {
   EXTENSION_FOR_MIME,
   acceptReplacementMedia,
@@ -145,11 +146,7 @@ async function handleListMedia(req: Request, db: DbClient): Promise<Response> {
   return jsonResponse({ assets: materialized })
 }
 
-async function handleUploadMedia(
-  req: Request,
-  db: DbClient,
-  _options: CmsHandlerOptions,
-): Promise<Response> {
+async function handleUploadMedia(req: Request, db: DbClient): Promise<Response> {
   const user = await requireCapability(req, db, 'media.write')
   if (user instanceof Response) return user
 
@@ -172,7 +169,6 @@ async function handleUploadMedia(
 async function handleRestoreMedia(
   req: Request,
   db: DbClient,
-  _options: CmsHandlerOptions,
   params: RouteParams,
 ): Promise<Response> {
   const user = await requireCapability(req, db, 'media.write')
@@ -186,7 +182,6 @@ async function handleRestoreMedia(
 async function handleReplaceMedia(
   req: Request,
   db: DbClient,
-  _options: CmsHandlerOptions,
   params: RouteParams,
 ): Promise<Response> {
   // `media.replace` is split out of `media.write` — uniquely dangerous
@@ -214,7 +209,6 @@ async function handleReplaceMedia(
 async function handleAssignMediaFolders(
   req: Request,
   db: DbClient,
-  _options: CmsHandlerOptions,
   params: RouteParams,
 ): Promise<Response> {
   const user = await requireCapability(req, db, 'media.write')
@@ -239,7 +233,6 @@ async function handleAssignMediaFolders(
 async function handleUpdateMediaMetadata(
   req: Request,
   db: DbClient,
-  _options: CmsHandlerOptions,
   params: RouteParams,
 ): Promise<Response> {
   const user = await requireCapability(req, db, 'media.write')
@@ -259,7 +252,6 @@ async function handleUpdateMediaMetadata(
 async function handleDeleteMedia(
   req: Request,
   db: DbClient,
-  _options: CmsHandlerOptions,
   params: RouteParams,
 ): Promise<Response> {
   const user = await requireCapability(req, db, 'media.delete')
@@ -299,24 +291,9 @@ async function handleDeleteMedia(
 // Route table + dispatcher
 // ─────────────────────────────────────────────────────────────────────────────
 
-type RouteParams = { id: string }
+const ID_PATTERN = '(?<id>[^/]+)'
 
-type MediaHandler = (
-  req: Request,
-  db: DbClient,
-  options: CmsHandlerOptions,
-  params: RouteParams,
-) => Promise<Response>
-
-interface MediaRoute {
-  readonly method: 'GET' | 'POST' | 'PATCH' | 'DELETE'
-  readonly pattern: string | RegExp
-  readonly handler: MediaHandler
-}
-
-const ID_PATTERN = '([^/]+)'
-
-const MEDIA_ROUTES: readonly MediaRoute[] = [
+const MEDIA_ROUTES: readonly Route<[]>[] = [
   { method: 'GET', pattern: MEDIA_PREFIX, handler: handleListMedia },
   { method: 'POST', pattern: MEDIA_PREFIX, handler: handleUploadMedia },
   {
@@ -346,31 +323,6 @@ const MEDIA_ROUTES: readonly MediaRoute[] = [
   },
 ]
 
-function matchRoute(pathname: string, route: MediaRoute): RouteParams | null {
-  if (typeof route.pattern === 'string') {
-    return pathname === route.pattern ? { id: '' } : null
-  }
-  const match = pathname.match(route.pattern)
-  if (!match) return null
-  return { id: decodeURIComponent(match[1] ?? '') }
-}
-
-export async function handleMediaRoutes(
-  req: Request,
-  db: DbClient,
-  options: CmsHandlerOptions,
-): Promise<Response | null> {
-  const { pathname } = new URL(req.url)
-  // The same pathname can carry multiple methods (e.g. GET + POST on
-  // `/media`, PATCH + DELETE on `/media/:id`), so the dispatcher remembers
-  // whether ANY route's pathname matched before deciding between 404 and 405.
-  let pathMatched = false
-  for (const route of MEDIA_ROUTES) {
-    const params = matchRoute(pathname, route)
-    if (params === null) continue
-    pathMatched = true
-    if (req.method !== route.method) continue
-    return route.handler(req, db, options, params)
-  }
-  return pathMatched ? methodNotAllowed() : null
+export async function handleMediaRoutes(req: Request, db: DbClient): Promise<Response | null> {
+  return runRouteTable(req, db, MEDIA_ROUTES)
 }

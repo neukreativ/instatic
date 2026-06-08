@@ -16,8 +16,7 @@ import { requireAuthenticatedUser, requireStepUp, getSessionHash } from '../../a
 import { createAuditEvent } from '../../repositories/audit'
 import { jsonResponse } from '../../http'
 import { requestAuditContext } from './shared'
-
-type RouteParams = Record<string, string>
+import type { RouteParams } from './routeTable'
 
 /**
  * GET /auth/sessions — list this user's live sessions. Drives the Account →

@@ -34,9 +34,10 @@ import {
 import { getMediaAsset } from '../../repositories/media'
 import { listGoogleFonts } from '@core/fonts'
 import { parseVariant } from '@core/fonts'
-import { badRequest, jsonResponse, methodNotAllowed, readValidatedBody } from '../../http'
+import { badRequest, jsonResponse, readValidatedBody } from '../../http'
 import { Type } from '@core/utils/typeboxHelpers'
-import type { CmsHandlerOptions } from './shared'
+import { CMS_API_PREFIX, type CmsHandlerOptions } from './shared'
+import { runRouteTable, type Route, type RouteParams } from './routeTable'
 
 const GoogleFontSelectionBodySchema = Type.Object({
   family: Type.String(),
@@ -68,127 +69,148 @@ async function readGoogleFontSelectionBody(
   return { family, variants: body.variants, subsets: body.subsets }
 }
 
+// ---------------------------------------------------------------------------
+// Per-route handlers
+// ---------------------------------------------------------------------------
+
+async function handleGoogleFontsDirectory(req: Request, db: DbClient): Promise<Response> {
+  const user = await requireCapability(req, db, 'site.style.edit')
+  if (user instanceof Response) return user
+  return jsonResponse({ families: listGoogleFonts() })
+}
+
+async function handleEstimateFont(req: Request, db: DbClient): Promise<Response> {
+  const user = await requireCapability(req, db, 'site.style.edit')
+  if (user instanceof Response) return user
+
+  const selection = await readGoogleFontSelectionBody(req)
+  if (selection instanceof Response) return selection
+
+  try {
+    const estimate = await estimateGoogleFont(selection)
+    return jsonResponse(estimate)
+  } catch (err) {
+    if (err instanceof FontInstallError) return badRequest(err.message)
+    console.error('[fonts:estimate]', err)
+    return jsonResponse({ error: 'Font estimate failed' }, { status: 500 })
+  }
+}
+
+async function handleCustomFont(req: Request, db: DbClient): Promise<Response> {
+  const user = await requireCapability(req, db, 'site.style.edit')
+  if (user instanceof Response) return user
+
+  const CustomFontBodySchema = Type.Object({
+    family: Type.String(),
+    files: Type.Array(Type.Object({
+      mediaAssetId: Type.String(),
+      variant: Type.String(),
+    })),
+  })
+  const body = await readValidatedBody(req, CustomFontBodySchema)
+  if (!body) return badRequest('Invalid request body')
+  const family = body.family.trim()
+  if (!family) return badRequest('Missing font family')
+  if (body.files.length === 0) {
+    return badRequest('Upload at least one font file')
+  }
+
+  // Resolve every requested file: the media asset must exist and be a font
+  // MIME; the format is derived from the SNIFFED MIME (server-trusted), never
+  // from the client. The variant must parse to a canonical weight/style.
+  const resolved: ResolvedCustomFontFile[] = []
+  for (const file of body.files) {
+    const { mediaAssetId, variant } = file
+    if (!mediaAssetId) return badRequest('Each font file needs a mediaAssetId')
+    if (!parseVariant(variant)) {
+      return badRequest(`Invalid font variant: "${variant}"`)
+    }
+
+    const asset = await getMediaAsset(db, mediaAssetId)
+    if (!asset) return badRequest(`Media asset not found: ${mediaAssetId}`)
+    const format = fontFormatForMime(asset.mimeType)
+    if (!format) {
+      return badRequest(`Media asset ${mediaAssetId} is not a font (${asset.mimeType})`)
+    }
+    resolved.push({ variant, format, path: asset.publicPath, mediaAssetId })
+  }
+
+  try {
+    const entry = assembleCustomFontEntry({ family, files: resolved })
+    return jsonResponse({ font: entry }, { status: 201 })
+  } catch (err) {
+    if (err instanceof FontInstallError) return badRequest(err.message)
+    console.error('[fonts:custom]', err)
+    return jsonResponse({ error: 'Custom font registration failed' }, { status: 500 })
+  }
+}
+
+async function handleInstallFont(
+  req: Request,
+  db: DbClient,
+  _params: RouteParams,
+  options: CmsHandlerOptions,
+): Promise<Response> {
+  const user = await requireCapability(req, db, 'site.style.edit')
+  if (user instanceof Response) return user
+  if (!options.uploadsDir) {
+    return jsonResponse({ error: 'Uploads directory is not configured' }, { status: 500 })
+  }
+
+  const selection = await readGoogleFontSelectionBody(req)
+  if (selection instanceof Response) return selection
+
+  try {
+    const entry = await installGoogleFont(selection, options.uploadsDir)
+    return jsonResponse({ font: entry }, { status: 201 })
+  } catch (err) {
+    if (err instanceof FontInstallError) return badRequest(err.message)
+    console.error('[fonts:install]', err)
+    return jsonResponse({ error: 'Font install failed' }, { status: 500 })
+  }
+}
+
+async function handleDeleteFontFamily(
+  req: Request,
+  db: DbClient,
+  params: RouteParams,
+  options: CmsHandlerOptions,
+): Promise<Response> {
+  const user = await requireCapability(req, db, 'site.style.edit')
+  if (user instanceof Response) return user
+  if (!options.uploadsDir) {
+    return jsonResponse({ error: 'Uploads directory is not configured' }, { status: 500 })
+  }
+
+  try {
+    await uninstallFontFamily(params.family, options.uploadsDir)
+    return jsonResponse({ ok: true })
+  } catch (err) {
+    console.error('[fonts:uninstall]', err)
+    return jsonResponse({ error: 'Font uninstall failed' }, { status: 500 })
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Route table + dispatcher
+// ---------------------------------------------------------------------------
+
+const FONTS_ROUTES: readonly Route<[CmsHandlerOptions]>[] = [
+  { method: 'GET', pattern: `${CMS_API_PREFIX}/fonts/google`, handler: handleGoogleFontsDirectory },
+  { method: 'POST', pattern: `${CMS_API_PREFIX}/fonts/estimate`, handler: handleEstimateFont },
+  { method: 'POST', pattern: `${CMS_API_PREFIX}/fonts/custom`, handler: handleCustomFont },
+  { method: 'POST', pattern: `${CMS_API_PREFIX}/fonts/install`, handler: handleInstallFont },
+  {
+    method: 'DELETE',
+    pattern: new RegExp(`^${CMS_API_PREFIX}/fonts/family/(?<family>[^/]+)$`),
+    handler: handleDeleteFontFamily,
+  },
+]
+
 export async function handleFontsRoutes(
   req: Request,
   db: DbClient,
   options: CmsHandlerOptions,
 ): Promise<Response | null> {
-  const url = new URL(req.url)
-
-  if (url.pathname === '/admin/api/cms/fonts/google') {
-    const user = await requireCapability(req, db, 'site.style.edit')
-    if (user instanceof Response) return user
-    if (req.method !== 'GET') return methodNotAllowed()
-    return jsonResponse({ families: listGoogleFonts() })
-  }
-
-  if (url.pathname === '/admin/api/cms/fonts/estimate') {
-    const user = await requireCapability(req, db, 'site.style.edit')
-    if (user instanceof Response) return user
-    if (req.method !== 'POST') return methodNotAllowed()
-
-    const selection = await readGoogleFontSelectionBody(req)
-    if (selection instanceof Response) return selection
-
-    try {
-      const estimate = await estimateGoogleFont(selection)
-      return jsonResponse(estimate)
-    } catch (err) {
-      if (err instanceof FontInstallError) return badRequest(err.message)
-      console.error('[fonts:estimate]', err)
-      return jsonResponse({ error: 'Font estimate failed' }, { status: 500 })
-    }
-  }
-
-  if (url.pathname === '/admin/api/cms/fonts/custom') {
-    const user = await requireCapability(req, db, 'site.style.edit')
-    if (user instanceof Response) return user
-    if (req.method !== 'POST') return methodNotAllowed()
-
-    const CustomFontBodySchema = Type.Object({
-      family: Type.String(),
-      files: Type.Array(Type.Object({
-        mediaAssetId: Type.String(),
-        variant: Type.String(),
-      })),
-    })
-    const body = await readValidatedBody(req, CustomFontBodySchema)
-    if (!body) return badRequest('Invalid request body')
-    const family = body.family.trim()
-    if (!family) return badRequest('Missing font family')
-    if (body.files.length === 0) {
-      return badRequest('Upload at least one font file')
-    }
-
-    // Resolve every requested file: the media asset must exist and be a font
-    // MIME; the format is derived from the SNIFFED MIME (server-trusted), never
-    // from the client. The variant must parse to a canonical weight/style.
-    const resolved: ResolvedCustomFontFile[] = []
-    for (const file of body.files) {
-      const { mediaAssetId, variant } = file
-      if (!mediaAssetId) return badRequest('Each font file needs a mediaAssetId')
-      if (!parseVariant(variant)) {
-        return badRequest(`Invalid font variant: "${variant}"`)
-      }
-
-      const asset = await getMediaAsset(db, mediaAssetId)
-      if (!asset) return badRequest(`Media asset not found: ${mediaAssetId}`)
-      const format = fontFormatForMime(asset.mimeType)
-      if (!format) {
-        return badRequest(`Media asset ${mediaAssetId} is not a font (${asset.mimeType})`)
-      }
-      resolved.push({ variant, format, path: asset.publicPath, mediaAssetId })
-    }
-
-    try {
-      const entry = assembleCustomFontEntry({ family, files: resolved })
-      return jsonResponse({ font: entry }, { status: 201 })
-    } catch (err) {
-      if (err instanceof FontInstallError) return badRequest(err.message)
-      console.error('[fonts:custom]', err)
-      return jsonResponse({ error: 'Custom font registration failed' }, { status: 500 })
-    }
-  }
-
-  if (url.pathname === '/admin/api/cms/fonts/install') {
-    const user = await requireCapability(req, db, 'site.style.edit')
-    if (user instanceof Response) return user
-    if (req.method !== 'POST') return methodNotAllowed()
-    if (!options.uploadsDir) {
-      return jsonResponse({ error: 'Uploads directory is not configured' }, { status: 500 })
-    }
-
-    const selection = await readGoogleFontSelectionBody(req)
-    if (selection instanceof Response) return selection
-
-    try {
-      const entry = await installGoogleFont(selection, options.uploadsDir)
-      return jsonResponse({ font: entry }, { status: 201 })
-    } catch (err) {
-      if (err instanceof FontInstallError) return badRequest(err.message)
-      console.error('[fonts:install]', err)
-      return jsonResponse({ error: 'Font install failed' }, { status: 500 })
-    }
-  }
-
-  const fontFamilyMatch = url.pathname.match(/^\/admin\/api\/cms\/fonts\/family\/([^/]+)$/)
-  if (fontFamilyMatch) {
-    const user = await requireCapability(req, db, 'site.style.edit')
-    if (user instanceof Response) return user
-    if (req.method !== 'DELETE') return methodNotAllowed()
-    if (!options.uploadsDir) {
-      return jsonResponse({ error: 'Uploads directory is not configured' }, { status: 500 })
-    }
-
-    const family = decodeURIComponent(fontFamilyMatch[1])
-    try {
-      await uninstallFontFamily(family, options.uploadsDir)
-      return jsonResponse({ ok: true })
-    } catch (err) {
-      console.error('[fonts:uninstall]', err)
-      return jsonResponse({ error: 'Font uninstall failed' }, { status: 500 })
-    }
-  }
-
-  return null
+  return runRouteTable(req, db, FONTS_ROUTES, options)
 }

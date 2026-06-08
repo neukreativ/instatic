@@ -29,13 +29,14 @@ import {
 } from '../../repositories/users'
 import type { UserStatus } from '../../types'
 import { Type } from '@core/utils/typeboxHelpers'
-import { badRequest, jsonResponse, methodNotAllowed, readValidatedBody } from '../../http'
+import { badRequest, jsonResponse, readValidatedBody } from '../../http'
 import {
   CMS_API_PREFIX,
   UserStatusSchema,
   mutationErrorResponse,
   requestAuditContext,
 } from './shared'
+import { runRouteTable, type Route, type RouteParams } from './routeTable'
 
 const UserCreateBodySchema = Type.Object({
   email: Type.String(),
@@ -95,57 +96,55 @@ function rejectsShortPassword(password: string | undefined): Response | null {
 // Per-route handlers
 // ---------------------------------------------------------------------------
 
-async function handleUsersCollection(
+async function handleListUsers(_req: Request, db: DbClient): Promise<Response> {
+  return jsonResponse({ users: await listUsers(db) })
+}
+
+async function handleCreateUser(
   req: Request,
   db: DbClient,
+  _params: RouteParams,
   actor: AuthUser,
 ): Promise<Response> {
-  if (req.method === 'GET') {
-    return jsonResponse({ users: await listUsers(db) })
+  const stepUp = await requireStepUp(req, db, actor)
+  if (stepUp) return stepUp
+
+  const body = await readValidatedBody(req, UserCreateBodySchema)
+  if (!body) return badRequest('Invalid user payload')
+  const passwordError = rejectsShortPassword(body.password)
+  if (passwordError) return passwordError
+  const ownerRoleError = rejectsOwnerRoleAssignment(body.roleId)
+  if (ownerRoleError) return ownerRoleError
+
+  try {
+    const user = await createUser(db, {
+      email: body.email,
+      displayName: body.displayName ?? body.email,
+      passwordHash: await hashPassword(body.password),
+      roleId: body.roleId,
+      status: body.status,
+    })
+    await createAuditEvent(db, {
+      actorUserId: actor.id,
+      action: 'user.create',
+      targetType: 'user',
+      targetId: user.id,
+      metadata: { roleId: body.roleId },
+      ...requestAuditContext(req),
+    })
+    return jsonResponse({ user }, { status: 201 })
+  } catch (err) {
+    return mutationErrorResponse(err)
   }
-
-  if (req.method === 'POST') {
-    const stepUp = await requireStepUp(req, db, actor)
-    if (stepUp) return stepUp
-
-    const body = await readValidatedBody(req, UserCreateBodySchema)
-    if (!body) return badRequest('Invalid user payload')
-    const passwordError = rejectsShortPassword(body.password)
-    if (passwordError) return passwordError
-    const ownerRoleError = rejectsOwnerRoleAssignment(body.roleId)
-    if (ownerRoleError) return ownerRoleError
-
-    try {
-      const user = await createUser(db, {
-        email: body.email,
-        displayName: body.displayName ?? body.email,
-        passwordHash: await hashPassword(body.password),
-        roleId: body.roleId,
-        status: body.status,
-      })
-      await createAuditEvent(db, {
-        actorUserId: actor.id,
-        action: 'user.create',
-        targetType: 'user',
-        targetId: user.id,
-        metadata: { roleId: body.roleId },
-        ...requestAuditContext(req),
-      })
-      return jsonResponse({ user }, { status: 201 })
-    } catch (err) {
-      return mutationErrorResponse(err)
-    }
-  }
-
-  return methodNotAllowed()
 }
 
 async function handleUserPatch(
   req: Request,
   db: DbClient,
+  params: RouteParams,
   actor: AuthUser,
-  userId: string,
 ): Promise<Response> {
+  const userId = params.id
   const stepUp = await requireStepUp(req, db, actor)
   if (stepUp) return stepUp
 
@@ -246,9 +245,10 @@ async function handleUserPatch(
 async function handleUserDelete(
   req: Request,
   db: DbClient,
+  params: RouteParams,
   actor: AuthUser,
-  userId: string,
 ): Promise<Response> {
+  const userId = params.id
   // Step-up gate — deleting another user is one of the highest-blast-radius
   // actions in the admin. Capability check (`users.manage`) already ran;
   // this enforces a fresh password re-entry on top.
@@ -284,51 +284,42 @@ async function handleUserDelete(
   return jsonResponse({ ok: true })
 }
 
-async function handleUserItem(
-  req: Request,
-  db: DbClient,
-  actor: AuthUser,
-  userId: string,
-): Promise<Response> {
-  if (req.method === 'PATCH') {
-    return handleUserPatch(req, db, actor, userId)
-  }
-
-  if (req.method === 'DELETE') {
-    return handleUserDelete(req, db, actor, userId)
-  }
-
-  return methodNotAllowed()
-}
-
 // ---------------------------------------------------------------------------
-// Route patterns
+// Route table + dispatcher
 // ---------------------------------------------------------------------------
 
+// Every user route shares the `users.manage` capability gate, so the dispatcher
+// runs it ONCE up front and threads the resolved actor to each handler as the
+// route table's extra context.
+const USERS_PATH = `${CMS_API_PREFIX}/users`
 const USER_ITEM_PATTERN = /^\/admin\/api\/cms\/users\/([^/]+)$/
 
-// ---------------------------------------------------------------------------
-// Dispatcher
-// ---------------------------------------------------------------------------
+const USERS_ROUTES: readonly Route<[AuthUser]>[] = [
+  { method: 'GET', pattern: USERS_PATH, handler: handleListUsers },
+  { method: 'POST', pattern: USERS_PATH, handler: handleCreateUser },
+  {
+    method: 'PATCH',
+    pattern: new RegExp(`^${USERS_PATH}/(?<id>[^/]+)$`),
+    handler: handleUserPatch,
+  },
+  {
+    method: 'DELETE',
+    pattern: new RegExp(`^${USERS_PATH}/(?<id>[^/]+)$`),
+    handler: handleUserDelete,
+  },
+]
 
 export async function handleUsersRoutes(req: Request, db: DbClient): Promise<Response | null> {
   const { pathname } = new URL(req.url)
 
-  if (pathname !== `${CMS_API_PREFIX}/users` && !USER_ITEM_PATTERN.test(pathname)) {
+  // Cheap prefix gate: only pay for the `users.manage` capability lookup on
+  // paths this group actually owns. Anything else falls through immediately.
+  if (pathname !== USERS_PATH && !USER_ITEM_PATTERN.test(pathname)) {
     return null
   }
 
   const actor = await requireCapability(req, db, 'users.manage')
   if (actor instanceof Response) return actor
 
-  if (pathname === `${CMS_API_PREFIX}/users`) {
-    return handleUsersCollection(req, db, actor)
-  }
-
-  const itemMatch = pathname.match(USER_ITEM_PATTERN)
-  if (itemMatch) {
-    return handleUserItem(req, db, actor, decodeURIComponent(itemMatch[1]))
-  }
-
-  return null
+  return runRouteTable(req, db, USERS_ROUTES, actor)
 }

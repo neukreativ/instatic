@@ -33,142 +33,163 @@ import {
   type UpdateMediaFolderInput,
 } from '../../repositories/mediaFolders'
 import { slugFromTitle } from '@core/utils/slug'
-import { badRequest, jsonResponse, methodNotAllowed, readValidatedBody } from '../../http'
+import { badRequest, jsonResponse, readValidatedBody } from '../../http'
 import { Type } from '@core/utils/typeboxHelpers'
+import { CMS_API_PREFIX } from './shared'
+import { runRouteTable, type Route, type RouteParams } from './routeTable'
+
+const FOLDERS_PATH = `${CMS_API_PREFIX}/media/folders`
+
+// ---------------------------------------------------------------------------
+// Per-route handlers
+// ---------------------------------------------------------------------------
+
+async function handleListFolders(req: Request, db: DbClient): Promise<Response> {
+  const user = await requireCapability(req, db, 'media.read')
+  if (user instanceof Response) return user
+  return jsonResponse({ folders: await listMediaFolders(db) })
+}
+
+async function handleCreateFolder(req: Request, db: DbClient): Promise<Response> {
+  const user = await requireCapability(req, db, 'media.write')
+  if (user instanceof Response) return user
+
+  const CreateFolderBodySchema = Type.Object({
+    name: Type.String(),
+    parentId: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  })
+  const body = await readValidatedBody(req, CreateFolderBodySchema)
+  if (!body) return badRequest('Invalid request body')
+  const name = body.name.trim()
+  if (!name) return badRequest('Folder name is required')
+  const parentId = body.parentId ?? null
+
+  if (parentId !== null) {
+    const parent = await getMediaFolder(db, parentId)
+    if (!parent) return badRequest('Parent folder does not exist')
+  }
+
+  const slug = slugFromTitle(name) || nanoid(8).toLowerCase()
+  if (await isMediaFolderSlugTaken(db, parentId, slug)) {
+    return badRequest(`A folder with the slug "${slug}" already exists here`)
+  }
+
+  const folder = await createMediaFolder(db, {
+    id: nanoid(),
+    parentId,
+    name,
+    slug,
+    createdByUserId: user.id,
+  })
+  return jsonResponse({ folder }, { status: 201 })
+}
+
+async function handleUpdateFolder(
+  req: Request,
+  db: DbClient,
+  params: RouteParams,
+): Promise<Response> {
+  const user = await requireCapability(req, db, 'media.write')
+  if (user instanceof Response) return user
+
+  const folderId = params.id
+
+  const PatchFolderBodySchema = Type.Object({
+    name: Type.Optional(Type.String()),
+    // Three states: undefined = keep existing parent, null = move to root,
+    // string = reparent to that folder id.
+    parentId: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+    sortOrder: Type.Optional(Type.Number()),
+  })
+  const body = await readValidatedBody(req, PatchFolderBodySchema)
+  if (!body) return badRequest('Invalid request body')
+  const existing = await getMediaFolder(db, folderId)
+  if (!existing) return jsonResponse({ error: 'Folder not found' }, { status: 404 })
+
+  const patch: UpdateMediaFolderInput = {}
+
+  if (body.name !== undefined) {
+    const name = body.name.trim()
+    if (!name) return badRequest('A non-empty folder name is required')
+    patch.name = name
+    const slug = slugFromTitle(name) || nanoid(8).toLowerCase()
+    // The slug derives from the name — the user can't set it directly.
+    // Re-check uniqueness against the new (parent, slug) pair.
+    const effectiveParent = body.parentId !== undefined ? body.parentId : existing.parentId
+    if (await isMediaFolderSlugTaken(db, effectiveParent, slug, folderId)) {
+      return badRequest(`A folder with the slug "${slug}" already exists here`)
+    }
+    patch.slug = slug
+  }
+
+  if (body.parentId !== undefined) {
+    const parentRaw = body.parentId
+    // Forbid making a folder its own ancestor — walk up the parent chain
+    // from the candidate parent and reject if we run into `folderId`.
+    if (parentRaw === folderId) {
+      return badRequest('A folder cannot be its own parent')
+    }
+    if (parentRaw !== null) {
+      let cursor: string | null = parentRaw
+      while (cursor) {
+        if (cursor === folderId) {
+          return badRequest('A folder cannot be moved into its own descendant')
+        }
+        const ancestor = await getMediaFolder(db, cursor)
+        cursor = ancestor?.parentId ?? null
+      }
+      const parent = await getMediaFolder(db, parentRaw)
+      if (!parent) return badRequest('Target parent folder does not exist')
+    }
+    patch.parentId = parentRaw
+  }
+
+  if (body.sortOrder !== undefined) patch.sortOrder = body.sortOrder
+
+  if (Object.keys(patch).length === 0) {
+    return badRequest('No editable fields supplied')
+  }
+
+  const folder = await updateMediaFolder(db, folderId, patch)
+  if (!folder) return jsonResponse({ error: 'Folder not found' }, { status: 404 })
+  return jsonResponse({ folder })
+}
+
+async function handleDeleteFolder(
+  req: Request,
+  db: DbClient,
+  params: RouteParams,
+): Promise<Response> {
+  const user = await requireCapability(req, db, 'media.delete')
+  if (user instanceof Response) return user
+
+  const ok = await deleteMediaFolder(db, params.id)
+  if (!ok) return jsonResponse({ error: 'Folder not found' }, { status: 404 })
+  return jsonResponse({ ok: true })
+}
+
+// ---------------------------------------------------------------------------
+// Route table + dispatcher
+// ---------------------------------------------------------------------------
+
+const MEDIA_FOLDER_ROUTES: readonly Route<[]>[] = [
+  { method: 'GET', pattern: FOLDERS_PATH, handler: handleListFolders },
+  { method: 'POST', pattern: FOLDERS_PATH, handler: handleCreateFolder },
+  {
+    method: 'PATCH',
+    pattern: new RegExp(`^${FOLDERS_PATH}/(?<id>[^/]+)$`),
+    handler: handleUpdateFolder,
+  },
+  {
+    method: 'DELETE',
+    pattern: new RegExp(`^${FOLDERS_PATH}/(?<id>[^/]+)$`),
+    handler: handleDeleteFolder,
+  },
+]
 
 export async function handleMediaFolderRoutes(
   req: Request,
   db: DbClient,
 ): Promise<Response | null> {
-  const url = new URL(req.url)
-
-  if (url.pathname === '/admin/api/cms/media/folders') {
-    // GET = read; POST = create. Two-step gate so a `media.read`-only
-    // caller can browse folders in the picker.
-    const user = req.method === 'GET'
-      ? await requireCapability(req, db, 'media.read')
-      : await requireCapability(req, db, 'media.write')
-    if (user instanceof Response) return user
-
-    if (req.method === 'GET') {
-      return jsonResponse({ folders: await listMediaFolders(db) })
-    }
-
-    if (req.method === 'POST') {
-      const CreateFolderBodySchema = Type.Object({
-        name: Type.String(),
-        parentId: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-      })
-      const body = await readValidatedBody(req, CreateFolderBodySchema)
-      if (!body) return badRequest('Invalid request body')
-      const name = body.name.trim()
-      if (!name) return badRequest('Folder name is required')
-      const parentId = body.parentId ?? null
-
-      if (parentId !== null) {
-        const parent = await getMediaFolder(db, parentId)
-        if (!parent) return badRequest('Parent folder does not exist')
-      }
-
-      const slug = slugFromTitle(name) || nanoid(8).toLowerCase()
-      if (await isMediaFolderSlugTaken(db, parentId, slug)) {
-        return badRequest(`A folder with the slug "${slug}" already exists here`)
-      }
-
-      const folder = await createMediaFolder(db, {
-        id: nanoid(),
-        parentId,
-        name,
-        slug,
-        createdByUserId: user.id,
-      })
-      return jsonResponse({ folder }, { status: 201 })
-    }
-
-    return methodNotAllowed()
-  }
-
-  const folderItemMatch = url.pathname.match(/^\/admin\/api\/cms\/media\/folders\/([^/]+)$/)
-  if (folderItemMatch) {
-    // PATCH = rename / reparent (write); DELETE = cascade delete folder
-    // (delete). Mirrors the asset-endpoint capability split.
-    const user = req.method === 'DELETE'
-      ? await requireCapability(req, db, 'media.delete')
-      : await requireCapability(req, db, 'media.write')
-    if (user instanceof Response) return user
-
-    const folderId = decodeURIComponent(folderItemMatch[1])
-
-    if (req.method === 'PATCH') {
-      const PatchFolderBodySchema = Type.Object({
-        name: Type.Optional(Type.String()),
-        // Three states: undefined = keep existing parent, null = move to root,
-        // string = reparent to that folder id.
-        parentId: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-        sortOrder: Type.Optional(Type.Number()),
-      })
-      const body = await readValidatedBody(req, PatchFolderBodySchema)
-      if (!body) return badRequest('Invalid request body')
-      const existing = await getMediaFolder(db, folderId)
-      if (!existing) return jsonResponse({ error: 'Folder not found' }, { status: 404 })
-
-      const patch: UpdateMediaFolderInput = {}
-
-      if (body.name !== undefined) {
-        const name = body.name.trim()
-        if (!name) return badRequest('A non-empty folder name is required')
-        patch.name = name
-        const slug = slugFromTitle(name) || nanoid(8).toLowerCase()
-        // The slug derives from the name — the user can't set it directly.
-        // Re-check uniqueness against the new (parent, slug) pair.
-        const effectiveParent = body.parentId !== undefined ? body.parentId : existing.parentId
-        if (await isMediaFolderSlugTaken(db, effectiveParent, slug, folderId)) {
-          return badRequest(`A folder with the slug "${slug}" already exists here`)
-        }
-        patch.slug = slug
-      }
-
-      if (body.parentId !== undefined) {
-        const parentRaw = body.parentId
-        // Forbid making a folder its own ancestor — walk up the parent chain
-        // from the candidate parent and reject if we run into `folderId`.
-        if (parentRaw === folderId) {
-          return badRequest('A folder cannot be its own parent')
-        }
-        if (parentRaw !== null) {
-          let cursor: string | null = parentRaw
-          while (cursor) {
-            if (cursor === folderId) {
-              return badRequest('A folder cannot be moved into its own descendant')
-            }
-            const ancestor = await getMediaFolder(db, cursor)
-            cursor = ancestor?.parentId ?? null
-          }
-          const parent = await getMediaFolder(db, parentRaw)
-          if (!parent) return badRequest('Target parent folder does not exist')
-        }
-        patch.parentId = parentRaw
-      }
-
-      if (body.sortOrder !== undefined) patch.sortOrder = body.sortOrder
-
-      if (Object.keys(patch).length === 0) {
-        return badRequest('No editable fields supplied')
-      }
-
-      const folder = await updateMediaFolder(db, folderId, patch)
-      if (!folder) return jsonResponse({ error: 'Folder not found' }, { status: 404 })
-      return jsonResponse({ folder })
-    }
-
-    if (req.method === 'DELETE') {
-      const ok = await deleteMediaFolder(db, folderId)
-      if (!ok) return jsonResponse({ error: 'Folder not found' }, { status: 404 })
-      return jsonResponse({ ok: true })
-    }
-
-    return methodNotAllowed()
-  }
-
-  return null
+  return runRouteTable(req, db, MEDIA_FOLDER_ROUTES)
 }

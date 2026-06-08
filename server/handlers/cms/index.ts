@@ -95,7 +95,7 @@ export async function handleCmsRequest(
     // the same rule — `/media/:id` would otherwise consume "storage".
     ?? (await handleMediaFolderRoutes(req, db))
     ?? (await handleMediaStorageAdminRoutes(req, db, options))
-    ?? (await handleMediaRoutes(req, db, options))
+    ?? (await handleMediaRoutes(req, db))
     ?? (await handlePluginsRoutes(req, db, options))
     ?? (await handleDataRoutes(req, db, options))
     // Dashboard stats — read-only aggregate counts used by the admin

@@ -30,8 +30,9 @@ import { registry } from '@core/module-engine'
 import { getLatestPublishedSiteSnapshot } from '../../../repositories/publish'
 import { getDataRow, getDataTable } from '../../../repositories/data'
 import { applyPublishedHtmlPipeline } from '../../../publish/publishedHtmlPipeline'
-import { badRequest, jsonResponse, methodNotAllowed, readValidatedBody } from '../../../http'
+import { badRequest, jsonResponse, readValidatedBody } from '../../../http'
 import { canReadDataRow, forbidden, requireDataAccess } from './access'
+import type { RouteParams } from '../routeTable'
 
 const CSS_ASSET_BASE_URL = '/_instatic/css/'
 const LOOP_ENDPOINT_BASE_URL = '/_instatic/loop/'
@@ -58,14 +59,12 @@ export type PreviewBody = Static<typeof PreviewBodySchema>
 export async function handleRowPreview(
   req: Request,
   db: DbClient,
-  rowId: string,
+  params: RouteParams,
 ): Promise<Response> {
-  if (req.method !== 'POST') return methodNotAllowed()
-
   const user = await requireDataAccess(req, db)
   if (user instanceof Response) return user
 
-  const row = await getDataRow(db, rowId)
+  const row = await getDataRow(db, params.id)
   if (!row) return jsonResponse({ error: 'Row not found' }, { status: 404 })
 
   const table = await getDataTable(db, row.tableId)

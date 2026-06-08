@@ -16,11 +16,12 @@
  *   GET    /admin/api/cms/auth/activity      — login attempts for this user.
  *   POST   /admin/api/cms/auth/logout-all    — revoke every other session for this user.
  *
- * Dispatch shape: a small route table maps `(method, pattern)` to a per-route
- * async handler. The dispatcher itself is a 15-line loop — adding a new auth
- * endpoint is "new handler function + one row in `AUTH_ROUTES`", not "edit a
- * giant if/else chain". Parameterised paths (currently only the session
- * revoke route) use a `RegExp` pattern with a named capture group.
+ * Dispatch shape: a flat `AUTH_ROUTES` table maps `(method, pattern)` to a
+ * per-route async handler and is run through the shared `runRouteTable`
+ * dispatcher (`./routeTable.ts`). Adding a new auth endpoint is "new handler
+ * function + one row in `AUTH_ROUTES`", not "edit a giant if/else chain".
+ * Parameterised paths (currently only the session revoke route) use a `RegExp`
+ * pattern with a named capture group.
  */
 import type { DbClient } from '../../db/client'
 import {
@@ -61,19 +62,11 @@ import { evaluateFailedAttempt, evaluateLockState } from '../../auth/lockout'
 import { clientIp } from '../../auth/security'
 import { deriveDeviceLabel } from '../../auth/deviceLabel'
 import { findMatchingRecoveryCodeHash, verifyTotpCode } from '../../auth/mfa'
-import { jsonResponse, methodNotAllowed, readValidatedBody, setCookieHeader } from '../../http'
+import { jsonResponse, readValidatedBody, setCookieHeader } from '../../http'
 import { Type } from '@core/utils/typeboxHelpers'
 import { CMS_API_PREFIX, requestAuditContext } from './shared'
 import { clearSessionCookie, getDummyPasswordHash, sessionCookie } from './session'
-
-type RouteParams = Record<string, string>
-type AuthHandler = (req: Request, db: DbClient, params: RouteParams) => Promise<Response>
-
-interface AuthRoute {
-  readonly method: 'GET' | 'POST' | 'DELETE'
-  readonly pattern: string | RegExp
-  readonly handler: AuthHandler
-}
+import { runRouteTable, type Route } from './routeTable'
 
 /**
  * Helper: build a 429 response with a `Retry-After` header. Centralises the
@@ -815,7 +808,7 @@ async function handleActivity(req: Request, db: DbClient): Promise<Response> {
 // Route table + dispatcher
 // ─────────────────────────────────────────────────────────────────────────────
 
-const AUTH_ROUTES: readonly AuthRoute[] = [
+const AUTH_ROUTES: readonly Route<[]>[] = [
   { method: 'POST', pattern: `${CMS_API_PREFIX}/login`, handler: handleLogin },
   { method: 'POST', pattern: `${CMS_API_PREFIX}/auth/mfa/verify`, handler: handleMfaVerify },
   { method: 'POST', pattern: `${CMS_API_PREFIX}/logout`, handler: handleLogout },
@@ -831,24 +824,6 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
   { method: 'POST', pattern: `${CMS_API_PREFIX}/auth/logout-all`, handler: handleLogoutAll },
 ]
 
-function matchRoute(
-  pathname: string,
-  route: AuthRoute,
-): RouteParams | null {
-  if (typeof route.pattern === 'string') {
-    return pathname === route.pattern ? {} : null
-  }
-  const match = pathname.match(route.pattern)
-  return match ? { ...(match.groups ?? {}) } : null
-}
-
 export async function handleAuthRoutes(req: Request, db: DbClient): Promise<Response | null> {
-  const { pathname } = new URL(req.url)
-  for (const route of AUTH_ROUTES) {
-    const params = matchRoute(pathname, route)
-    if (params === null) continue
-    if (req.method !== route.method) return methodNotAllowed()
-    return route.handler(req, db, params)
-  }
-  return null
+  return runRouteTable(req, db, AUTH_ROUTES)
 }
