@@ -181,17 +181,32 @@ The editor's Properties Panel shows a "bind to param" affordance for each prop o
 
 ---
 
+## VC reference predicate
+
+`src/core/visualComponents/vcRefs.ts` is the single source of truth for "what is a VC reference node" (`base.visual-component-ref` with a non-blank `props.componentId`). It was previously re-encoded in three places; it now lives once.
+
+```ts
+forEachVCRef(nodes: unknown, cb: (ref: VCRef) => void): void
+collectVCRefs(nodes: unknown): VCRef[]   // convenience wrapper
+```
+
+Both accept `unknown` node maps so they work on raw/untyped data (validateSite, recursion guarding) and on fully-typed page / VC trees alike. Non-object maps, non-ref nodes, and refs with a missing or blank `componentId` are skipped.
+
+`recursionGuard.ts` and `deletionImpact.ts` both consume `forEachVCRef` to iterate refs — they never inline their own VC-ref detection logic.
+
+---
+
 ## Recursion guard
 
 A VC must not reference itself (directly or via a chain). `src/core/visualComponents/recursionGuard.ts`:
 
 ```ts
-wouldCreateCycle(vcId, targetVcId, allVCs) → boolean
+wouldCreateCycle(visualComponents: unknown[], hostVcId: string, candidateChildVcId: string) → boolean
 ```
 
 The mutation paths that insert a `base.visual-component-ref` call `wouldCreateCycle` first; if true, the mutation aborts and the UI shows a `VisualComponentRecursionError`.
 
-`getReferencedComponentIds(vc)` returns the direct refs from a VC's tree; the cycle check walks the graph transitively.
+`getReferencedComponentIds(vc)` returns the set of all `componentId` values referenced by `base.visual-component-ref` nodes anywhere in a VC's flat tree; the cycle check walks the graph transitively via BFS.
 
 ---
 
@@ -302,12 +317,21 @@ This is why mutations don't need to branch — VC-mode looks like page-mode all 
 Deleting a VC has consequences across every page and every other VC tree that references it. `src/core/visualComponents/deletionImpact.ts`:
 
 ```ts
-previewVCDeletion(vcId, allPages) → VCDeletionImpact {
-  references: VCRefUsage[]     // every ref on every page that points at this VC
+previewVCDeletion(site: SiteDocument, vcId: string): VCDeletionImpact | null
+```
+
+Returns `null` when the VC has no usages (the caller can commit silently). When usages exist:
+
+```ts
+interface VCDeletionImpact {
+  vc:        { id: string; name: string }
+  usages:    VCRefUsage[]   // every page + VC ref that points at this VC
+  pageCount: number          // distinct pages with at least one ref
+  vcCount:   number          // distinct other VCs with at least one ref
 }
 ```
 
-The admin UI shows the impact list before confirming the delete, so the user can decide to leave the VC alone.
+`previewVCDeletion` uses `forEachVCRef` (from `vcRefs.ts`) to walk both page trees and other VC definition trees. Self-references (a VC containing a ref to itself) are excluded. The admin UI shows the impact list before confirming the delete, so the user can decide to leave the VC alone.
 
 ---
 
@@ -381,7 +405,7 @@ const { refNode, slotInstances } = instantiateVCAtRef(vc, { /* instanceProps */ 
 
 ### Delete a VC safely
 
-1. Call `previewVCDeletion(vcId, allPages)` to enumerate references.
+1. Call `previewVCDeletion(site, vcId)` to enumerate references.
 2. Show the impact list in the UI; require confirmation.
 3. On confirm, call `deleteVisualComponent(id)` (store action in `visualComponentsSlice.ts`), which in a single Mutative draft:
    - Removes the VC from `site.visualComponents`.
@@ -415,7 +439,8 @@ const { refNode, slotInstances } = instantiateVCAtRef(vc, { /* instanceProps */ 
   - `src/core/visualComponents/schemas.ts` — `VisualComponentSchema`, `VCParamSchema`, `VCNodeSchema`
   - `src/core/visualComponents/slotSync.ts` — `syncSlotInstances`, `applySlotSyncResult`
   - `src/core/visualComponents/instantiate.ts` — `instantiateVCAtRef`
-  - `src/core/visualComponents/recursionGuard.ts` — `wouldCreateCycle`
+  - `src/core/visualComponents/vcRefs.ts` — `forEachVCRef`, `collectVCRefs` (single VC-ref predicate)
+  - `src/core/visualComponents/recursionGuard.ts` — `wouldCreateCycle`, `getReferencedComponentIds`
   - `src/core/visualComponents/nameValidation.ts` — `validateComponentName`, `validateParamName`
   - `src/core/visualComponents/deletionImpact.ts` — `previewVCDeletion`
   - `src/core/visualComponents/virtualPage.ts` — `flattenVCToVirtualPage` (VC-mode wrapper)
@@ -435,3 +460,4 @@ const { refNode, slotInstances } = instantiateVCAtRef(vc, { /* instanceProps */ 
   - `src/__tests__/architecture/multiWrapDefaults.test.ts`
 - Regression tests:
   - `src/__tests__/canvas/visualComponentRefInlineBody.test.tsx` — verifies `base.body`-rooted VCs don't overwrite the iframe `<body>` and that selection still works
+  - `src/__tests__/visualComponents/vcRefs.test.ts` — pins the single VC-ref predicate: `forEachVCRef` / `collectVCRefs` find exactly the valid refs; `getReferencedComponentIds` returns the same set

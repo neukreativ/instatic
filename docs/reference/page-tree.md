@@ -164,6 +164,11 @@ All mutations live in `src/core/page-tree/mutations.ts`. They take a `NodeTree<P
 
 - `cloneScopedClassesForNodeMap(...)` — rewrites class ids that scope to specific nodes when those nodes are duplicated.
 
+`src/core/page-tree/baseNode.ts`:
+
+- `parseBaseNodeFields(r, path)` — THE shared tolerant parser for all `BaseNode` fields. Accepts an already-narrowed record `r` and a `path` string used in error messages. Returns the normalised `BaseNode` with `withFallback` defaults applied (non-string `children` / `classIds` entries dropped, non-object `breakpointOverrides` entries dropped, etc.). Throws `Error('<path>.<field>: …')` when a required field (`id`, `moduleId`, `children`) is absent or the wrong type. `parentId` is intentionally omitted from the output — it is recomputed by `reindexNodeParents` after the whole tree is parsed. Both `parsePageNode` (page tree) and `parseVCNode` (VC schemas) delegate here, so a fix to any shared normalisation path lands once for both.
+- `parsePropBindings(raw)` — tolerant parser for a node's `propBindings` map. Invalid entries are silently dropped; returns `undefined` when no valid entries remain. Use at the raw-data parsing layer (not a schema-level transform).
+
 `src/core/page-tree/slugs.ts` (exported via `@core/page-tree`):
 
 - `pagePublicPath(slug)` — maps a slug to its public URL path: `'index'` → `'/'`, everything else → `'/<slug>'`.
@@ -306,7 +311,7 @@ const tree = parsePageNodeTree(raw)
 - [docs/features/plugin-system.md](../features/plugin-system.md) — plugins ship VCs via `pack/site.json`
 - Source-of-truth files:
   - `src/core/page-tree/treeSchema.ts` — `NodeTreeSchema` + `NodeTree<TNode>`
-  - `src/core/page-tree/baseNode.ts` — `BaseNodeSchema` + `BaseNode`
+  - `src/core/page-tree/baseNode.ts` — `BaseNodeSchema`, `BaseNode`, `parseBaseNodeFields` (shared base-node parser used by both page and VC paths), `parsePropBindings`
   - `src/core/page-tree/pageNode.ts` — `PageNode` (extends `BaseNode`)
   - `src/core/page-tree/page.ts` — `Page` (is `NodeTree<PageNode>` + metadata)
   - `src/core/page-tree/mutations.ts` — all node + site mutations
@@ -320,6 +325,7 @@ const tree = parsePageNodeTree(raw)
   - `src/__tests__/persistence/treeSchemaShape.test.ts`
   - `src/__tests__/page-tree/parentIndex.test.ts` — `parentId` invariant: every mutation keeps it consistent; undo/redo preserves it; `reindexNodeParents` derives from children only; `getParent` is O(1) not O(N)
   - `src/__tests__/page-tree/subtree-consolidation.test.ts` — cycle-safety: `collectSubtreeIds` + deletion + duplication all terminate on corrupt cyclic trees; `cloneNodeWithRemap` produces deep-independent clones; deletion paths unlink via O(1) `parentId` cache, not a whole-map scan
+  - `src/__tests__/page-tree/baseNodeParse.test.ts` — parse equivalence: the same raw stored node normalises identically through `parsePage` (PageNode) and `parseVisualComponent` (VCNode), and both match `parseBaseNodeFields` directly
   - `src/__tests__/architecture/no-vc-mode-branches-in-mutations.test.ts`
   - `src/__tests__/architecture/centralized-site-mutation-history.test.ts`
   - `src/__tests__/architecture/visual-components-mutation-contract.test.ts`
