@@ -3,9 +3,9 @@
  *
  * Thin wrapper around the shared `FrameworkScalePanel` with a typography-specific
  * adapter (base size lives at `min.fontSize` / `max.fontSize`, ratio options
- * stop at the Major Sixth, the per-step preview is a sample text rendered at
- * the calculated px size, and the Class Generator targets `font-size` / line-
- * height / letter-spacing properties).
+ * stop at the Major Sixth, the scale preview is an open text specimen list,
+ * and the Class Generator targets `font-size` / line-height / letter-spacing
+ * properties).
  */
 
 import { type CSSProperties } from 'react'
@@ -17,13 +17,14 @@ import type {
 } from '@core/framework-schema'
 import { TextStartTIcon } from 'pixel-art-icons/icons/text-start-t'
 import { TextColumsIcon } from 'pixel-art-icons/icons/text-colums'
+import { Button } from '@ui/components/Button'
 import {
   FrameworkScalePanel,
   type ScaleAdapter,
 } from '@site/panels/FrameworkScalePanel'
 import { useFrameworkChangeConfirm } from '@admin/shared/dialogs/FrameworkChangeConfirmDialog'
 import { applyTypographyGroupPatchPreview } from '@site/store/slices/site/framework/typography'
-import { FontsSection } from './FontsSection'
+import { FontsSection } from './FontsSection/FontsSection'
 import styles from './TypographyPanel.module.css'
 
 const TYPOGRAPHY_CSS_PROPERTIES = [
@@ -35,12 +36,84 @@ const TYPOGRAPHY_CSS_PROPERTIES = [
 const EMPTY_GROUPS: FrameworkTypographyGroup[] = []
 const EMPTY_CLASSES: FrameworkTypographyClassGenerator[] = []
 
+interface TypographyScalePoint {
+  stepLabel: string
+  variableName: string
+  minPx: number
+  maxPx: number
+  isBase: boolean
+}
+
 function groupActionLabel(prefix: string, groupId: string): string {
   // The dialog header gets shortened — prefer "<prefix>" without the
   // raw group ID. Group name is unknown at this layer; the prefix
   // alone is informative enough.
   void groupId
   return prefix
+}
+
+function formatTypeValue(value: number): string {
+  if (!Number.isFinite(value)) return ''
+  return value.toFixed(2).replace(/\.?0+$/, '')
+}
+
+function copyToClipboard(value: string) {
+  if (typeof navigator === 'undefined' || !navigator.clipboard) return
+  void navigator.clipboard.writeText(value).catch(() => {})
+}
+
+function TypographyScalePreview({ points }: { points: TypographyScalePoint[] }) {
+  return (
+    <ol
+      className={styles.scalePreview}
+      aria-label="Typography scale preview"
+    >
+      {points.map((point, idx) => {
+        const minLabel = formatTypeValue(point.minPx)
+        const maxLabel = formatTypeValue(point.maxPx)
+        const variableValue = `var(${point.variableName})`
+        const tooltip = `${point.variableName}: ${minLabel} / ${maxLabel} px`
+        return (
+          <li
+            key={`${point.stepLabel}-${idx}`}
+            className={styles.typeSpecimen}
+            data-base={point.isBase ? 'true' : undefined}
+            aria-label={`${point.variableName}, ${minLabel}px mobile, ${maxLabel}px desktop`}
+            style={
+              {
+                '--type-min-size': `${Math.max(8, point.minPx)}px`,
+                '--type-max-size': `${Math.max(8, point.maxPx)}px`,
+              } as CSSProperties
+            }
+          >
+            <div className={styles.typeSpecimenHeader}>
+              <Button
+                variant="ghost"
+                size="micro"
+                shape="flush"
+                className={styles.typeTokenButton}
+                tooltip={tooltip}
+                aria-label={`Copy ${point.variableName}`}
+                onClick={() => copyToClipboard(variableValue)}
+              >
+                {point.variableName}
+              </Button>
+              <span className={styles.typeRange}>
+                {minLabel}
+                <span className={styles.typeRangeSeparator}>/</span>
+                {maxLabel}
+                <span className={styles.typeRangeUnit}> px</span>
+              </span>
+            </div>
+            <div className={styles.typeSpecimenLine} aria-hidden="true">
+              <span className={styles.typeSpecimenMin}>Aa</span>
+              <span className={styles.typeSpecimenMax}>Aa</span>
+            </div>
+          </li>
+        )
+      })}
+    </ol>
+  )
 }
 
 export function TypographyPanel() {
@@ -115,11 +188,12 @@ export function TypographyPanel() {
     renderPreview: (sizePx) => (
       <span
         className={styles.previewText}
-        style={{ fontSize: `${Math.max(8, sizePx)}px` } as CSSProperties}
+        style={{ '--preview-text-size': `${Math.max(8, sizePx)}px` } as CSSProperties}
       >
         Aa
       </span>
     ),
+    renderChart: ({ points }) => <TypographyScalePreview points={points} />,
     onToggleDisabled: wrappedToggleDisabled,
     onCreateGroup,
     onUpdateGroup: wrappedUpdateGroup,

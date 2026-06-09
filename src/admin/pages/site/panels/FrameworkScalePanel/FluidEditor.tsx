@@ -17,8 +17,9 @@ import styles from './FluidEditor.module.css'
  * full per-step scale once via `computeFluidScale` and feeds it to either:
  *
  *   - `ChartHost` (when the adapter supplies `renderChart`, the visualisation
- *     replaces the per-step list — Spacing's bar chart is the canonical case),
- *   - `StepList` (the default per-step preview list — Typography uses this).
+ *     replaces the per-step list — Typography and Spacing both do this),
+ *   - `StepList` (the default per-step preview list for adapters without a
+ *     dedicated scale visualisation).
  *
  * Step add/remove callbacks live here because they touch `group.steps` AND
  * `group.baseScaleIndex` together — the index has to slide when steps are
@@ -33,7 +34,10 @@ export function FluidEditor<G extends GroupShape, C extends GeneratorShape>({
   adapter: ScaleAdapter<G, C>
   preferences: ReturnType<typeof resolveFrameworkPreferences>
 }) {
-  const stepLabels = group.steps.split(',').map((s) => s.trim()).filter(Boolean)
+  const stepLabels = group.steps.split(',').flatMap((step) => {
+    const label = step.trim()
+    return label ? [label] : []
+  })
   const baseScaleIndex = Math.max(0, Math.min(group.baseScaleIndex, stepLabels.length - 1))
   const fluid: FluidScaleStep[] = computeFluidScale({
     minBaseSize: adapter.readBaseSize(group, 'min'),
