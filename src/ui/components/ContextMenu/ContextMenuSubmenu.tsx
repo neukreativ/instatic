@@ -287,6 +287,7 @@ export function ContextMenuSubmenu({
             '--context-menu-z-index': zIndex + 10,
             '--context-menu-min-width': `${resolvedMinWidth}px`,
             '--context-menu-width': `${width}px`,
+            '--context-menu-max-width': 'calc(100vw - 16px)',
             ...(maxHeight != null
               ? { '--context-menu-max-height': `${maxHeight}px` }
               : null),

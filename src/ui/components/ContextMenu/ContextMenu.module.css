@@ -3,7 +3,7 @@
     left: var(--context-menu-x);
     top: var(--context-menu-y);
     z-index: var(--context-menu-z-index);
-    width: min(var(--context-menu-width), calc(100vw - 16px));
+    width: min(var(--context-menu-width), var(--context-menu-max-width), calc(100vw - 16px));
     min-width: var(--context-menu-min-width);
     overflow: hidden;
     padding: 4px;

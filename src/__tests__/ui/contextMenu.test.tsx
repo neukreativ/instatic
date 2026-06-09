@@ -185,6 +185,65 @@ describe('ContextMenu', () => {
     }
   })
 
+  it('caps a match-anchor dropdown to its explicit max width', () => {
+    const realRect = HTMLElement.prototype.getBoundingClientRect
+    const realInnerHeight = Object.getOwnPropertyDescriptor(window, 'innerHeight')
+    const realInnerWidth = Object.getOwnPropertyDescriptor(window, 'innerWidth')
+
+    Object.defineProperty(window, 'innerHeight', { value: 800, configurable: true })
+    Object.defineProperty(window, 'innerWidth', { value: 1600, configurable: true })
+
+    const rect = (r: Partial<DOMRect>): DOMRect => ({
+      top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, x: 0, y: 0,
+      toJSON: () => ({}), ...r,
+    }) as DOMRect
+
+    HTMLElement.prototype.getBoundingClientRect = function () {
+      if (this.getAttribute('role') === 'menu') {
+        return rect({ top: 0, left: 100, right: 620, width: 520, height: 40 })
+      }
+      if ((this as HTMLElement).dataset.anchor === 'true') {
+        return rect({ top: 100, bottom: 120, left: 100, right: 1300, width: 1200, height: 20 })
+      }
+      return realRect.call(this)
+    }
+
+    function AnchoredHarness() {
+      const ref = useRef<HTMLButtonElement>(null)
+      return (
+        <>
+          <button ref={ref} data-anchor="true" type="button">
+            Trigger
+          </button>
+          <ContextMenu
+            anchorRef={ref}
+            triggerRef={ref}
+            ariaLabel="Wide dropdown"
+            matchAnchorWidth
+            minWidth={240}
+            maxWidth={520}
+            onClose={() => {}}
+          >
+            <ContextMenuItem onClick={() => {}}>Very long selector row</ContextMenuItem>
+          </ContextMenu>
+        </>
+      )
+    }
+
+    try {
+      render(<AnchoredHarness />)
+      const menu = screen.getByRole('menu', { name: /wide dropdown/i })
+
+      expect(menu.style.getPropertyValue('--context-menu-width')).toBe('520px')
+      expect(menu.style.getPropertyValue('--context-menu-max-width')).toBe('520px')
+      expect(menu.style.getPropertyValue('--context-menu-x')).toBe('100px')
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = realRect
+      if (realInnerHeight) Object.defineProperty(window, 'innerHeight', realInnerHeight)
+      if (realInnerWidth) Object.defineProperty(window, 'innerWidth', realInnerWidth)
+    }
+  })
+
   it('dismisses on a click inside a same-origin iframe document', async () => {
     function IframeDismissHarness({ onClose }: { onClose: () => void }) {
       const [doc, setDoc] = useState<Document | null>(null)

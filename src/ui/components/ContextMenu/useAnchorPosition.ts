@@ -37,6 +37,8 @@ interface UseAnchorPositionParams {
   width: number
   /** Lower bound for `matchAnchorWidth`. */
   minWidth: number
+  /** Optional width ceiling applied after `matchAnchorWidth`. */
+  maxWidth: number | undefined
   maxHeight: number | undefined
   /** When set, the menu's width tracks the anchor's measured width. */
   matchAnchorWidth: boolean
@@ -45,7 +47,7 @@ interface UseAnchorPositionParams {
 interface UseAnchorPositionResult {
   /** Auto-flipped position, or `null` until the menu has been measured. */
   position: AnchorPosition | null
-  /** Render width after applying `matchAnchorWidth` (never below `minWidth`). */
+  /** Render width after applying `matchAnchorWidth` and `maxWidth`. */
   effectiveWidth: number
 }
 
@@ -60,8 +62,8 @@ interface UseAnchorPositionResult {
  * tracked via ResizeObserver and folded into `effectiveWidth`, so the dropdown
  * stays glued to the trigger's width even as the surrounding panel resizes.
  *
- * No-op (returns `position: null`, `effectiveWidth: width`) when `anchorRef`
- * is absent — the menu is then in point mode (see {@link usePointPosition}).
+ * No-op for positioning when `anchorRef` is absent — the menu is then in
+ * point mode (see {@link usePointPosition}). Width constraints still apply.
  */
 export function useAnchorPosition({
   anchorRef,
@@ -72,6 +74,7 @@ export function useAnchorPosition({
   offset,
   width,
   minWidth,
+  maxWidth,
   maxHeight,
   matchAnchorWidth,
 }: UseAnchorPositionParams): UseAnchorPositionResult {
@@ -82,10 +85,14 @@ export function useAnchorPosition({
   const [anchorWidth, setAnchorWidth] = useState<number | null>(null)
 
   // Effective render width: when `matchAnchorWidth` is set, the menu expands
-  // to the anchor's measured width but never shrinks below the `minWidth` floor.
-  const effectiveWidth = matchAnchorWidth && anchorWidth != null
+  // to the anchor's measured width, then clamps to the optional `maxWidth`
+  // ceiling while never shrinking below the `minWidth` floor.
+  const anchorMatchedWidth = matchAnchorWidth && anchorWidth != null
     ? Math.max(anchorWidth, minWidth)
     : width
+  const effectiveWidth = maxWidth != null
+    ? Math.min(anchorMatchedWidth, maxWidth)
+    : anchorMatchedWidth
 
   const recompute = useEvent(() => {
     if (!anchorRef) return

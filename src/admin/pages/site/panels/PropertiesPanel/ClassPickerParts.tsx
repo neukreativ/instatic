@@ -17,6 +17,8 @@ import {
 import type { SelectorPillItem, SelectorSuggestionItem } from './selectorPickerModel'
 import styles from './ClassPicker.module.css'
 
+const SELECTOR_SUGGESTIONS_MAX_WIDTH = 520
+
 interface AssignedClassPillProps {
   cls: StyleRule
   isActive: boolean
@@ -444,6 +446,7 @@ export function SelectorSuggestionsPortal({
       offset={6}
       matchAnchorWidth
       minWidth={240}
+      maxWidth={SELECTOR_SUGGESTIONS_MAX_WIDTH}
       maxHeight={320}
       zIndex={10000}
       ariaLabel="Selector suggestions"

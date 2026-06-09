@@ -34,6 +34,12 @@ interface ContextMenuProps extends Omit<HTMLAttributes<HTMLDivElement>, 'childre
   minWidth?: number
   width?: number
   /**
+   * Optional rendered-width ceiling in pixels. Applied after `minWidth` and
+   * `matchAnchorWidth`, so wide anchored dropdowns can stay readable without
+   * expanding to a long trigger or content-derived width.
+   */
+  maxWidth?: number
+  /**
    * Maximum height of the menu in pixels. When the content exceeds this,
    * the menu becomes vertically scrollable (`overflow-y: auto`). The CSS
    * also clamps the menu to the viewport (`min(maxHeight, 100vh - 16px)`)
@@ -134,6 +140,7 @@ export function ContextMenu({
   header,
   minWidth = 176,
   width = minWidth,
+  maxWidth,
   maxHeight,
   zIndex = 1000,
   menuClassName,
@@ -180,6 +187,7 @@ export function ContextMenu({
     offset,
     width,
     minWidth,
+    maxWidth: maxWidth != null ? Math.max(maxWidth, minWidth) : undefined,
     maxHeight,
     matchAnchorWidth,
   })
@@ -213,6 +221,9 @@ export function ContextMenu({
     '--context-menu-y': `${resolvedY ?? 0}px`,
     '--context-menu-min-width': `${minWidth}px`,
     '--context-menu-width': `${effectiveWidth}px`,
+    '--context-menu-max-width': maxWidth != null
+      ? `${Math.max(maxWidth, minWidth)}px`
+      : 'calc(100vw - 16px)',
     '--context-menu-z-index': zIndex,
     ...(maxHeight != null ? { '--context-menu-max-height': `${maxHeight}px` } : null),
     ...(measuring ? { visibility: 'hidden' as const } : null),
