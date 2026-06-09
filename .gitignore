@@ -68,6 +68,9 @@ uploads/*
 # E2E test run artifacts — generated, not source
 docs/e2e/runs
 
+# Agent implementation plans — local planning artifacts, never source
+docs/plans/
+
 # Plugin build artifacts — generated from source plugin directories
 *.plugin.zip
 
