@@ -1,24 +1,22 @@
 .field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 }
 
 .label {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--editor-text-muted);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--editor-text);
 }
 
 .controls {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .controls > :first-child {
-  flex: 1;
-  min-width: 0;
+    flex: 1;
+    min-width: 0;
 }

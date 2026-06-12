@@ -7,12 +7,12 @@
  * the control is disabled with the reason inline.
  */
 import { useState } from 'react'
-import { Code } from '@ui/components/Code'
 import { Switch } from '@ui/components/Switch'
+import { FormField } from '@ui/components/FormField'
 import { getErrorMessage } from '@core/utils/errorMessage'
 import type { SeoSitemapSettings } from '@core/seo'
 import { SaveControls } from '../components/SeoPreviewEditor'
-import { SettingSwitch } from './RobotsTab'
+import { SeoCodeViewer } from '../components/SeoCodeViewer'
 import type { SeoWorkspace } from '../hooks/useSeoWorkspace'
 import styles from './SettingsTabs.module.css'
 
@@ -86,22 +86,27 @@ export function SitemapTab({ workspace, canManage }: SitemapTabProps) {
       )}
 
       <div className={styles.controls}>
-        <SettingSwitch
+        <FormField
+          layout="inline-end"
           label="Generate sitemap.xml"
           description="Search and answer engines use the sitemap to discover published pages and posts."
-          checked={enabled}
-          disabled={!canManage}
-          onChange={(value) => {
-            setDraft((current) => {
-              const next = { ...current }
-              if (value) delete next.enabled
-              else next.enabled = false
-              return next
-            })
-            if (saveState !== 'idle') setSaveState('idle')
-          }}
-          testId="seo-sitemap-enabled"
-        />
+        >
+          <Switch
+            checked={enabled}
+            disabled={!canManage}
+            onCheckedChange={(value) => {
+              setDraft((current) => {
+                const next = { ...current }
+                if (value) delete next.enabled
+                else next.enabled = false
+                return next
+              })
+              if (saveState !== 'idle') setSaveState('idle')
+            }}
+            aria-label="Generate sitemap.xml"
+            data-testid="seo-sitemap-enabled"
+          />
+        </FormField>
       </div>
 
       <p className={styles.counts} role="status" data-testid="seo-sitemap-counts">
@@ -137,7 +142,7 @@ export function SitemapTab({ workspace, canManage }: SitemapTabProps) {
       )}
 
       <h3 className={styles.previewHeading}>Entry format</h3>
-      <Code className={styles.preview}>{sampleEntry(workspace)}</Code>
+      <SeoCodeViewer docKey="sitemap-sample" value={sampleEntry(workspace)} language="html" />
     </section>
   )
 }

@@ -1,10 +1,10 @@
 /**
  * SeoTargetIndex — the Meta tab's right column: navigation + audit context.
  *
- * Search bar, kind filters (All / Pages / Posts / Templates / Issues), an
- * issues summary chip row, the pinned Site defaults row, and dense target
- * rows with per-field health dots. Keyboard: ↑/↓ move the selection,
- * Enter activates, `/` focuses search.
+ * Search, kind filters, an issues summary chip, the pinned Site defaults
+ * card, then the targets grouped under Pages / Templates / Posts section
+ * headers — each row shows title, mono route, and per-field health dots.
+ * Keyboard: ↑/↓ move the selection, `/` focuses search.
  */
 import { useRef, useState, type KeyboardEvent } from 'react'
 import { SearchBar } from '@ui/components/SearchBar'
@@ -32,6 +32,11 @@ interface IndexedTarget {
   health: SeoHealth
 }
 
+interface TargetGroup {
+  label: string
+  items: IndexedTarget[]
+}
+
 interface SeoTargetIndexProps {
   workspace: SeoWorkspace
   selectedId: string
@@ -43,7 +48,6 @@ export function SeoTargetIndex({ workspace, selectedId, siteDefaultsId, onSelect
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
   const searchRef = useRef<HTMLInputElement>(null)
-  const listRef = useRef<HTMLDivElement>(null)
 
   const indexed: IndexedTarget[] = workspace.targets.map((target) => ({
     target,
@@ -53,9 +57,7 @@ export function SeoTargetIndex({ workspace, selectedId, siteDefaultsId, onSelect
     ),
   }))
 
-  const missingTitles = indexed.filter((item) => item.health.title !== 'ok').length
-  const missingDescriptions = indexed.filter((item) => item.health.description !== 'ok').length
-  const noindexed = indexed.filter((item) => !item.health.indexable).length
+  const issueCount = indexed.filter((item) => item.health.issueCount > 0).length
 
   const normalizedQuery = query.trim().toLowerCase()
   const visible = indexed.filter(({ target, health }) => {
@@ -70,8 +72,15 @@ export function SeoTargetIndex({ workspace, selectedId, siteDefaultsId, onSelect
     )
   })
 
-  // Keyboard order: pinned site row first, then the visible targets.
-  const order: string[] = [siteDefaultsId, ...visible.map(({ target }) => target.id)]
+  const groups: TargetGroup[] = [
+    { label: 'Pages', items: visible.filter(({ target }) => target.kind === 'page') },
+    { label: 'Templates', items: visible.filter(({ target }) => target.kind === 'template') },
+    { label: 'Posts', items: visible.filter(({ target }) => target.kind === 'post') },
+  ].filter((group) => group.items.length > 0)
+
+  // Keyboard order: pinned site row first, then the grouped targets in
+  // display order.
+  const order: string[] = [siteDefaultsId, ...groups.flatMap((group) => group.items.map(({ target }) => target.id))]
 
   function handleListKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
     if (event.key === '/') {
@@ -105,52 +114,54 @@ export function SeoTargetIndex({ workspace, selectedId, siteDefaultsId, onSelect
         options={FILTER_OPTIONS}
         onChange={setFilter}
         size="xs"
+        fullWidth
         aria-label="Filter targets"
         data-testid="seo-target-filter"
       />
 
-      {(missingTitles > 0 || missingDescriptions > 0 || noindexed > 0) && (
-        <div className={styles.summaryRow} role="status">
-          {missingTitles > 0 && (
-            <span className={styles.summaryChip}>{missingTitles} title {missingTitles === 1 ? 'issue' : 'issues'}</span>
-          )}
-          {missingDescriptions > 0 && (
-            <span className={styles.summaryChip}>{missingDescriptions} description {missingDescriptions === 1 ? 'issue' : 'issues'}</span>
-          )}
-          {noindexed > 0 && (
-            <span className={styles.summaryChip}>{noindexed} noindexed</span>
-          )}
-        </div>
+      {issueCount > 0 && (
+        <p className={styles.summary} role="status">
+          {issueCount} {issueCount === 1 ? 'target needs' : 'targets need'} attention
+        </p>
       )}
 
       <div
-        ref={listRef}
-        className={styles.list}
+        className={styles.scroller}
         role="listbox"
         aria-label="SEO target list"
         tabIndex={0}
         onKeyDown={handleListKeyDown}
       >
-        <TargetRow
-          pinned
-          label="Site defaults"
-          sublabel="Fallbacks for every target"
-          selected={selectedId === siteDefaultsId}
-          onSelect={() => onSelect(siteDefaultsId)}
-          testId="seo-target-site-defaults"
-        />
-        {visible.map(({ target, health }) => (
-          <TargetRow
-            key={target.id}
-            label={target.title}
-            sublabel={target.route ?? (target.kind === 'template' ? 'Entry template' : '—')}
-            kind={target.kind}
-            tableLabel={target.tableLabel}
-            health={health}
-            selected={selectedId === target.id}
-            onSelect={() => onSelect(target.id)}
-            testId={`seo-target-${target.id}`}
-          />
+        <Button
+          type="button"
+          variant="ghost"
+          className={cn(styles.siteRow, selectedId === siteDefaultsId && styles.rowSelected)}
+          role="option"
+          aria-selected={selectedId === siteDefaultsId}
+          onClick={() => onSelect(siteDefaultsId)}
+          data-testid="seo-target-site-defaults"
+        >
+          <span className={styles.rowMain}>
+            <span className={styles.rowTitle}>Site defaults</span>
+            <span className={styles.rowSub}>Fallbacks for every target</span>
+          </span>
+        </Button>
+
+        {groups.map((group) => (
+          <div key={group.label} className={styles.group}>
+            <h3 className={styles.groupLabel}>{group.label}</h3>
+            <div className={styles.groupList}>
+              {group.items.map(({ target, health }) => (
+                <TargetRow
+                  key={target.id}
+                  target={target}
+                  health={health}
+                  selected={selectedId === target.id}
+                  onSelect={() => onSelect(target.id)}
+                />
+              ))}
+            </div>
+          </div>
         ))}
         {visible.length === 0 && (
           <p className={styles.empty} role="status">No targets match the current filter.</p>
@@ -161,45 +172,33 @@ export function SeoTargetIndex({ workspace, selectedId, siteDefaultsId, onSelect
 }
 
 function TargetRow({
-  label,
-  sublabel,
-  kind,
-  tableLabel,
+  target,
   health,
   selected,
-  pinned = false,
   onSelect,
-  testId,
 }: {
-  label: string
-  sublabel: string
-  kind?: SeoTarget['kind']
-  tableLabel?: string
-  health?: SeoHealth
+  target: SeoTarget
+  health: SeoHealth
   selected: boolean
-  pinned?: boolean
   onSelect: () => void
-  testId: string
 }) {
-  const kindLabel = kind === 'post' ? (tableLabel ?? 'Post') : kind === 'template' ? 'Template' : kind === 'page' ? 'Page' : 'Site'
   return (
     <Button
       type="button"
       variant="ghost"
-      className={cn(styles.row, selected && styles.rowSelected, pinned && styles.rowPinned)}
+      className={cn(styles.row, selected && styles.rowSelected)}
       role="option"
       aria-selected={selected}
       onClick={onSelect}
-      data-testid={testId}
+      data-testid={`seo-target-${target.id}`}
     >
       <span className={styles.rowMain}>
-        <span className={styles.rowTitle}>{label}</span>
-        <span className={styles.rowSub}>{sublabel}</span>
+        <span className={styles.rowTitle}>{target.title}</span>
+        <span className={styles.rowSub}>
+          {target.route ?? (target.kind === 'template' ? `Entry template${target.tableSlug ? ` · ${target.tableSlug}` : ''}` : '—')}
+        </span>
       </span>
-      <span className={styles.rowMeta}>
-        <span className={styles.rowKind}>{kindLabel}</span>
-        {health && <HealthDots health={health} />}
-      </span>
+      <HealthDots health={health} />
     </Button>
   )
 }

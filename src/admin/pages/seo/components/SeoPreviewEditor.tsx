@@ -1,43 +1,32 @@
 /**
- * SeoPreviewEditor — the Meta tab's left column for page / template / post
- * targets.
+ * SeoPreviewEditor — the Meta tab's workbench for one page / template / post
+ * target: a sticky rail of live 1:1 platform previews on the left (Google,
+ * Open Graph, X, collapsible JSON-LD) and the sectioned metadata form on the
+ * right. One draft, one resolver — every keystroke re-resolves and the rail
+ * re-renders, so what's previewed is exactly what the publisher will emit.
  *
- * Platform switcher (Search / Open Graph / X / Schema) over an editable
- * snippet: controlled Input/Textarea primitives styled as the platform
- * preview, never raw contentEditable. Every empty field shows its RESOLVED
- * fallback as placeholder text (the shared `@core/seo` resolver), so the
- * user always sees exactly what will be emitted. Title/description carry
- * live pixel meters. Save is quiet and local.
+ * Form sections: Search appearance → Social card (Open Graph) → X card
+ * (behind the customize gate while inheriting). Controlled Input/Textarea
+ * primitives only; empty fields show their resolved fallback as placeholder.
  */
 import { useId, useState } from 'react'
 import { Button } from '@ui/components/Button'
 import { Input, Textarea } from '@ui/components/Input'
 import { Select } from '@ui/components/Select'
 import { Switch } from '@ui/components/Switch'
-import { SegmentedControl } from '@ui/components/SegmentedControl'
+import { FormField } from '@ui/components/FormField'
+import { Separator } from '@ui/components/Separator'
 import { getErrorMessage } from '@core/utils/errorMessage'
 import { isSafeCanonicalUrl } from '@core/seo'
 import type { SeoTarget } from '../lib/seoApi'
 import { resolveTargetSeo, templateForPost } from '../lib/resolveTargetSeo'
 import type { SeoWorkspace } from '../hooks/useSeoWorkspace'
 import { useSeoDraft, normalizeSeoDraft, type SeoDraftField } from '../hooks/useSeoDraft'
-import { SearchSnippetPreview } from './SearchSnippetPreview'
-import { OpenGraphPreview } from './OpenGraphPreview'
-import { XCardPreview } from './XCardPreview'
-import { SchemaPreview } from './SchemaPreview'
+import { SeoPreviewRail } from './SeoPreviewRail'
 import { MetaLengthMeter } from './MetaLengthMeter'
 import { SeoImageField } from './SeoImageField'
 import { AiSuggestionSparkle } from './AiSuggestionBubbles'
 import styles from './SeoPreviewEditor.module.css'
-
-type Platform = 'search' | 'og' | 'x' | 'schema'
-
-const PLATFORM_OPTIONS: { value: Platform; label: string }[] = [
-  { value: 'search', label: 'Search' },
-  { value: 'og', label: 'Open Graph' },
-  { value: 'x', label: 'X' },
-  { value: 'schema', label: 'Schema' },
-]
 
 interface SeoPreviewEditorProps {
   target: SeoTarget
@@ -47,7 +36,6 @@ interface SeoPreviewEditorProps {
 }
 
 export function SeoPreviewEditor({ target, workspace, canManage, onDirtyChange }: SeoPreviewEditorProps) {
-  const [platform, setPlatform] = useState<Platform>('search')
   const draft = useSeoDraft(target.seo, onDirtyChange)
   const fieldIdBase = useId()
 
@@ -55,6 +43,7 @@ export function SeoPreviewEditor({ target, workspace, canManage, onDirtyChange }
   const template = templateForPost(target, workspace.targets)
   const canonicalValue = draft.draft.canonicalUrl ?? ''
   const canonicalInvalid = canonicalValue !== '' && !isSafeCanonicalUrl(canonicalValue)
+  const routePath = target.route ?? '/'
 
   async function handleSave(): Promise<void> {
     if (canonicalInvalid) {
@@ -147,149 +136,134 @@ export function SeoPreviewEditor({ target, workspace, canManage, onDirtyChange }
   }
 
   return (
-    <section className={styles.editor} aria-label={`SEO for ${target.title}`}>
-      <header className={styles.header}>
-        <div className={styles.headerText}>
-          <h2 className={styles.headerTitle}>{target.title}</h2>
-          <span className={styles.headerRoute}>
-            {target.route ?? (target.kind === 'template' ? `Entry template${target.tableSlug ? ` · ${target.tableSlug}` : ''}` : '')}
-          </span>
-        </div>
-        <SaveControls
-          dirty={draft.isDirty}
-          state={draft.saveState}
-          canManage={canManage}
-          onSave={() => void handleSave()}
-        />
-      </header>
-      {draft.saveError && <p className={styles.error} role="alert">{draft.saveError}</p>}
-      {!canManage && (
-        <p className={styles.readOnlyNote} role="status">
-          Read-only — your role does not include Manage SEO.
-        </p>
-      )}
-      {target.kind === 'template' && (
-        <p className={styles.templateNote} role="status">
-          Template defaults — title and description act as patterns
-          (<code>{'{currentEntry.title}'}</code>, <code>{'{site.name}'}</code>) for every matching post.
-        </p>
-      )}
-
-      <SegmentedControl
-        value={platform}
-        options={PLATFORM_OPTIONS}
-        onChange={setPlatform}
-        size="sm"
-        aria-label="Preview platform"
-        data-testid="seo-platform-switcher"
+    <div className={styles.workbench}>
+      <SeoPreviewRail
+        resolved={resolved}
+        workspace={workspace}
+        routePath={routePath}
+        schemaTarget={target}
       />
 
-      {platform === 'search' && (
-        <div className={styles.platformBody}>
-          <SearchSnippetPreview resolved={resolved} />
-          {field('title', 'Title', { meterBudget: 'title', sparkle: true })}
-          {field('description', 'Description', { textarea: true, meterBudget: 'description', sparkle: true })}
-          {field('canonicalUrl', 'Canonical URL', { invalid: canonicalInvalid })}
-          {canonicalInvalid && (
-            <p className={styles.error} role="alert">Canonical URL must be an absolute http(s) URL.</p>
-          )}
-          <div className={styles.switchRow}>
-            <Switch
-              checked={draft.draft.noindex === true}
-              onCheckedChange={draft.setNoindex}
-              disabled={!canManage}
-              aria-label="Exclude from search engines (noindex)"
-              switchSize="sm"
-            />
-            <span className={styles.switchLabel}>
-              Exclude from search engines (<code>noindex</code>)
+      <section className={styles.form} aria-label={`SEO for ${target.title}`}>
+        <header className={styles.header}>
+          <div className={styles.headerText}>
+            <h2 className={styles.headerTitle}>{target.title}</h2>
+            <span className={styles.headerRoute}>
+              {target.route ?? (target.kind === 'template' ? `Entry template${target.tableSlug ? ` · ${target.tableSlug}` : ''}` : '')}
             </span>
           </div>
-        </div>
-      )}
-
-      {platform === 'og' && (
-        <div className={styles.platformBody}>
-          <OpenGraphPreview resolved={resolved} siteName={workspace.siteName} />
-          {field('ogTitle', 'OG title', { sparkle: true })}
-          {field('ogDescription', 'OG description', { textarea: true, sparkle: true })}
-          <SeoImageField
-            label="OG image"
-            value={draft.draft.ogImage ?? ''}
-            inheritedValue={resolved.ogImage ?? null}
-            disabled={!canManage}
-            onChange={(next) => draft.setField('ogImage', next)}
+          <SaveControls
+            dirty={draft.isDirty}
+            state={draft.saveState}
+            canManage={canManage}
+            onSave={() => void handleSave()}
           />
-          {field('ogImageAlt', 'OG image alt')}
-          <div className={styles.field}>
-            <label htmlFor={`${fieldIdBase}-ogType`} className={styles.fieldLabel}>OG type</label>
-            <Select
-              id={`${fieldIdBase}-ogType`}
-              value={draft.draft.ogType ?? ''}
-              disabled={!canManage}
-              onChange={(e) => draft.setOgType(e.target.value === '' ? undefined : (e.target.value as 'website' | 'article'))}
-            >
-              <option value="">Auto ({resolved.ogType})</option>
-              <option value="website">website</option>
-              <option value="article">article</option>
-            </Select>
-          </div>
-        </div>
-      )}
+        </header>
+        {draft.saveError && <p className={styles.error} role="alert">{draft.saveError}</p>}
+        {!canManage && (
+          <p className={styles.readOnlyNote} role="status">
+            Read-only — your role does not include Manage SEO.
+          </p>
+        )}
+        {target.kind === 'template' && (
+          <p className={styles.templateNote} role="status">
+            Template defaults — title and description act as patterns
+            (<code>{'{currentEntry.title}'}</code>, <code>{'{site.name}'}</code>) for every matching post.
+          </p>
+        )}
+        {template && (
+          <p className={styles.templateNote} role="status">
+            Inherits patterns from the “{template.title}” entry template.
+          </p>
+        )}
 
-      {platform === 'x' && (
-        <div className={styles.platformBody}>
-          <XCardPreview resolved={resolved} />
-          {!showXFields ? (
-            <div className={styles.customizeRow}>
-              <p className={styles.customizeHint}>
-                X uses the Open Graph values until customized.
-              </p>
-              <Button variant="secondary" size="sm" disabled={!canManage} onClick={() => setXExpanded(true)} data-testid="seo-customize-x">
-                Customize X preview
-              </Button>
-            </div>
-          ) : (
-            <>
-              {field('xTitle', 'X title', { sparkle: true })}
-              {field('xDescription', 'X description', { textarea: true, sparkle: true })}
-              <SeoImageField
-                label="X image"
-                value={draft.draft.xImage ?? ''}
-                inheritedValue={resolved.xImage ?? null}
-                disabled={!canManage}
-                onChange={(next) => draft.setField('xImage', next)}
-              />
-              {field('xImageAlt', 'X image alt')}
-              <div className={styles.field}>
-                <label htmlFor={`${fieldIdBase}-xCard`} className={styles.fieldLabel}>Card type</label>
-                <Select
-                  id={`${fieldIdBase}-xCard`}
-                  value={draft.draft.xCard ?? ''}
-                  disabled={!canManage}
-                  onChange={(e) => draft.setXCard(e.target.value === '' ? undefined : (e.target.value as 'summary' | 'summary_large_image'))}
-                >
-                  <option value="">Auto ({resolved.xCard})</option>
-                  <option value="summary">summary</option>
-                  <option value="summary_large_image">summary_large_image</option>
-                </Select>
-              </div>
-            </>
-          )}
-        </div>
-      )}
+        <h3 className={styles.sectionHeading}>Search appearance</h3>
+        {field('title', 'Title', { meterBudget: 'title', sparkle: true })}
+        {field('description', 'Description', { textarea: true, meterBudget: 'description', sparkle: true })}
+        {field('canonicalUrl', 'Canonical URL', { invalid: canonicalInvalid })}
+        {canonicalInvalid && (
+          <p className={styles.error} role="alert">Canonical URL must be an absolute http(s) URL.</p>
+        )}
+        <FormField
+          layout="inline-end"
+          label="Exclude from search engines"
+          description="Emits noindex — the page disappears from search and answer engines."
+        >
+          <Switch
+            checked={draft.draft.noindex === true}
+            onCheckedChange={draft.setNoindex}
+            disabled={!canManage}
+            aria-label="Exclude from search engines (noindex)"
+            switchSize="sm"
+          />
+        </FormField>
 
-      {platform === 'schema' && (
-        <div className={styles.platformBody}>
-          <SchemaPreview target={target} resolved={resolved} workspace={workspace} />
-          {template && (
-            <p className={styles.templateNote} role="status">
-              Patterns inherit from the “{template.title}” entry template.
+        <Separator />
+        <h3 className={styles.sectionHeading}>Social card (Open Graph)</h3>
+        {field('ogTitle', 'OG title', { sparkle: true })}
+        {field('ogDescription', 'OG description', { textarea: true, sparkle: true })}
+        <SeoImageField
+          label="OG image"
+          value={draft.draft.ogImage ?? ''}
+          inheritedValue={resolved.ogImage ?? null}
+          disabled={!canManage}
+          onChange={(next) => draft.setField('ogImage', next)}
+        />
+        {field('ogImageAlt', 'OG image alt')}
+        <div className={styles.field}>
+          <label htmlFor={`${fieldIdBase}-ogType`} className={styles.fieldLabel}>OG type</label>
+          <Select
+            id={`${fieldIdBase}-ogType`}
+            value={draft.draft.ogType ?? ''}
+            disabled={!canManage}
+            onChange={(e) => draft.setOgType(e.target.value === '' ? undefined : (e.target.value as 'website' | 'article'))}
+          >
+            <option value="">Auto ({resolved.ogType})</option>
+            <option value="website">website</option>
+            <option value="article">article</option>
+          </Select>
+        </div>
+
+        <Separator />
+        <h3 className={styles.sectionHeading}>X card</h3>
+        {!showXFields ? (
+          <div className={styles.customizeRow}>
+            <p className={styles.customizeHint}>
+              X uses the Open Graph values until customized.
             </p>
-          )}
-        </div>
-      )}
-    </section>
+            <Button variant="secondary" size="sm" disabled={!canManage} onClick={() => setXExpanded(true)} data-testid="seo-customize-x">
+              Customize X preview
+            </Button>
+          </div>
+        ) : (
+          <>
+            {field('xTitle', 'X title', { sparkle: true })}
+            {field('xDescription', 'X description', { textarea: true, sparkle: true })}
+            <SeoImageField
+              label="X image"
+              value={draft.draft.xImage ?? ''}
+              inheritedValue={resolved.xImage ?? null}
+              disabled={!canManage}
+              onChange={(next) => draft.setField('xImage', next)}
+            />
+            {field('xImageAlt', 'X image alt')}
+            <div className={styles.field}>
+              <label htmlFor={`${fieldIdBase}-xCard`} className={styles.fieldLabel}>Card type</label>
+              <Select
+                id={`${fieldIdBase}-xCard`}
+                value={draft.draft.xCard ?? ''}
+                disabled={!canManage}
+                onChange={(e) => draft.setXCard(e.target.value === '' ? undefined : (e.target.value as 'summary' | 'summary_large_image'))}
+              >
+                <option value="">Auto ({resolved.xCard})</option>
+                <option value="summary">summary</option>
+                <option value="summary_large_image">summary_large_image</option>
+              </Select>
+            </div>
+          </>
+        )}
+      </section>
+    </div>
   )
 }
 

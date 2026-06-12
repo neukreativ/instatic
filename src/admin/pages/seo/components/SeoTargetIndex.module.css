@@ -1,126 +1,146 @@
 .index {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
 }
 
-.summaryRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+.summary {
+    margin: 0;
+    font-size: 11px;
+    color: var(--editor-warning-text);
 }
 
-.summaryChip {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: var(--editor-radius-sm);
-  background: var(--editor-surface-3);
-  color: var(--editor-warning-text);
+.scroller {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    outline: none;
 }
 
-.list {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  background: var(--editor-surface);
-  border-radius: 16px;
-  overflow: hidden;
-  outline: none;
+.scroller:focus-visible {
+    border-radius: var(--editor-radius);
+    box-shadow: 0 0 0 2px var(--editor-focus-ring);
 }
 
-.list:focus-visible {
-  box-shadow: 0 0 0 2px var(--editor-focus-ring);
+/* Pinned site-defaults card — its own rounded tile above the groups. */
+.siteRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: var(--panel-radius);
+    background: var(--editor-surface-2);
+    text-align: left;
+}
+
+.siteRow:hover {
+    background: var(--editor-surface-3);
+}
+
+.group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.groupLabel {
+    margin: 0;
+    padding: 0 2px;
+    font-size: 10px;
+    font-weight: 620;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--editor-text-secondary);
+}
+
+.groupList {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: var(--editor-surface);
+    border-radius: var(--panel-radius);
+    overflow: hidden;
 }
 
 .row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 12px;
-  border-radius: 0;
-  background: var(--editor-surface-2);
-  text-align: left;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: 0;
+    background: var(--editor-surface-2);
+    text-align: left;
 }
 
 .row:hover {
-  background: var(--editor-surface-3);
+    background: var(--editor-surface-3);
 }
 
 .rowSelected,
 .rowSelected:hover {
-  background: var(--editor-surface-4);
-}
-
-.rowPinned {
-  background: var(--editor-surface-3);
+    background: var(--editor-surface-4);
+    box-shadow: inset 2px 0 0 var(--editor-accent);
 }
 
 .rowMain {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
 }
 
 .rowTitle {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--editor-text-bright);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--editor-text-bright);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .rowSub {
-  font-size: 11px;
-  color: var(--editor-text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.rowMeta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.rowKind {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--editor-text-muted);
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--editor-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .dots {
-  display: inline-flex;
-  gap: 3px;
+    display: inline-flex;
+    gap: 3px;
+    flex-shrink: 0;
 }
 
 .dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
 }
 
 .dot_ok {
-  background: var(--editor-success-green);
+    background: var(--editor-success-green);
 }
 
 .dot_warn {
-  background: var(--editor-warning);
+    background: var(--editor-warning);
 }
 
 .dot_bad {
-  background: var(--editor-danger);
+    background: var(--editor-danger);
 }
 
 .empty {
-  padding: 16px;
-  font-size: 12px;
-  color: var(--editor-text-muted);
-  background: var(--editor-surface-2);
+    margin: 0;
+    padding: 14px;
+    font-size: 12px;
+    color: var(--editor-text-muted);
+    background: var(--editor-surface-2);
+    border-radius: var(--panel-radius);
 }

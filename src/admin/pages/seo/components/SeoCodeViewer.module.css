@@ -1,0 +1,11 @@
+.viewer {
+    border-radius: var(--editor-radius);
+    overflow: hidden;
+    background: var(--editor-surface);
+    max-height: 420px;
+    overflow-y: auto;
+}
+
+.fallback {
+    font-size: 11px;
+}

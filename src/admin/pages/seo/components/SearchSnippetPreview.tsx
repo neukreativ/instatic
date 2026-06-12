@@ -1,20 +1,39 @@
 /**
- * SearchSnippetPreview — Google-style result snippet rendered from the
- * RESOLVED metadata, so what the user sees is what the publisher emits.
- * Pure display; editing happens in the controlled inputs below it.
+ * SearchSnippetPreview — 1:1 mock of a Google dark-theme desktop result.
+ *
+ * Layout mirrors the real SERP: favicon circle + site-name/breadcrumb
+ * header row, the blue 20px title, then the grey snippet. Values come from
+ * the RESOLVED metadata, so what's shown is exactly what the publisher
+ * emits. Colours live in the `--seo-serp-*` palette (globals.css) — the
+ * preview must look like Google, not like the editor.
  */
 import type { ResolvedSeoMetadata } from '@core/seo'
 import styles from './SearchSnippetPreview.module.css'
+import { serpBreadcrumb, serpSiteLabel } from './previewDomain'
 
-export function SearchSnippetPreview({ resolved }: { resolved: ResolvedSeoMetadata }) {
+interface SearchSnippetPreviewProps {
+  resolved: ResolvedSeoMetadata
+  siteName: string
+  origin: string | null
+  routePath: string
+}
+
+export function SearchSnippetPreview({ resolved, siteName, origin, routePath }: SearchSnippetPreviewProps) {
+  const siteLabel = serpSiteLabel(siteName, origin)
   return (
-    <figure className={styles.snippet} aria-label="Search result preview">
-      <span className={styles.url}>
-        {resolved.canonicalUrl ?? 'example.com — set PUBLIC_ORIGINS for absolute URLs'}
-      </span>
+    <figure className={styles.serp} aria-label="Google search result preview">
+      <div className={styles.head}>
+        <span className={styles.favicon} aria-hidden="true">
+          {siteLabel.slice(0, 1).toUpperCase()}
+        </span>
+        <span className={styles.headText}>
+          <span className={styles.site}>{siteLabel}</span>
+          <span className={styles.url}>{serpBreadcrumb(origin, routePath, resolved.canonicalUrl)}</span>
+        </span>
+      </div>
       <span className={styles.title}>{resolved.title}</span>
       <span className={styles.description}>
-        {resolved.description ?? 'Search engines will generate a description from page content.'}
+        {resolved.description ?? 'Google will generate a snippet from page content — add a description to control it.'}
       </span>
       {resolved.noindex && (
         <span className={styles.noindexBadge} role="status">noindex — hidden from search</span>

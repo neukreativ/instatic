@@ -1,26 +1,28 @@
 .columns {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  gap: 16px;
-  align-items: start;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 28px;
+    align-items: start;
 }
 
 .editorColumn {
-  position: sticky;
-  top: 16px;
-  min-width: 0;
+    min-width: 0;
 }
 
 .indexColumn {
-  min-width: 0;
+    position: sticky;
+    top: 0;
+    align-self: start;
+    min-width: 0;
 }
 
 @media (max-width: 960px) {
-  .columns {
-    grid-template-columns: 1fr;
-  }
+    .columns {
+        grid-template-columns: 1fr;
+    }
 
-  .editorColumn {
-    position: static;
-  }
+    .indexColumn {
+        position: static;
+        order: -1;
+    }
 }

@@ -3,14 +3,15 @@
  *
  * Two persistent columns:
  *   - Left: sticky preview editor. Platform switcher (Search / Open Graph /
- *     X / Schema), editable snippet fields with inherited-value placeholders
- *     and pixel length meters. The pinned "Site defaults" target renders the
- *     site-level editor instead (patterns, default images, organization).
+ *     X / Schema) over live 1:1 platform previews, editable snippet fields
+ *     with inherited-value placeholders and pixel length meters. The pinned
+ *     "Site defaults" row opens the site-level editor instead.
  *   - Right: target index — search, kind filters, issues summary chips,
  *     dense rows with per-field health dots, full keyboard navigation.
  *
- * Dirty guard: switching targets with unsaved changes asks through an
- * in-app dialog (never `confirm()`); nothing is silently discarded.
+ * The homepage is selected by default so the user lands on a live preview,
+ * not an empty defaults form. Switching targets with unsaved changes asks
+ * through an in-app dialog (never `confirm()`).
  */
 import { useState } from 'react'
 import { Button } from '@ui/components/Button'
@@ -30,10 +31,21 @@ interface MetaTabProps {
   canManage: boolean
 }
 
+/** Homepage first, then any page, then the site defaults row. */
+function defaultSelectionId(targets: SeoTarget[]): string {
+  return (
+    targets.find((target) => target.kind === 'page' && target.route === '/')?.id ??
+    targets.find((target) => target.kind === 'page')?.id ??
+    SITE_DEFAULTS_ID
+  )
+}
+
 export function MetaTab({ workspace, canManage }: MetaTabProps) {
-  const [selectedId, setSelectedId] = useState<string>(SITE_DEFAULTS_ID)
+  const [selection, setSelection] = useState<string | null>(null)
   const [editorDirty, setEditorDirty] = useState(false)
   const [pendingSelection, setPendingSelection] = useState<string | null>(null)
+
+  const selectedId = selection ?? defaultSelectionId(workspace.targets)
 
   const selectedTarget: SeoTarget | null =
     selectedId === SITE_DEFAULTS_ID
@@ -46,12 +58,12 @@ export function MetaTab({ workspace, canManage }: MetaTabProps) {
       setPendingSelection(nextId)
       return
     }
-    setSelectedId(nextId)
+    setSelection(nextId)
   }
 
   function discardAndSwitch(): void {
     if (pendingSelection !== null) {
-      setSelectedId(pendingSelection)
+      setSelection(pendingSelection)
       setEditorDirty(false)
       setPendingSelection(null)
     }

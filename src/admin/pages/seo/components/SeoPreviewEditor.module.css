@@ -1,126 +1,129 @@
-.editor {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  background: var(--editor-surface-2);
-  border-radius: 16px;
-  padding: 16px;
+/* Workbench: sticky preview rail (left) + sectioned form (right). */
+.workbench {
+    display: grid;
+    grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+    min-width: 0;
+}
+
+@media (max-width: 1100px) {
+    .workbench {
+        grid-template-columns: 1fr;
+    }
+}
+
+.form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    background: var(--editor-surface-2);
+    border-radius: 16px;
+    padding: 20px;
+    min-width: 0;
 }
 
 .header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
 }
 
 .headerText {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
 }
 
 .headerTitle {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--editor-text-bright);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--editor-text-bright);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .headerRoute {
-  font-size: 11px;
-  color: var(--editor-text-muted);
+    font-size: 11px;
+    color: var(--editor-text-muted);
+    font-family: var(--font-mono);
 }
 
 .saveControls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
 }
 
 .saveStatus {
-  font-size: 11px;
-  color: var(--editor-text-muted);
+    font-size: 11px;
+    color: var(--editor-text-muted);
 }
 
 .error {
-  margin: 0;
-  font-size: 12px;
-  color: var(--editor-danger-text);
+    margin: 0;
+    font-size: 12px;
+    color: var(--editor-danger-text);
 }
 
 .readOnlyNote,
 .templateNote {
-  margin: 0;
-  font-size: 12px;
-  color: var(--editor-info-text);
-}
-
-.platformBody {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.fieldLabelRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.fieldLabel {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--editor-text-muted);
-}
-
-.fieldHint {
-  margin: 0;
-  font-size: 11px;
-  color: var(--editor-text-muted);
-}
-
-.switchRow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.switchLabel {
-  font-size: 12px;
-  color: var(--editor-text);
-}
-
-.customizeRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.customizeHint {
-  margin: 0;
-  font-size: 12px;
-  color: var(--editor-text-muted);
+    margin: 0;
+    font-size: 12px;
+    color: var(--editor-info-text);
 }
 
 .sectionHeading {
-  margin: 8px 0 0;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--editor-text-bright);
+    margin: 2px 0 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--editor-text-bright);
+}
+
+/* Field shell — mirrors the FormField primitive's stacked layout. The
+ * sparkle action rides the label row, which FormField's single label slot
+ * can't host, hence the local mirror instead of the wrapper. */
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.fieldLabelRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 20px;
+}
+
+.fieldLabel {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--editor-text);
+}
+
+.fieldHint {
+    margin: 0;
+    font-size: 11px;
+    color: var(--editor-text-muted);
+    line-height: 1.4;
+}
+
+.customizeRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.customizeHint {
+    margin: 0;
+    font-size: 12px;
+    color: var(--editor-text-muted);
 }

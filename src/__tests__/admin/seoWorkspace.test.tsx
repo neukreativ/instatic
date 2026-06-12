@@ -227,8 +227,7 @@ describe('SEO Meta tab', () => {
     fireEvent.click(await screen.findByTestId('seo-target-page_about'))
     const editor = await screen.findByRole('region', { name: 'SEO for About' })
 
-    // Switch to the X platform view.
-    fireEvent.click(within(editor).getByRole('button', { name: 'X' }))
+    // The X section starts collapsed behind the customize gate.
     expect(within(editor).queryByLabelText('X title')).toBeNull()
 
     fireEvent.click(screen.getByTestId('seo-customize-x'))
@@ -259,12 +258,17 @@ describe('SEO Robots tab', () => {
     mockSeoFetch()
     renderWithSession(<RobotsHarness />)
 
+    // Newline-agnostic assertions: the preview renders through the lazy
+    // CodeMirror viewer when its chunk is already loaded (full-suite runs)
+    // and through the plain <Code> fallback otherwise — CM6's per-line DOM
+    // drops newlines from textContent.
     const preview = await screen.findByTestId('seo-robots-preview')
-    expect(preview.textContent).toContain('User-agent: *\nAllow: /')
+    expect(preview.textContent).toContain('User-agent: *')
+    expect(preview.textContent).toContain('Allow: /')
     expect(preview.textContent).not.toContain('GPTBot')
 
     fireEvent.click(screen.getByTestId('seo-robots-ai-training'))
-    expect(screen.getByTestId('seo-robots-preview').textContent).toContain('User-agent: GPTBot\nDisallow: /')
+    expect(screen.getByTestId('seo-robots-preview').textContent).toContain('User-agent: GPTBot')
   })
 })
 

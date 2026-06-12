@@ -1,13 +1,13 @@
 /**
  * SeoPage — `/admin/tools/seo`.
  *
- * The SEO & AEO workspace: per-target metadata editing with live platform
- * previews (Meta tab), generated robots.txt with AI-crawler controls
- * (Robots.txt tab), and sitemap generation settings (Sitemap tab).
+ * The SEO & AEO workspace: per-target metadata editing with live 1:1
+ * platform previews (Meta tab), generated robots.txt with AI-crawler
+ * controls (Robots.txt tab), and sitemap generation settings (Sitemap tab).
  *
- * Tab chrome uses the shared `Tabs` compound primitive (ARIA tabs with
- * automatic activation); the page owns the active value and the shared
- * workspace data (one `GET /seo/targets` load).
+ * Tab chrome matches the sibling AI / Users / Account pages: the same
+ * capability-gated Button row passed through AdminPageLayout's `tabs` slot
+ * (§T.6 in `no-plugin-tab-shells.test.ts`).
  *
  * Capabilities: `seo.read` gates the workspace (enforced by
  * `canAccessWorkspace`); `seo.manage` gates every write — tabs receive
@@ -15,7 +15,7 @@
  */
 
 import { useState } from 'react'
-import { Tabs, TabList, Tab, TabPanel } from '@ui/components/Tabs'
+import { Button } from '@ui/components/Button'
 import { AdminPageLayout } from '@admin/layouts/AdminPageLayout'
 import { hasCapability } from '@admin/access'
 import { useCurrentAdminUser } from '@admin/sessionContext'
@@ -25,48 +25,61 @@ import { SitemapTab } from './tabs/SitemapTab'
 import { useSeoWorkspace } from './hooks/useSeoWorkspace'
 import styles from './SeoPage.module.css'
 
-type TabValue = 'meta' | 'robots' | 'sitemap'
+type Tab = 'meta' | 'robots' | 'sitemap'
+
+const TAB_LABELS: Record<Tab, string> = {
+  meta: 'Meta',
+  robots: 'Robots.txt',
+  sitemap: 'Sitemap',
+}
+
+const ALL_TABS: Tab[] = ['meta', 'robots', 'sitemap']
 
 export function SeoPage() {
   const currentUser = useCurrentAdminUser()
   const unrestricted = !currentUser
   const canManage = unrestricted || hasCapability(currentUser, 'seo.manage')
 
-  const [tab, setTab] = useState<TabValue>('meta')
+  const [tab, setTab] = useState<Tab>('meta')
   const workspace = useSeoWorkspace()
 
+  const tabs = (
+    <div role="tablist" aria-label="SEO sections" className={styles.tabsRow}>
+      {ALL_TABS.map((item) => (
+        <Button
+          key={item}
+          type="button"
+          variant={tab === item ? 'primary' : 'secondary'}
+          size="sm"
+          onClick={() => setTab(item)}
+          role="tab"
+          aria-selected={tab === item}
+          data-testid={`seo-tab-${item}`}
+        >
+          <span>{TAB_LABELS[item]}</span>
+        </Button>
+      ))}
+    </div>
+  )
+
   return (
-    <Tabs value={tab} onChange={setTab}>
-      <AdminPageLayout
-        workspace="seo"
-        title="SEO"
-        titleId="seo-title"
-        description="Search and answer-engine optimization: metadata, social cards, structured data, robots, and sitemap."
-        tabs={
-          <TabList ariaLabel="SEO sections">
-            <Tab value="meta">Meta</Tab>
-            <Tab value="robots">Robots.txt</Tab>
-            <Tab value="sitemap">Sitemap</Tab>
-          </TabList>
-        }
-        loading={workspace.loading}
-      >
-        {workspace.error ? (
-          <p className={styles.loadError} role="alert">{workspace.error}</p>
-        ) : (
-          <div className={styles.body}>
-            <TabPanel value="meta">
-              <MetaTab workspace={workspace} canManage={canManage} />
-            </TabPanel>
-            <TabPanel value="robots">
-              <RobotsTab workspace={workspace} canManage={canManage} />
-            </TabPanel>
-            <TabPanel value="sitemap">
-              <SitemapTab workspace={workspace} canManage={canManage} />
-            </TabPanel>
-          </div>
-        )}
-      </AdminPageLayout>
-    </Tabs>
+    <AdminPageLayout
+      workspace="seo"
+      title="SEO"
+      titleId="seo-title"
+      description="Search and answer-engine optimization: metadata, social cards, structured data, robots, and sitemap."
+      tabs={tabs}
+      loading={workspace.loading}
+    >
+      {workspace.error ? (
+        <p className={styles.loadError} role="alert">{workspace.error}</p>
+      ) : (
+        <div className={styles.body}>
+          {tab === 'meta' && <MetaTab workspace={workspace} canManage={canManage} />}
+          {tab === 'robots' && <RobotsTab workspace={workspace} canManage={canManage} />}
+          {tab === 'sitemap' && <SitemapTab workspace={workspace} canManage={canManage} />}
+        </div>
+      )}
+    </AdminPageLayout>
   )
 }

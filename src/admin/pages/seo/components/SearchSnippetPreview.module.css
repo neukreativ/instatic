@@ -1,42 +1,97 @@
-.snippet {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0;
-  padding: 14px 16px;
-  border-radius: var(--panel-radius);
-  background: var(--editor-surface);
+/* 1:1 Google dark-theme desktop result. Fonts/sizes/colours mirror the
+ * real SERP (arial, 20px blue title, 14px grey snippet). */
+
+.serp {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+    padding: 18px 20px;
+    border-radius: var(--panel-radius);
+    background: var(--seo-serp-bg);
+    font-family: arial, sans-serif;
+}
+
+.head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 4px;
+}
+
+.favicon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--seo-serp-chip);
+    color: var(--seo-serp-site);
+    font-size: 13px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.headText {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.site {
+    color: var(--seo-serp-site);
+    font-size: 14px;
+    line-height: 20px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .url {
-  font-size: 11px;
-  color: var(--editor-text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+    color: var(--seo-serp-url);
+    font-size: 12px;
+    line-height: 18px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .title {
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--editor-info-text);
-  overflow-wrap: break-word;
+    color: var(--seo-serp-title);
+    font-size: 20px;
+    line-height: 26px;
+    font-weight: 400;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    cursor: pointer;
+}
+
+.title:hover {
+    text-decoration: underline;
 }
 
 .description {
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--editor-text);
+    color: var(--seo-serp-text);
+    font-size: 14px;
+    line-height: 22px;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
 }
 
 .noindexBadge {
-  align-self: flex-start;
-  margin-top: 6px;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 2px 6px;
-  border-radius: var(--editor-radius-sm);
-  background: var(--editor-danger-bg);
-  color: var(--editor-danger-text);
+    align-self: flex-start;
+    margin-top: 8px;
+    font-family: var(--font-sans);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 6px;
+    border-radius: var(--editor-radius-sm);
+    background: var(--editor-danger-bg);
+    color: var(--editor-danger-text);
 }

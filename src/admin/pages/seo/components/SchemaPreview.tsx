@@ -1,12 +1,13 @@
 /**
- * SchemaPreview — read-only, pretty-printed JSON-LD exactly as the publisher
- * will emit it for the selected target (same `buildJsonLdEntities` call).
- * Makes the AEO output inspectable instead of invisible.
+ * SchemaPreview — read-only, syntax-highlighted JSON-LD exactly as the
+ * publisher will emit it for the selected target (same `buildJsonLdEntities`
+ * call). Rendered through the shared CodeMirror viewer so the AEO output is
+ * inspectable with real JSON highlighting.
  */
 import { buildJsonLdEntities, type ResolvedSeoMetadata } from '@core/seo'
-import { Code } from '@ui/components/Code'
 import type { SeoTarget } from '../lib/seoApi'
 import type { SeoWorkspace } from '../hooks/useSeoWorkspace'
+import { SeoCodeViewer } from './SeoCodeViewer'
 import styles from './SchemaPreview.module.css'
 
 export function SchemaPreview({
@@ -40,9 +41,11 @@ export function SchemaPreview({
 
   return (
     <div className={styles.schema} aria-label="JSON-LD structured data preview">
-      {entities.map((entity, index) => (
-        <Code key={index}>{JSON.stringify(entity, null, 2)}</Code>
-      ))}
+      <SeoCodeViewer
+        docKey={`schema:${target.id}`}
+        value={entities.map((entity) => JSON.stringify(entity, null, 2)).join('\n\n')}
+        language="json"
+      />
     </div>
   )
 }

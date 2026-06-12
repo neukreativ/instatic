@@ -1,0 +1,33 @@
+.rail {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 0;
+}
+
+.block {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.blockLabel {
+    margin: 0;
+    font-size: 10px;
+    font-weight: 620;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--editor-text-secondary);
+}
+
+.schemaToggle {
+    align-self: flex-start;
+    font-size: 10px;
+    font-weight: 620;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--editor-text-secondary);
+}

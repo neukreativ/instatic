@@ -1,14 +1,15 @@
 /**
  * RobotsTab — generated robots.txt controls + live preview.
  *
- * Three switches (indexing, AI training crawlers, AI answer crawlers) over
- * a byte-identical preview of the served file — the preview calls the same
- * `generateRobotsTxt` the server endpoint uses. Saving writes
- * `site.settings.seo.robots`; output goes live with the publish lifecycle.
+ * Three FormField-wrapped switches (indexing, AI training crawlers, AI
+ * answer crawlers) over a byte-identical CodeMirror preview of the served
+ * file — the preview calls the same `generateRobotsTxt` the server endpoint
+ * uses. Saving writes `site.settings.seo.robots`; output goes live with the
+ * publish lifecycle.
  */
 import { useState } from 'react'
 import { Switch } from '@ui/components/Switch'
-import { Code } from '@ui/components/Code'
+import { FormField } from '@ui/components/FormField'
 import { getErrorMessage } from '@core/utils/errorMessage'
 import {
   generateRobotsTxt,
@@ -17,6 +18,7 @@ import {
   type SeoRobotsSettings,
 } from '@core/seo'
 import { SaveControls } from '../components/SeoPreviewEditor'
+import { SeoCodeViewer } from '../components/SeoCodeViewer'
 import type { SeoWorkspace } from '../hooks/useSeoWorkspace'
 import styles from './SettingsTabs.module.css'
 
@@ -77,68 +79,49 @@ export function RobotsTab({ workspace, canManage }: RobotsTabProps) {
       )}
 
       <div className={styles.controls}>
-        <SettingSwitch
+        <FormField
+          layout="inline-end"
           label="Allow search engine indexing"
           description="Turning this off serves a global Disallow — the whole site disappears from search."
-          checked={draft.indexingEnabled !== false}
-          disabled={!canManage}
-          onChange={(value) => setFlag('indexingEnabled', value)}
-          testId="seo-robots-indexing"
-        />
-        <SettingSwitch
+        >
+          <Switch
+            checked={draft.indexingEnabled !== false}
+            onCheckedChange={(value) => setFlag('indexingEnabled', value)}
+            disabled={!canManage}
+            aria-label="Allow search engine indexing"
+            data-testid="seo-robots-indexing"
+          />
+        </FormField>
+        <FormField
+          layout="inline-end"
           label="Allow AI training crawlers"
           description={`Bots that ingest content for model training: ${AI_TRAINING_CRAWLERS.join(', ')}.`}
-          checked={draft.allowAiTrainingCrawlers !== false}
-          disabled={!canManage || draft.indexingEnabled === false}
-          onChange={(value) => setFlag('allowAiTrainingCrawlers', value)}
-          testId="seo-robots-ai-training"
-        />
-        <SettingSwitch
+        >
+          <Switch
+            checked={draft.allowAiTrainingCrawlers !== false}
+            onCheckedChange={(value) => setFlag('allowAiTrainingCrawlers', value)}
+            disabled={!canManage || draft.indexingEnabled === false}
+            aria-label="Allow AI training crawlers"
+            data-testid="seo-robots-ai-training"
+          />
+        </FormField>
+        <FormField
+          layout="inline-end"
           label="Allow AI search & answer crawlers"
           description={`Bots that fetch content to ground live AI answers: ${AI_ANSWER_CRAWLERS.join(', ')}. Blocking these removes the site from AI search results.`}
-          checked={draft.allowAiAnswerCrawlers !== false}
-          disabled={!canManage || draft.indexingEnabled === false}
-          onChange={(value) => setFlag('allowAiAnswerCrawlers', value)}
-          testId="seo-robots-ai-answer"
-        />
+        >
+          <Switch
+            checked={draft.allowAiAnswerCrawlers !== false}
+            onCheckedChange={(value) => setFlag('allowAiAnswerCrawlers', value)}
+            disabled={!canManage || draft.indexingEnabled === false}
+            aria-label="Allow AI search & answer crawlers"
+            data-testid="seo-robots-ai-answer"
+          />
+        </FormField>
       </div>
 
       <h3 className={styles.previewHeading}>Preview</h3>
-      <div data-testid="seo-robots-preview">
-        <Code className={styles.preview}>{preview}</Code>
-      </div>
+      <SeoCodeViewer docKey="robots-preview" value={preview} language="text" data-testid="seo-robots-preview" />
     </section>
-  )
-}
-
-export function SettingSwitch({
-  label,
-  description,
-  checked,
-  disabled,
-  onChange,
-  testId,
-}: {
-  label: string
-  description: string
-  checked: boolean
-  disabled: boolean
-  onChange: (value: boolean) => void
-  testId: string
-}) {
-  return (
-    <div className={styles.switchRow}>
-      <Switch
-        checked={checked}
-        onCheckedChange={onChange}
-        disabled={disabled}
-        aria-label={label}
-        data-testid={testId}
-      />
-      <div className={styles.switchText}>
-        <span className={styles.switchLabel}>{label}</span>
-        <span className={styles.switchDescription}>{description}</span>
-      </div>
-    </div>
   )
 }
