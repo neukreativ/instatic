@@ -1,14 +1,14 @@
 /**
  * SitemapTab — sitemap.xml generation settings.
  *
- * Enable/disable, inclusion counts (computed from the same target data the
- * Meta tab uses), and per-target include/exclude switches for routable
- * targets. Noindex targets are excluded automatically and shown as such —
- * the control is disabled with the reason inline.
+ * Two-column workbench: the settings card (enable switch + inclusion
+ * counts) and the per-target include/exclude list on the left, a sticky
+ * entry-format sample on the right. Noindex targets are excluded
+ * automatically and shown as such — the control is disabled with the
+ * reason inline.
  */
 import { useState } from 'react'
 import { Switch } from '@ui/components/Switch'
-import { FormField } from '@ui/components/FormField'
 import { getErrorMessage } from '@core/utils/errorMessage'
 import { publishCmsDraft } from '@core/persistence'
 import { hasCapability } from '@admin/access'
@@ -16,6 +16,7 @@ import { useCurrentAdminUser } from '@admin/sessionContext'
 import { StepUpCancelledMessage, useStepUp } from '@admin/shared/StepUp'
 import type { SeoSitemapSettings } from '@core/seo'
 import { SeoCodeViewer } from '../components/SeoCodeViewer'
+import { SeoSwitchRow } from '../components/SeoFormRow'
 import type { SeoWorkspace } from '../hooks/useSeoWorkspace'
 import type { SeoSaveBridge } from '../hooks/useSeoSaveBridge'
 import { useSeoSaveSurface } from '../hooks/useSeoSaveBridge'
@@ -110,80 +111,81 @@ export function SitemapTab({ workspace, canManage, bridge }: SitemapTabProps) {
 
   return (
     <section className={styles.tab} aria-label="Sitemap settings">
-      <header className={styles.header}>
-        <div>
-          <h2 className={styles.heading}>Sitemap</h2>
-          <p className={styles.subheading}>
-            Generated from published content and served at <code>/sitemap.xml</code>. Changes go live on the next publish.
-          </p>
-        </div>
-      </header>
-      {saveError && <p className={styles.error} role="alert">{saveError}</p>}
-      {!workspace.publicOrigin && (
-        <p className={styles.notice} role="status">
-          No public origin configured — set the <code>PUBLIC_ORIGINS</code> environment
-          variable so sitemap URLs use your real domain.
-        </p>
-      )}
+      <div className={styles.workbench}>
+        <div className={styles.settingsColumn}>
+          {saveError && <p className={styles.error} role="alert">{saveError}</p>}
+          {!workspace.publicOrigin && (
+            <p className={styles.notice} role="status">
+              No public origin configured — set the <code>PUBLIC_ORIGINS</code> environment
+              variable so sitemap URLs use your real domain.
+            </p>
+          )}
 
-      <div className={styles.controls}>
-        <FormField
-          layout="inline-end"
-          label="Generate sitemap.xml"
-          description="Search and answer engines use the sitemap to discover published pages and posts."
-        >
-          <Switch
-            checked={enabled}
-            disabled={!canManage}
-            onCheckedChange={(value) => {
-              setDraft((current) => {
-                const next = { ...current }
-                if (value) delete next.enabled
-                else next.enabled = false
-                return next
-              })
-              if (saveState !== 'idle') setSaveState('idle')
-            }}
-            aria-label="Generate sitemap.xml"
-            data-testid="seo-sitemap-enabled"
-          />
-        </FormField>
+          <div className={styles.card}>
+            <header className={styles.cardHeader}>
+              <h2 className={styles.heading}>Sitemap</h2>
+              <p className={styles.subheading}>
+                Generated from published content and served at <code>/sitemap.xml</code>. Changes go live on the next publish.
+              </p>
+            </header>
+
+            <SeoSwitchRow
+              id="seo-sitemap-enabled-switch"
+              label="Generate sitemap.xml"
+              hint="Search and answer engines use the sitemap to discover published pages and posts."
+              checked={enabled}
+              disabled={!canManage}
+              onCheckedChange={(value) => {
+                setDraft((current) => {
+                  const next = { ...current }
+                  if (value) delete next.enabled
+                  else next.enabled = false
+                  return next
+                })
+                if (saveState !== 'idle') setSaveState('idle')
+              }}
+              data-testid="seo-sitemap-enabled"
+            />
+
+            <p className={styles.counts} role="status" data-testid="seo-sitemap-counts">
+              {enabled
+                ? `${included.length} of ${routable.length} routable targets included.`
+                : 'Sitemap generation is disabled — /sitemap.xml returns 404.'}
+            </p>
+          </div>
+
+          {enabled && (
+            <div className={styles.targetList} aria-label="Sitemap inclusion">
+              {routable.map((target) => {
+                const kindKey = target.kind === 'post' ? 'row' as const : 'page' as const
+                const noindexed = target.seo?.noindex === true
+                const isIncluded = !noindexed && !excluded.has(`${kindKey}:${target.id}`)
+                return (
+                  <div key={target.id} className={styles.targetRow}>
+                    <Switch
+                      checked={isIncluded}
+                      disabled={!canManage || noindexed}
+                      onCheckedChange={(value) => toggleTarget(kindKey, target.id, value)}
+                      aria-label={`Include ${target.title} in the sitemap`}
+                      switchSize="sm"
+                    />
+                    <span className={styles.targetTitle}>{target.title}</span>
+                    <span className={styles.targetRoute}>{target.route}</span>
+                    {noindexed && (
+                      <span className={styles.targetNote}>noindex — excluded automatically</span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        <aside className={styles.previewColumn} aria-label="Sitemap entry format">
+          <h3 className={styles.previewHeading}>Entry format</h3>
+          <SeoCodeViewer docKey="sitemap-sample" value={sampleEntry(workspace)} language="html" />
+        </aside>
       </div>
-
-      <p className={styles.counts} role="status" data-testid="seo-sitemap-counts">
-        {enabled
-          ? `${included.length} of ${routable.length} routable targets included.`
-          : 'Sitemap generation is disabled — /sitemap.xml returns 404.'}
-      </p>
-
-      {enabled && (
-        <div className={styles.targetList} aria-label="Sitemap inclusion">
-          {routable.map((target) => {
-            const kindKey = target.kind === 'post' ? 'row' as const : 'page' as const
-            const noindexed = target.seo?.noindex === true
-            const isIncluded = !noindexed && !excluded.has(`${kindKey}:${target.id}`)
-            return (
-              <div key={target.id} className={styles.targetRow}>
-                <Switch
-                  checked={isIncluded}
-                  disabled={!canManage || noindexed}
-                  onCheckedChange={(value) => toggleTarget(kindKey, target.id, value)}
-                  aria-label={`Include ${target.title} in the sitemap`}
-                  switchSize="sm"
-                />
-                <span className={styles.targetTitle}>{target.title}</span>
-                <span className={styles.targetRoute}>{target.route}</span>
-                {noindexed && (
-                  <span className={styles.targetNote}>noindex — excluded automatically</span>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      <h3 className={styles.previewHeading}>Entry format</h3>
-      <SeoCodeViewer docKey="sitemap-sample" value={sampleEntry(workspace)} language="html" />
     </section>
   )
 }

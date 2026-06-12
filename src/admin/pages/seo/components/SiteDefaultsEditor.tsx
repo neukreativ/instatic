@@ -24,6 +24,7 @@ import { useSeoSaveSurface } from '../hooks/useSeoSaveBridge'
 import { resolveTargetSeo } from '../lib/resolveTargetSeo'
 import { SeoPreviewRail } from './SeoPreviewRail'
 import { SeoImageField } from './SeoImageField'
+import { SeoFormRow } from './SeoFormRow'
 import styles from './SeoPreviewEditor.module.css'
 
 type SiteStringField =
@@ -198,8 +199,7 @@ export function SiteDefaultsEditor({ workspace, canManage, bridge }: SiteDefault
         )}
 
         <h3 className={styles.sectionHeading}>Defaults</h3>
-        <div className={styles.field}>
-          <label htmlFor={`${idBase}-pattern`} className={styles.fieldLabel}>Title pattern</label>
+        <SeoFormRow label="Title pattern" htmlFor={`${idBase}-pattern`}>
           <Input
             id={`${idBase}-pattern`}
             type="text"
@@ -212,10 +212,9 @@ export function SiteDefaultsEditor({ workspace, canManage, bridge }: SiteDefault
             Tokens: <code>{'{page.title}'}</code>, <code>{'{site.name}'}</code>, <code>{'{currentEntry.title}'}</code>.
             Targets with an explicit SEO title skip the pattern.
           </p>
-        </div>
+        </SeoFormRow>
 
-        <div className={styles.field}>
-          <label htmlFor={`${idBase}-description`} className={styles.fieldLabel}>Site description</label>
+        <SeoFormRow label="Site description" htmlFor={`${idBase}-description`}>
           <Textarea
             id={`${idBase}-description`}
             rows={3}
@@ -224,7 +223,7 @@ export function SiteDefaultsEditor({ workspace, canManage, bridge }: SiteDefault
             disabled={!canManage}
             onChange={(e) => setField('description', e.target.value)}
           />
-        </div>
+        </SeoFormRow>
 
         <SeoImageField
           label="Default social image"
@@ -234,8 +233,7 @@ export function SiteDefaultsEditor({ workspace, canManage, bridge }: SiteDefault
           onChange={(next) => setField('defaultOgImage', next)}
         />
 
-        <div className={styles.field}>
-          <label htmlFor={`${idBase}-ogalt`} className={styles.fieldLabel}>Default image alt text</label>
+        <SeoFormRow label="Default image alt text" htmlFor={`${idBase}-ogalt`}>
           <Input
             id={`${idBase}-ogalt`}
             type="text"
@@ -243,10 +241,9 @@ export function SiteDefaultsEditor({ workspace, canManage, bridge }: SiteDefault
             disabled={!canManage}
             onChange={(e) => setField('defaultOgImageAlt', e.target.value)}
           />
-        </div>
+        </SeoFormRow>
 
-        <div className={styles.field}>
-          <label htmlFor={`${idBase}-xcard`} className={styles.fieldLabel}>Default X card</label>
+        <SeoFormRow label="Default X card" htmlFor={`${idBase}-xcard`}>
           <Select
             id={`${idBase}-xcard`}
             value={draft.defaultXCard ?? ''}
@@ -266,10 +263,9 @@ export function SiteDefaultsEditor({ workspace, canManage, bridge }: SiteDefault
             <option value="summary">summary</option>
             <option value="summary_large_image">summary_large_image</option>
           </Select>
-        </div>
+        </SeoFormRow>
 
-        <div className={styles.field}>
-          <label htmlFor={`${idBase}-xhandle`} className={styles.fieldLabel}>X site handle</label>
+        <SeoFormRow label="X site handle" htmlFor={`${idBase}-xhandle`}>
           <Input
             id={`${idBase}-xhandle`}
             type="text"
@@ -278,7 +274,7 @@ export function SiteDefaultsEditor({ workspace, canManage, bridge }: SiteDefault
             disabled={!canManage}
             onChange={(e) => setField('xSiteHandle', e.target.value)}
           />
-        </div>
+        </SeoFormRow>
 
         <Separator />
         <h3 className={styles.sectionHeading}>Organization (structured data)</h3>
@@ -287,8 +283,7 @@ export function SiteDefaultsEditor({ workspace, canManage, bridge }: SiteDefault
           how answer engines identify who runs this site.
         </p>
 
-        <div className={styles.field}>
-          <label htmlFor={`${idBase}-orgname`} className={styles.fieldLabel}>Organization name</label>
+        <SeoFormRow label="Organization name" htmlFor={`${idBase}-orgname`}>
           <Input
             id={`${idBase}-orgname`}
             type="text"
@@ -296,7 +291,7 @@ export function SiteDefaultsEditor({ workspace, canManage, bridge }: SiteDefault
             disabled={!canManage}
             onChange={(e) => setOrgField('name', e.target.value)}
           />
-        </div>
+        </SeoFormRow>
 
         <SeoImageField
           label="Organization logo"

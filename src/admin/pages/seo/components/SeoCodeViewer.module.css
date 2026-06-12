@@ -1,9 +1,27 @@
+/* Card surface matching the workspace's form cards. The CM6 theme paints
+ * its own editor/gutter backgrounds for the code panel — flatten them here
+ * so the viewer reads as one quiet surface, and drop the active-line
+ * highlight (meaningless in a read-only viewer). */
 .viewer {
-    border-radius: var(--editor-radius);
-    overflow: hidden;
-    background: var(--editor-surface);
+    border-radius: 16px;
+    background: var(--editor-surface-2);
+    padding: 8px 4px;
     max-height: 420px;
     overflow-y: auto;
+}
+
+.viewer :global(.cm-editor) {
+    background: transparent;
+}
+
+.viewer :global(.cm-gutters) {
+    background: transparent;
+    border-right: 1px solid var(--panel-border);
+}
+
+.viewer :global(.cm-activeLine),
+.viewer :global(.cm-activeLineGutter) {
+    background: transparent;
 }
 
 .fallback {

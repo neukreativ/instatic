@@ -21,9 +21,6 @@
     border-radius: 16px;
     padding: 20px;
     min-width: 0;
-    /* Shared label-column width for every field row in the form, including
-       the SeoImageField rows rendered inside it. */
-    --seo-label-col: 140px;
 }
 
 .header {
@@ -136,63 +133,8 @@
     color: var(--editor-text-bright);
 }
 
-/* Field shell — two-column grid row: muted label (+ sparkle) on the left,
- * control + meter/hint stacked on the right. Labels center against the
- * control block. */
-.field {
-    display: grid;
-    grid-template-columns: var(--seo-label-col) minmax(0, 1fr);
-    column-gap: 18px;
-    row-gap: 6px;
-    align-items: center;
-}
-
-.field > * {
-    grid-column: 2;
-    min-width: 0;
-}
-
-.field > .fieldLabelRow,
-.field > .fieldLabel {
-    grid-column: 1;
-    grid-row: 1;
-}
-
-.fieldLabelRow {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-}
-
-.fieldLabel {
-    font-size: 12.5px;
-    font-weight: 600;
-    color: var(--editor-text-muted);
-}
-
-/* noindex row: hint left, switch pinned right — same grid as every field. */
-.switchRow {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-}
-
-@media (max-width: 700px) {
-    .field {
-        grid-template-columns: 1fr;
-    }
-
-    .field > * {
-        grid-column: 1;
-    }
-
-    .field > .fieldLabelRow,
-    .field > .fieldLabel {
-        grid-row: auto;
-    }
-}
+/* Field rows render through the shared SeoFormRow component — see
+ * SeoFormRow.module.css for the two-column grid. */
 
 .fieldHint {
     margin: 0;

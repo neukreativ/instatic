@@ -1,15 +1,14 @@
 /**
  * RobotsTab — generated robots.txt controls + live preview.
  *
- * Three FormField-wrapped switches (indexing, AI training crawlers, AI
- * answer crawlers) over a byte-identical CodeMirror preview of the served
- * file — the preview calls the same `generateRobotsTxt` the server endpoint
- * uses. Saving writes `site.settings.seo.robots`; output goes live with the
+ * Two-column workbench: the settings card (shared SeoSwitchRow rows —
+ * indexing, AI training crawlers, AI answer crawlers) on the left, a sticky
+ * byte-identical CodeMirror preview of the served file on the right — the
+ * preview calls the same `generateRobotsTxt` the server endpoint uses.
+ * Saving writes `site.settings.seo.robots`; output goes live with the
  * publish lifecycle.
  */
 import { useState } from 'react'
-import { Switch } from '@ui/components/Switch'
-import { FormField } from '@ui/components/FormField'
 import { getErrorMessage } from '@core/utils/errorMessage'
 import { publishCmsDraft } from '@core/persistence'
 import { hasCapability } from '@admin/access'
@@ -22,6 +21,7 @@ import {
   type SeoRobotsSettings,
 } from '@core/seo'
 import { SeoCodeViewer } from '../components/SeoCodeViewer'
+import { SeoSwitchRow } from '../components/SeoFormRow'
 import type { SeoWorkspace } from '../hooks/useSeoWorkspace'
 import type { SeoSaveBridge } from '../hooks/useSeoSaveBridge'
 import { useSeoSaveSurface } from '../hooks/useSeoSaveBridge'
@@ -103,66 +103,59 @@ export function RobotsTab({ workspace, canManage, bridge }: RobotsTabProps) {
 
   return (
     <section className={styles.tab} aria-label="Robots.txt settings">
-      <header className={styles.header}>
-        <div>
-          <h2 className={styles.heading}>Robots.txt</h2>
-          <p className={styles.subheading}>
-            Generated automatically and served at <code>/robots.txt</code>. Changes go live on the next publish.
-          </p>
+      <div className={styles.workbench}>
+        <div className={styles.settingsColumn}>
+          {saveError && <p className={styles.error} role="alert">{saveError}</p>}
+          {!workspace.publicOrigin && (
+            <p className={styles.notice} role="status">
+              No public origin configured — set the <code>PUBLIC_ORIGINS</code> environment
+              variable so the sitemap link (and canonical URLs) use your real domain.
+            </p>
+          )}
+
+          <div className={styles.card}>
+            <header className={styles.cardHeader}>
+              <h2 className={styles.heading}>Robots.txt</h2>
+              <p className={styles.subheading}>
+                Generated automatically and served at <code>/robots.txt</code>. Changes go live on the next publish.
+              </p>
+            </header>
+
+            <SeoSwitchRow
+              id="seo-robots-indexing-switch"
+              label="Search indexing"
+              hint="Turning this off serves a global Disallow — the whole site disappears from search."
+              checked={draft.indexingEnabled !== false}
+              disabled={!canManage}
+              onCheckedChange={(value) => setFlag('indexingEnabled', value)}
+              data-testid="seo-robots-indexing"
+            />
+            <SeoSwitchRow
+              id="seo-robots-ai-training-switch"
+              label="AI training crawlers"
+              hint={`Bots that ingest content for model training: ${AI_TRAINING_CRAWLERS.join(', ')}.`}
+              checked={draft.allowAiTrainingCrawlers !== false}
+              disabled={!canManage || draft.indexingEnabled === false}
+              onCheckedChange={(value) => setFlag('allowAiTrainingCrawlers', value)}
+              data-testid="seo-robots-ai-training"
+            />
+            <SeoSwitchRow
+              id="seo-robots-ai-answer-switch"
+              label="AI answer crawlers"
+              hint={`Bots that fetch content to ground live AI answers: ${AI_ANSWER_CRAWLERS.join(', ')}. Blocking these removes the site from AI search results.`}
+              checked={draft.allowAiAnswerCrawlers !== false}
+              disabled={!canManage || draft.indexingEnabled === false}
+              onCheckedChange={(value) => setFlag('allowAiAnswerCrawlers', value)}
+              data-testid="seo-robots-ai-answer"
+            />
+          </div>
         </div>
-      </header>
-      {saveError && <p className={styles.error} role="alert">{saveError}</p>}
-      {!workspace.publicOrigin && (
-        <p className={styles.notice} role="status">
-          No public origin configured — set the <code>PUBLIC_ORIGINS</code> environment
-          variable so the sitemap link (and canonical URLs) use your real domain.
-        </p>
-      )}
 
-      <div className={styles.controls}>
-        <FormField
-          layout="inline-end"
-          label="Allow search engine indexing"
-          description="Turning this off serves a global Disallow — the whole site disappears from search."
-        >
-          <Switch
-            checked={draft.indexingEnabled !== false}
-            onCheckedChange={(value) => setFlag('indexingEnabled', value)}
-            disabled={!canManage}
-            aria-label="Allow search engine indexing"
-            data-testid="seo-robots-indexing"
-          />
-        </FormField>
-        <FormField
-          layout="inline-end"
-          label="Allow AI training crawlers"
-          description={`Bots that ingest content for model training: ${AI_TRAINING_CRAWLERS.join(', ')}.`}
-        >
-          <Switch
-            checked={draft.allowAiTrainingCrawlers !== false}
-            onCheckedChange={(value) => setFlag('allowAiTrainingCrawlers', value)}
-            disabled={!canManage || draft.indexingEnabled === false}
-            aria-label="Allow AI training crawlers"
-            data-testid="seo-robots-ai-training"
-          />
-        </FormField>
-        <FormField
-          layout="inline-end"
-          label="Allow AI search & answer crawlers"
-          description={`Bots that fetch content to ground live AI answers: ${AI_ANSWER_CRAWLERS.join(', ')}. Blocking these removes the site from AI search results.`}
-        >
-          <Switch
-            checked={draft.allowAiAnswerCrawlers !== false}
-            onCheckedChange={(value) => setFlag('allowAiAnswerCrawlers', value)}
-            disabled={!canManage || draft.indexingEnabled === false}
-            aria-label="Allow AI search & answer crawlers"
-            data-testid="seo-robots-ai-answer"
-          />
-        </FormField>
+        <aside className={styles.previewColumn} aria-label="robots.txt preview">
+          <h3 className={styles.previewHeading}>Preview</h3>
+          <SeoCodeViewer docKey="robots-preview" value={preview} language="text" data-testid="seo-robots-preview" />
+        </aside>
       </div>
-
-      <h3 className={styles.previewHeading}>Preview</h3>
-      <SeoCodeViewer docKey="robots-preview" value={preview} language="text" data-testid="seo-robots-preview" />
     </section>
   )
 }

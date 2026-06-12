@@ -23,7 +23,6 @@ import { useId, useState } from 'react'
 import { Button } from '@ui/components/Button'
 import { Input, Textarea } from '@ui/components/Input'
 import { Select } from '@ui/components/Select'
-import { Switch } from '@ui/components/Switch'
 import { Separator } from '@ui/components/Separator'
 import { getErrorMessage } from '@core/utils/errorMessage'
 import { isSafeCanonicalUrl, computeSeoReport, type SeoCheckId } from '@core/seo'
@@ -44,6 +43,7 @@ import { MetaLengthMeter } from './MetaLengthMeter'
 import { SeoImageField } from './SeoImageField'
 import { useAiSuggestions } from '../hooks/useAiSuggestions'
 import { AiSuggestionSparkle, AiSuggestionResults } from './AiSuggestionBubbles'
+import { SeoFormRow, SeoSwitchRow } from './SeoFormRow'
 import styles from './SeoPreviewEditor.module.css'
 
 interface SeoPreviewEditorProps {
@@ -269,24 +269,14 @@ export function SeoPreviewEditor({ target, workspace, canManage, bridge }: SeoPr
         {canonicalInvalid && (
           <p className={styles.error} role="alert">Canonical URL must be an absolute http(s) URL.</p>
         )}
-        <div className={styles.field}>
-          <label htmlFor={`${fieldIdBase}-noindex`} className={styles.fieldLabel}>
-            Exclude from search engines
-          </label>
-          <div className={styles.switchRow}>
-            <span className={styles.fieldHint}>
-              Emits noindex — the page disappears from search and answer engines.
-            </span>
-            <Switch
-              id={`${fieldIdBase}-noindex`}
-              checked={draft.draft.noindex === true}
-              onCheckedChange={draft.setNoindex}
-              disabled={!canManage}
-              aria-label="Exclude from search engines (noindex)"
-              switchSize="sm"
-            />
-          </div>
-        </div>
+        <SeoSwitchRow
+          id={`${fieldIdBase}-noindex`}
+          label="Exclude from search engines"
+          hint="Emits noindex — the page disappears from search and answer engines."
+          checked={draft.draft.noindex === true}
+          disabled={!canManage}
+          onCheckedChange={draft.setNoindex}
+        />
 
         <Separator />
         <h3 className={styles.sectionHeading}>Social card (Open Graph)</h3>
@@ -301,8 +291,7 @@ export function SeoPreviewEditor({ target, workspace, canManage, bridge }: SeoPr
           onChange={(next) => draft.setField('ogImage', next)}
         />
         {field('ogImageAlt', 'OG image alt')}
-        <div className={styles.field}>
-          <label htmlFor={`${fieldIdBase}-ogType`} className={styles.fieldLabel}>OG type</label>
+        <SeoFormRow label="OG type" htmlFor={`${fieldIdBase}-ogType`}>
           <Select
             id={`${fieldIdBase}-ogType`}
             value={draft.draft.ogType ?? ''}
@@ -313,7 +302,7 @@ export function SeoPreviewEditor({ target, workspace, canManage, bridge }: SeoPr
             <option value="website">website</option>
             <option value="article">article</option>
           </Select>
-        </div>
+        </SeoFormRow>
 
         <Separator />
         <h3 className={styles.sectionHeading}>X card</h3>
@@ -338,8 +327,7 @@ export function SeoPreviewEditor({ target, workspace, canManage, bridge }: SeoPr
               onChange={(next) => draft.setField('xImage', next)}
             />
             {field('xImageAlt', 'X image alt')}
-            <div className={styles.field}>
-              <label htmlFor={`${fieldIdBase}-xCard`} className={styles.fieldLabel}>Card type</label>
+            <SeoFormRow label="Card type" htmlFor={`${fieldIdBase}-xCard`}>
               <Select
                 id={`${fieldIdBase}-xCard`}
                 value={draft.draft.xCard ?? ''}
@@ -350,7 +338,7 @@ export function SeoPreviewEditor({ target, workspace, canManage, bridge }: SeoPr
                 <option value="summary">summary</option>
                 <option value="summary_large_image">summary_large_image</option>
               </Select>
-            </div>
+            </SeoFormRow>
           </>
         )}
       </section>
@@ -406,11 +394,11 @@ function MetaField({
     'aria-invalid': invalid || undefined,
   }
   return (
-    <div className={styles.field}>
-      <div className={styles.fieldLabelRow}>
-        <label htmlFor={id} className={styles.fieldLabel}>{label}</label>
-        {sparkle && <AiSuggestionSparkle ai={ai} canManage={canManage} />}
-      </div>
+    <SeoFormRow
+      label={label}
+      htmlFor={id}
+      labelAction={sparkle ? <AiSuggestionSparkle ai={ai} canManage={canManage} /> : undefined}
+    >
       {textarea ? (
         <Textarea {...common} rows={3} onChange={(e) => onChange(e.target.value)} />
       ) : (
@@ -426,6 +414,6 @@ function MetaField({
         />
       )}
       <AiSuggestionResults ai={ai} />
-    </div>
+    </SeoFormRow>
   )
 }

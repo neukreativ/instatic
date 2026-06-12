@@ -16,6 +16,7 @@ import { listCmsMediaAssets, type CmsMediaAsset } from '@core/persistence/cmsMed
 import { isValidImageUrl } from '@core/utils/urlValidation'
 import { getErrorMessage } from '@core/utils/errorMessage'
 import { MediaPickerField } from '@admin/pages/media/components/MediaPickerField'
+import { SeoFormRow } from './SeoFormRow'
 import styles from './SeoImageField.module.css'
 
 const MediaPickerModal = lazy(() =>
@@ -89,11 +90,8 @@ export function SeoImageField({ label, fieldId, value, inheritedValue, disabled,
   }
 
   return (
-    /* tabIndex -1: programmatic focus target for the improvements list. */
-    <div id={fieldId} tabIndex={-1} className={styles.field}>
-      <span className={styles.label}>{label}</span>
-      <div className={styles.body}>
-        <SegmentedControl<Mode>
+    <SeoFormRow label={label} anchorId={fieldId}>
+      <SegmentedControl<Mode>
           value={mode}
           options={SOURCE_OPTIONS}
           onChange={setMode}
@@ -154,7 +152,6 @@ export function SeoImageField({ label, fieldId, value, inheritedValue, disabled,
             )}
           </div>
         )}
-      </div>
       {pickerOpen && (
         <Suspense fallback={null}>
           <MediaPickerModal
@@ -166,6 +163,6 @@ export function SeoImageField({ label, fieldId, value, inheritedValue, disabled,
           />
         </Suspense>
       )}
-    </div>
+    </SeoFormRow>
   )
 }
