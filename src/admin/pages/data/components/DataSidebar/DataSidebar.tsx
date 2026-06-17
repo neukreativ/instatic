@@ -223,6 +223,30 @@ export function DataSidebar({
             title="Data tables"
             body="bare"
             onClose={() => setDataSidebarCollapsed(true)}
+            headerActions={
+              <>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  iconOnly
+                  aria-label="Export site"
+                  tooltip="Export site"
+                  onClick={onOpenExport}
+                >
+                  <ArrowDownIcon size={13} aria-hidden="true" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  iconOnly
+                  aria-label="Import site"
+                  tooltip="Import site"
+                  onClick={onOpenImport}
+                >
+                  <UploadIcon size={13} aria-hidden="true" />
+                </Button>
+              </>
+            }
           >
             <div
               ref={tableListRef}
@@ -257,50 +281,45 @@ export function DataSidebar({
                 </p>
               )}
 
-              {!loading && !error && tables.length === 0 && (
-                <p className={styles.emptyText}>No tables yet.</p>
+              {/* System tables (built-in) first, then the user's custom tables.
+                  The System group only renders when the user can see system
+                  tables; the Custom group always renders so its "New table"
+                  action has a home even with zero custom tables. */}
+              {!loading && !error && systemTables.length > 0 && (
+                <>
+                  <div className={styles.sectionHeader}>
+                    <h3 className={styles.sectionTitle}>System</h3>
+                    <span className={styles.sectionCount}>{systemTables.length}</span>
+                  </div>
+                  {systemTables.map(renderTableButton)}
+                </>
               )}
 
-              {/* System tables first (built-in), then the user's custom tables.
-                  Group labels render only when both groups are present, so a
-                  custom-only persona (no system read) sees a plain list. */}
-              {!loading && !error && systemTables.length > 0 && customTables.length > 0 && (
-                <p className={styles.groupLabel} aria-hidden="true">System</p>
+              {!loading && !error && (
+                <>
+                  <div className={styles.sectionHeader}>
+                    <h3 className={styles.sectionTitle}>Custom tables</h3>
+                    <span className={styles.sectionCount}>{customTables.length}</span>
+                    {canCreate && (
+                      <span className={styles.headerActions}>
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          iconOnly
+                          aria-label="New table"
+                          tooltip="New table"
+                          onClick={onCreateTable}
+                        >
+                          <PlusIcon size={13} aria-hidden="true" />
+                        </Button>
+                      </span>
+                    )}
+                  </div>
+                  {customTables.length > 0
+                    ? customTables.map(renderTableButton)
+                    : <p className={styles.emptyText}>None yet</p>}
+                </>
               )}
-              {systemTables.map(renderTableButton)}
-
-              {!loading && !error && customTables.length > 0 && systemTables.length > 0 && (
-                <p className={styles.groupLabel} aria-hidden="true">Your tables</p>
-              )}
-              {customTables.map(renderTableButton)}
-            </div>
-
-            {/* Action footer — create table + export/import */}
-            <div className={styles.footer}>
-              {canCreate && (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  fullWidth
-                  onClick={onCreateTable}
-                  className={styles.footerButton}
-                >
-                  <PlusIcon size={12} aria-hidden="true" />
-                  <span>New table</span>
-                </Button>
-              )}
-
-              <div className={styles.transferActions}>
-                <Button variant="ghost" size="sm" fullWidth onClick={onOpenExport}>
-                  <ArrowDownIcon size={12} aria-hidden="true" />
-                  <span>Export site</span>
-                </Button>
-
-                <Button variant="ghost" size="sm" fullWidth onClick={onOpenImport}>
-                  <UploadIcon size={12} aria-hidden="true" />
-                  <span>Import site</span>
-                </Button>
-              </div>
             </div>
           </Panel>
 

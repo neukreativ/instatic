@@ -86,38 +86,39 @@
     color: var(--editor-text-muted);
 }
 
-.groupLabel {
-    margin: 0;
+.sectionHeader {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     padding: 8px 6px 4px;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--editor-text-muted);
 }
 
-.groupLabel:not(:first-child) {
+.sectionHeader:not(:first-child) {
     margin-top: 6px;
 }
 
-.footer {
-    padding: 6px 8px 8px;
-    flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+.sectionTitle {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    color: var(--editor-text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.footerButton {
-    /* explicit margin for the create button above the transfer actions */
+.sectionCount {
+    color: var(--editor-text-muted);
+    font-size: 11px;
+    line-height: 1;
 }
 
-.transferActions {
+.headerActions {
     display: flex;
-    flex-direction: column;
-    gap: 1px;
-    border-top: 1px solid var(--editor-border);
-    padding-top: 4px;
-    margin-top: 2px;
+    align-items: center;
+    gap: 2px;
 }
 
