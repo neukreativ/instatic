@@ -7,54 +7,17 @@
  *         atomic Immer producer → single Cmd+Z undo step.
  */
 
-import { Type, type Static } from '@sinclair/typebox'
 import type { SiteImportAdapter, SiteImportTransaction } from '@core/siteImport'
-import { parseJsonResponse } from '@core/utils/jsonValidate'
-import { responseErrorMessage } from '@core/http'
 import { installCmsGoogleFont } from '@core/persistence/cmsFonts'
+import {
+  createCmsMediaFolder,
+  listCmsMediaFolders,
+  setCmsMediaAssetFolders,
+  uploadCmsMediaAsset,
+  type CmsMediaFolder,
+} from '@core/persistence/cmsMedia'
+import { getErrorMessage } from '@core/utils/errorMessage'
 import { useEditorStore } from '@site/store/store'
-
-// Minimal TypeBox schema for the upload response — both `id` and `publicPath`
-// are needed: id to assign the asset to its destination folder, publicPath to
-// stitch back into the imported HTML/CSS so references resolve.
-const MediaUploadResponseSchema = Type.Object(
-  {
-    asset: Type.Object(
-      { id: Type.String(), publicPath: Type.String() },
-      { additionalProperties: true },
-    ),
-  },
-  { additionalProperties: true },
-)
-
-// Subset of the folder list response — name / parentId let us match against an
-// existing folder tree so a re-run of the wizard re-uses the same folders
-// instead of accumulating `assets-2`, `assets-3` next to the originals.
-const MediaFolderListResponseSchema = Type.Object(
-  {
-    folders: Type.Array(
-      Type.Object(
-        {
-          id: Type.String(),
-          name: Type.String(),
-          parentId: Type.Union([Type.String(), Type.Null()]),
-        },
-        { additionalProperties: true },
-      ),
-    ),
-  },
-  { additionalProperties: true },
-)
-
-const MediaFolderCreateResponseSchema = Type.Object(
-  {
-    folder: Type.Object(
-      { id: Type.String() },
-      { additionalProperties: true },
-    ),
-  },
-  { additionalProperties: true },
-)
 
 interface AdapterCallbacks {
   /** Stable id for the upload session (for logging). */
@@ -81,20 +44,14 @@ function dirSegments(path: string): string[] {
   return dir.split('/').filter((s) => s.length > 0)
 }
 
-interface FolderIndexEntry {
-  id: string
-  parentId: string | null
-  name: string
-}
-
 /**
  * In-memory cache of folder ids keyed by their full slash-delimited path
  * (`'assets'`, `'assets/img'`, …). Folders the user already has from
  * previous imports / manual uploads are matched against this index so a
  * second wizard run doesn't duplicate the tree.
  */
-function buildFolderIndex(folders: ReadonlyArray<FolderIndexEntry>): Map<string, string> {
-  const byId = new Map<string, FolderIndexEntry>()
+function buildFolderIndex(folders: ReadonlyArray<CmsMediaFolder>): Map<string, string> {
+  const byId = new Map<string, CmsMediaFolder>()
   for (const f of folders) byId.set(f.id, f)
 
   // Resolve each folder's full path by walking parents.
@@ -128,14 +85,7 @@ export function createSiteImportAdapter(opts: AdapterCallbacks): SiteImportAdapt
     if (folderIndex) return folderIndex
     if (!folderIndexPromise) {
       folderIndexPromise = (async () => {
-        const res = await fetch('/admin/api/cms/media/folders', { method: 'GET' })
-        if (!res.ok) {
-          throw new Error(
-            `[siteImportAdapter] Could not load folder index: ${await responseErrorMessage(res, 'Folder list failed')}`,
-          )
-        }
-        const payload = await parseJsonResponse(res, MediaFolderListResponseSchema)
-        const idx = buildFolderIndex(payload.folders)
+        const idx = buildFolderIndex(await listCmsMediaFolders())
         folderIndex = idx
         return idx
       })()
@@ -164,40 +114,22 @@ export function createSiteImportAdapter(opts: AdapterCallbacks): SiteImportAdapt
         parentId = cached
         continue
       }
-      // Explicit annotations break a TS inference cycle: `parentId` is
-      // reassigned from `payload.folder.id`, and without the annotation the
-      // compiler tries to resolve `payload`'s (and `res`'s) types through the
-      // captured `parentId` recursively (TS7022).
-      const res: Response = await fetch('/admin/api/cms/media/folders', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ name: segment, parentId }),
-      })
-      if (!res.ok) {
-        throw new Error(
-          `[siteImportAdapter] Folder create failed for "${cumulative}": ${await responseErrorMessage(res, 'Create folder failed')}`,
-        )
-      }
-      const payload: Static<typeof MediaFolderCreateResponseSchema> =
-        await parseJsonResponse(res, MediaFolderCreateResponseSchema)
-      index.set(cumulative, payload.folder.id)
-      parentId = payload.folder.id
+      const folder = await createCmsMediaFolder({ name: segment, parentId })
+      index.set(cumulative, folder.id)
+      parentId = folder.id
     }
     return parentId
   }
 
   async function assignAssetToFolder(assetId: string, folderId: string): Promise<void> {
-    const res = await fetch(`/admin/api/cms/media/${assetId}/folders`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ add: [folderId] }),
-    })
-    if (!res.ok) {
+    try {
+      await setCmsMediaAssetFolders(assetId, { add: [folderId] })
+    } catch (err) {
       // Surface as a non-fatal log: the asset uploaded fine, only the
       // folder placement failed. The user can drag it to the right folder
       // by hand afterwards.
       console.warn(
-        `[siteImportAdapter] Asset ${assetId} placed at the media root; folder assign returned ${res.status}.`,
+        `[siteImportAdapter] Asset ${assetId} placed at the media root; ${getErrorMessage(err, 'folder assignment failed')}.`,
       )
     }
   }
@@ -209,17 +141,11 @@ export function createSiteImportAdapter(opts: AdapterCallbacks): SiteImportAdapt
 
     async uploadAsset({ path, bytes, mimeType }) {
       opts.onUploadStart?.({ path })
-      const form = new FormData()
       // bytes comes from fflate/File APIs — always backed by a plain ArrayBuffer.
       // TypeScript's BlobPart constraint excludes SharedArrayBuffer; the cast is safe.
       const blobData: ArrayBuffer = bytes.slice().buffer as ArrayBuffer
-      form.append('file', new Blob([blobData], { type: mimeType }), basename(path))
-      const res = await fetch('/admin/api/cms/media', { method: 'POST', body: form })
-      if (!res.ok) {
-        const errMsg = await responseErrorMessage(res, 'Upload failed')
-        throw new Error(`[siteImportAdapter] Upload failed for ${path}: ${errMsg}`)
-      }
-      const payload = await parseJsonResponse(res, MediaUploadResponseSchema)
+      const file = new File([blobData], basename(path), { type: mimeType })
+      const asset = await uploadCmsMediaAsset(file)
 
       // Place the asset under a folder that mirrors its source bundle path.
       // Folder creation happens lazily here so a flat bundle (every asset at
@@ -230,11 +156,11 @@ export function createSiteImportAdapter(opts: AdapterCallbacks): SiteImportAdapt
       const segments = dirSegments(path)
       if (segments.length > 0) {
         const folderId = await ensureFolderPath(segments)
-        if (folderId) await assignAssetToFolder(payload.asset.id, folderId)
+        if (folderId) await assignAssetToFolder(asset.id, folderId)
       }
 
-      opts.onUploadComplete?.({ path, url: payload.asset.publicPath })
-      return payload.asset.publicPath
+      opts.onUploadComplete?.({ path, url: asset.publicPath })
+      return asset.publicPath
     },
 
     async commit(recipe) {

@@ -133,17 +133,7 @@ const ALLOWLIST_FETCH = new Set<string>([
   //   tool-result POSTs, must use apiRequest.
   join(PROJECT_ROOT, 'src/admin/pages/site/agent/agentSlice.ts'),
 
-  // §3.2  createSiteImportAdapter.ts — four media/folder API calls that pre-date
-  //   the apiRequest migration and are legitimately using parseJsonResponse (not
-  //   res.json() as) for TypeBox validation at the boundary. The FormData binary-
-  //   blob upload (MIME-multipart) and the non-fatal fire-and-forget folder-
-  //   placement call make migrating to apiRequest a non-trivial plumbing change.
-  //   All four calls satisfy constraint #272 via parseJsonResponse; migration to
-  //   apiRequest should happen in a dedicated cleanup but is not a boundary-
-  //   validation regression.
-  join(PROJECT_ROOT, 'src/admin/modals/SiteImport/shared/createSiteImportAdapter.ts'),
-
-  // §3.3  SvgControl.tsx — fetches the raw bytes of a user-picked .svg asset
+  // §3.2  SvgControl.tsx — fetches the raw bytes of a user-picked .svg asset
   //   from its public path (asset.publicPath) to inline its markup. This is a
   //   plain file-content GET, not a JSON-envelope CMS endpoint, so apiRequest
   //   (which validates a TypeBox success body) cannot model it — the response
