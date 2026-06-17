@@ -6,15 +6,16 @@
  * shape — single source of truth, server owns all derivation.
  *
  * Only the ACTIVE page carries full `nodes`. Non-active pages keep metadata
- * (id/title/slug) with emptied `nodes`, because server-side rendering and CSS
- * collection only ever touch the active page + site-level styleRules. This
- * bounds the per-turn payload on multi-page sites.
+ * (id/title/slug/template) with emptied `nodes`, because server-side catalog
+ * tools only need document handles. Full document reads are browser-backed
+ * against the live store so the snapshot does not ship every tree every turn.
  */
 
 import { Type, type Static } from '@core/utils/typeboxHelpers'
 import { PageSchema, SiteShellSchema, type Page, type SiteDocument } from '@core/page-tree'
 import { VisualComponentSchema } from '@core/visualComponents'
 import { SavedLayoutSchema } from '@core/layouts'
+import { AgentDocumentRefSchema, type AgentDocumentRef } from '@core/ai'
 
 /**
  * In-memory site document validated as a single value: the persisted shell
@@ -40,6 +41,8 @@ const SiteDocumentSchema = Type.Composite([
 export const SiteAgentSnapshotSchema = Type.Object({
   /** Active page, full node map — the tree the agent reads and mutates. */
   page: PageSchema,
+  /** Current editor document, which may be a page/template or a visual component. */
+  currentDocument: AgentDocumentRefSchema,
   /** Site document: styleRules/settings/breakpoints intact; non-active pages emptied. */
   site: SiteDocumentSchema,
   selectedNodeId: Type.Union([Type.String(), Type.Null()]),
@@ -51,6 +54,7 @@ export type SiteAgentSnapshot = Static<typeof SiteAgentSnapshotSchema>
 interface SiteAgentSnapshotOptions {
   selectedNodeId: string | null
   activeBreakpointId: string
+  currentDocument: AgentDocumentRef
 }
 
 export function buildSiteAgentSnapshot(
@@ -61,6 +65,7 @@ export function buildSiteAgentSnapshot(
   const pages = site.pages.map((p) => (p.id === page.id ? p : { ...p, nodes: {} }))
   return {
     page,
+    currentDocument: options.currentDocument,
     // Saved layouts are editor-only insertion templates — the agent never
     // reads them, so they ship emptied (same payload bounding as non-active
     // pages).

@@ -344,6 +344,7 @@ function emptySiteAgentSnapshot(): SiteAgentSnapshot {
       rootNodeId: '',
       nodes: {},
     } as SiteAgentSnapshot['page'],
+    currentDocument: { type: 'page', id: 'empty' },
     site: {
       pages: [],
       breakpoints: [],

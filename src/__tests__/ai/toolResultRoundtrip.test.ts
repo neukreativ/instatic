@@ -48,8 +48,8 @@ describe('tool-result persist → buildMessageHistory round-trip', () => {
     })
 
     // A successful call: no error, no persisted data.
-    await persister.appendToolCall({ toolCallId: 'ok1', toolName: 'read_page', input: { a: 1 } })
-    await persister.appendToolResult({ toolCallId: 'ok1', toolName: 'read_page', ok: true })
+    await persister.appendToolCall({ toolCallId: 'ok1', toolName: 'read_document', input: { a: 1 } })
+    await persister.appendToolResult({ toolCallId: 'ok1', toolName: 'read_document', ok: true })
 
     // A failed call: carries an error message.
     await persister.appendToolCall({ toolCallId: 'err1', toolName: 'insertHtml', input: {} })

@@ -7,8 +7,8 @@ import '@modules/base'
  * The site-editor agent adapter now posts the RAW authoritative tree
  * (active page + site) as a `SiteAgentSnapshot`. The server derives modules,
  * tokens, classes, and the rendered HTML from it on demand — those derivations
- * are covered by readPage.test.ts / agentTools.test.ts. Here we only assert the
- * browser adapter reads the live store correctly.
+ * are covered by readDocument.test.ts / agentTools.test.ts. Here we only assert
+ * the browser adapter reads the live store correctly.
  */
 
 function freshSite() {
@@ -44,6 +44,7 @@ describe('buildCurrentPageContext', () => {
     expect(snap).toBeDefined()
     expect(snap!.page.id).toBe(page.id)
     expect(snap!.page.nodes[page.rootNodeId]).toBeDefined()
+    expect(snap!.currentDocument).toEqual({ type: 'page', id: page.id })
     expect(snap!.selectedNodeId).toBe(page.rootNodeId)
     expect(snap!.activeBreakpointId).toBe('mobile')
   })
@@ -55,6 +56,18 @@ describe('buildCurrentPageContext', () => {
     expect(snap!.site.breakpoints.map((b) => b.id)).toEqual(['mobile', 'tablet', 'desktop'])
     expect(snap!.site.styleRules).toBeDefined()
     expect(snap!.site.settings).toBeDefined()
+  })
+
+  it('emits the active visual component as the current document without bloating pages', () => {
+    const page = freshSite()
+    const vcId = useEditorStore.getState().createVisualComponent('Card')
+    useEditorStore.getState().setActiveDocument({ kind: 'visualComponent', vcId })
+
+    const snap = buildCurrentPageContext(get)
+
+    expect(snap).toBeDefined()
+    expect(snap!.page.id).toBe(page.id)
+    expect(snap!.currentDocument).toEqual({ type: 'visualComponent', id: vcId })
   })
 
   it('empties non-active pages\' nodes to bound the payload', () => {

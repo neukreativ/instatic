@@ -2,6 +2,7 @@ import { describe, expect, it, beforeAll } from 'bun:test'
 import type { SiteAgentSnapshot } from '@site/agent/siteAgentSnapshot'
 import type { AiTool, ToolContext } from '../../../server/ai/runtime/types'
 import { makePage, makeSite } from '../publisher/helpers'
+import type { VisualComponent } from '@core/visualComponents'
 
 let siteReadTools: AiTool[]
 
@@ -30,8 +31,43 @@ function snapshot(): SiteAgentSnapshot {
   page.id = 'page-home'
   page.slug = 'index'
   page.title = 'Home'
-  const site = makeSite({ pages: [page, about] })
-  return { page, site, selectedNodeId: null, activeBreakpointId: site.breakpoints[0].id }
+  const cardComponent: VisualComponent = {
+    id: 'vc-card',
+    name: 'Card',
+    tree: {
+      rootNodeId: 'vc-root',
+      nodes: {
+        'vc-root': {
+          id: 'vc-root',
+          moduleId: 'base.body',
+          props: {},
+          children: ['vc-title'],
+          breakpointOverrides: {},
+          classIds: [],
+        },
+        'vc-title': {
+          id: 'vc-title',
+          moduleId: 'base.text',
+          props: { text: 'Component title', tag: 'h2' },
+          children: [],
+          breakpointOverrides: {},
+          classIds: [],
+          parentId: 'vc-root',
+        },
+      },
+    },
+    params: [],
+    classIds: [],
+    createdAt: 0,
+  }
+  const site = makeSite({ pages: [page, about], visualComponents: [cardComponent] })
+  return {
+    page,
+    currentDocument: { type: 'page', id: page.id },
+    site,
+    selectedNodeId: null,
+    activeBreakpointId: site.breakpoints[0].id,
+  }
 }
 
 function callTool(name: string, input: Record<string, unknown> = {}): Promise<unknown> {
@@ -42,15 +78,14 @@ function callTool(name: string, input: Record<string, unknown> = {}): Promise<un
 }
 
 describe('site read tools', () => {
-  it('exposes exactly read_page + the catalog tools', () => {
+  it('exposes exactly the document-aware catalog tools', () => {
     expect(siteReadTools.map((t) => t.name).sort()).toEqual([
       'list_breakpoints',
+      'list_documents',
       'list_loop_sources',
       'list_modules',
-      'list_pages',
       'list_post_types',
       'list_tokens',
-      'read_page',
     ])
   })
 
@@ -113,21 +148,6 @@ describe('site read tools', () => {
     )
   })
 
-  it('read_page returns annotated HTML + a <style> css bundle with paging metadata', async () => {
-    const result = (await callTool('read_page')) as {
-      html: string
-      css: string
-      pageInfo: { part: number; totalParts: number; nextPart: number | null }
-    }
-    expect(result.html).toContain('uid="title"')
-    expect(result.html).toContain('Design tools')
-    expect(result.pageInfo).toEqual(expect.objectContaining({
-      part: 1,
-      totalParts: 1,
-      nextPart: null,
-    }))
-  })
-
   it('list_modules returns base.text and excludes base.body', async () => {
     const { modules } = (await callTool('list_modules')) as {
       modules: Array<{ id: string; category: string }>
@@ -167,28 +187,47 @@ describe('site read tools', () => {
     expect(onlyColors.fonts).toEqual([])
   })
 
-  it('list_pages maps pages with active + isHomepage flags and template config', async () => {
-    const { pages } = (await callTool('list_pages')) as {
-      pages: Array<{
-        id: string
-        slug: string
+  it('list_documents maps pages, templates, and visual components with document refs', async () => {
+    const { documents } = (await callTool('list_documents')) as {
+      documents: Array<{
+        document: { type: 'page' | 'template' | 'visualComponent'; id: string }
+        title: string
+        slug?: string
+        rootNodeId: string
         active: boolean
-        isHomepage: boolean
-        template: { target: { kind: string; tableSlugs?: string[] }; priority: number } | null
+        current: boolean
+        isHomepage?: boolean
+        template?: { target: { kind: string; tableSlugs?: string[] }; priority: number }
+        summary: string
       }>
     }
-    const home = pages.find((p) => p.id === 'page-home')!
-    const about = pages.find((p) => p.id === 'page-about')!
+    const home = documents.find((p) => p.document.id === 'page-home')!
+    const about = documents.find((p) => p.document.id === 'page-about')!
+    const component = documents.find((p) => p.document.id === 'vc-card')!
+    expect(home.document).toEqual({ type: 'page', id: 'page-home' })
+    expect(home.rootNodeId).toBe('root')
     expect(home.isHomepage).toBe(true) // slug "index"
     expect(home.active).toBe(true) // the posted active page
-    expect(home.template).toBeNull() // ordinary page
+    expect(home.current).toBe(true)
+    expect(home.template).toBeUndefined() // ordinary page
+    expect(home.summary).toContain('Homepage')
+    expect(about.document).toEqual({ type: 'template', id: 'page-about' })
+    expect(about.rootNodeId).toBe('aboutRoot')
     expect(about.isHomepage).toBe(false)
     expect(about.active).toBe(false)
+    expect(about.current).toBe(false)
     // about is a postTypes template targeting "posts"
     expect(about.template).toEqual({
       target: { kind: 'postTypes', tableSlugs: ['posts'] },
       priority: 100,
     })
+    expect(about.summary).toContain('template')
+    expect(component.document).toEqual({ type: 'visualComponent', id: 'vc-card' })
+    expect(component.title).toBe('Card')
+    expect(component.rootNodeId).toBe('vc-root')
+    expect(component.active).toBe(false)
+    expect(component.current).toBe(false)
+    expect(component.summary).toContain('Visual component')
   })
 
   it('list_breakpoints returns the site breakpoints + the active id', async () => {

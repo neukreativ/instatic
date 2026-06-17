@@ -1,16 +1,14 @@
 import { describe, expect, it, beforeAll } from 'bun:test'
-import type { SiteAgentSnapshot } from '@site/agent/siteAgentSnapshot'
-import { classKindSelector } from '@core/page-tree'
+import { renderAgentDocument, type AgentDocumentRenderOptions } from '@core/ai'
+import { registry } from '@core/module-engine'
+import { classKindSelector, type Page, type SiteDocument } from '@core/page-tree'
 import { makePage, makeSite } from '../publisher/helpers'
-
-let renderAgentPage: typeof import('../../../server/ai/tools/site/render')['renderAgentPage']
 
 beforeAll(async () => {
   await import('../../../src/modules/base') // register base modules in this process
-  ;({ renderAgentPage } = await import('../../../server/ai/tools/site/render'))
 })
 
-function snap(): SiteAgentSnapshot {
+function fixture(): { page: Page; site: SiteDocument } {
   const page = makePage({
     root: { moduleId: 'base.body', children: ['t'] },
     t: { moduleId: 'base.text', props: { text: 'Hi', tag: 'h1' } },
@@ -21,12 +19,21 @@ function snap(): SiteAgentSnapshot {
       r1: { id: 'r1', name: 'heading', kind: 'ambient', selector: 'h1', order: 0, styles: { color: 'red' } },
     },
   })
-  return { page, site, selectedNodeId: null, activeBreakpointId: 'desktop' }
+  return { page, site }
 }
 
-describe('renderAgentPage', () => {
+function renderDoc(
+  page: Page,
+  site: SiteDocument,
+  options?: AgentDocumentRenderOptions,
+) {
+  return renderAgentDocument(page, site, registry, options)
+}
+
+describe('renderAgentDocument', () => {
   it('returns an annotated body with uid attributes and a <style> css bundle', () => {
-    const { html, css, pageInfo } = renderAgentPage(snap())
+    const { page, site } = fixture()
+    const { html, css, pageInfo } = renderDoc(page, site)
     expect(html).toContain('uid="t"') // node addressable
     expect(html).toContain('Hi') // content present
     expect(html).not.toContain('<head>') // body only, not full document
@@ -37,7 +44,7 @@ describe('renderAgentPage', () => {
     expect(pageInfo.nextPart).toBeNull()
   })
 
-  it('pages oversized read_page payloads with exact ranges for follow-up reads', () => {
+  it('pages oversized read_document payloads with exact ranges for follow-up reads', () => {
     const page = makePage({
       root: { moduleId: 'base.body', children: ['one', 'two', 'three'] },
       one: { moduleId: 'base.text', props: { text: 'FIRST-' + 'a'.repeat(900), tag: 'p' } },
@@ -46,14 +53,8 @@ describe('renderAgentPage', () => {
     })
     const site = makeSite({ pages: [page] })
 
-    const first = renderAgentPage(
-      { page, site, selectedNodeId: null, activeBreakpointId: 'desktop' },
-      { maxSerializedChars: 1400 },
-    )
-    const second = renderAgentPage(
-      { page, site, selectedNodeId: null, activeBreakpointId: 'desktop' },
-      { maxSerializedChars: 1400, part: 2 },
-    )
+    const first = renderDoc(page, site, { maxSerializedChars: 1400 })
+    const second = renderDoc(page, site, { maxSerializedChars: 1400, part: 2 })
 
     expect(first.pageInfo.totalParts).toBeGreaterThan(1)
     expect(first.pageInfo.nextPart).toBe(2)
@@ -97,12 +98,7 @@ describe('renderAgentPage', () => {
       },
     })
 
-    const { html, css, pageInfo } = renderAgentPage({
-      page,
-      site,
-      selectedNodeId: null,
-      activeBreakpointId: 'desktop',
-    })
+    const { html, css, pageInfo } = renderDoc(page, site)
 
     expect(html).not.toContain(longBase64)
     expect(html).not.toContain(longUrl)
@@ -194,12 +190,7 @@ describe('renderAgentPage', () => {
       },
     })
 
-    const { css } = renderAgentPage({
-      page,
-      site,
-      selectedNodeId: null,
-      activeBreakpointId: 'desktop',
-    })
+    const { css } = renderDoc(page, site)
 
     expect(css).toContain('.hero {')
     expect(css).toContain('.hero .title {')
@@ -246,12 +237,7 @@ describe('renderAgentPage', () => {
       },
     })
 
-    const { css } = renderAgentPage({
-      page,
-      site,
-      selectedNodeId: null,
-      activeBreakpointId: 'desktop',
-    })
+    const { css } = renderDoc(page, site)
 
     expect(css).toContain('--font-heading:')
     expect(css).toContain('"Example Sans", sans-serif')
@@ -271,7 +257,7 @@ describe('catalog derivations', () => {
 
   it('describes tokens from site.settings', async () => {
     const { describeAgentTokens } = await import('../../../server/ai/tools/site/render')
-    const tokens = describeAgentTokens(snap().site)
+    const tokens = describeAgentTokens(fixture().site)
     expect(tokens).toHaveProperty('colors')
     expect(tokens).toHaveProperty('fonts')
   })
@@ -280,7 +266,7 @@ describe('catalog derivations', () => {
     const { describeAgentTokens, filterTokenFamily } = await import(
       '../../../server/ai/tools/site/render'
     )
-    const tokens = describeAgentTokens(snap().site)
+    const tokens = describeAgentTokens(fixture().site)
     const onlyColors = filterTokenFamily(tokens, 'colors')
     expect(onlyColors.colors).toBe(tokens.colors)
     expect(onlyColors.typography).toEqual([])

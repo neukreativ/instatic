@@ -143,7 +143,7 @@ interface PublishPageOptions {
   /**
    * Editor-only: annotate each node's outermost emitted element with
    * `uid="<id>"`. Default off — real publishes emit clean, id-less
-   * HTML. Used by the agent read-surface (read_page) to produce an
+   * HTML. Used by the agent read-surface (read_document) to produce an
    * HTML representation the agent targets nodes through.
    */
   annotateNodeIds?: boolean

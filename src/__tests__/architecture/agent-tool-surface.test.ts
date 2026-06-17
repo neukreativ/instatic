@@ -39,6 +39,11 @@ describe('agent-tool-surface gate', () => {
     expect(toolNames).toContain('getNodeHtml')
   })
 
+  it('document-aware browser read tools are present', () => {
+    expect(toolNames).toContain('read_document')
+    expect(toolNames).toContain('open_document')
+  })
+
   it('HTML-native replaceNodeHtml tool is present', () => {
     expect(toolNames).toContain('replaceNodeHtml')
   })
@@ -64,7 +69,7 @@ describe('agent-tool-surface gate', () => {
     expect(toolNames).toContain('clearPageTemplate')
   })
 
-  it('total tool count is 22 (14 mutation + 2 template + 4 token + render_snapshot + getNodeHtml)', () => {
-    expect(toolNames).toHaveLength(22)
+  it('total tool count is 24 (document, HTML, node, CSS, page, template, token, and snapshot tools)', () => {
+    expect(toolNames).toHaveLength(24)
   })
 })

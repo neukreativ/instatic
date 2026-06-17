@@ -76,6 +76,33 @@ function expectHtml(result: AiToolOutput): string {
   return expectToolData<{ html: string }>(result).html
 }
 
+function activePage() {
+  const state = useEditorStore.getState()
+  return state.site!.pages.find((p) => p.id === state.activePageId)!
+}
+
+async function makeTemplateDocument(): Promise<{ homeId: string; templateId: string }> {
+  const { rootId } = freshStore()
+  const homeId = useEditorStore.getState().activePageId!
+  await executeAgentTool('insertHtml', { parentId: rootId, html: '<main><h1>Home</h1></main>' })
+  const templateId = expectPageId(await executeAgentTool('addPage', {
+    title: 'Main Layout',
+    slug: 'main-layout',
+  }))
+  await executeAgentTool('setPageTemplate', {
+    pageId: templateId,
+    target: { kind: 'everywhere' },
+    priority: 100,
+  })
+  const templateRootId = activePage().rootNodeId
+  await executeAgentTool('insertHtml', {
+    parentId: templateRootId,
+    html: '<nav><button>LGT</button><button>DRK</button></nav><instatic-outlet></instatic-outlet>',
+  })
+  useEditorStore.getState().openPageInCanvas(homeId)
+  return { homeId, templateId }
+}
+
 // ---------------------------------------------------------------------------
 // insertHtml
 // ---------------------------------------------------------------------------
@@ -494,6 +521,27 @@ describe('executeAgentTool — auto-navigates to the target node\'s document', (
     expect(useEditorStore.getState().activePageId).toBe(pageAId)
   })
 
+  it('getNodeHtml navigates to the owning visual component and returns its HTML', async () => {
+    freshStore()
+    const pageId = useEditorStore.getState().activePageId!
+    const vcId = useEditorStore.getState().createVisualComponent('Promo Card')
+    const vc = useEditorStore.getState().site!.visualComponents.find((item) => item.id === vcId)!
+    useEditorStore.getState().setActiveDocument({ kind: 'visualComponent', vcId })
+    const nodeId = expectNodeIds(
+      await executeAgentTool('insertHtml', {
+        parentId: vc.tree.rootNodeId,
+        html: '<h2>Component title</h2>',
+      }),
+    )[0]
+    useEditorStore.getState().openPageInCanvas(pageId)
+
+    const result = await executeAgentTool('getNodeHtml', { nodeId })
+
+    expectToolOk(result)
+    expect(expectHtml(result)).toContain('Component title')
+    expect(useEditorStore.getState().activeDocument).toEqual({ kind: 'visualComponent', vcId })
+  })
+
   it('updateNodeProps navigates to the owning page', async () => {
     const { id, pageAId } = await foreignNode('<p>Old</p>')
     const result = await executeAgentTool('updateNodeProps', { nodeId: id, patch: { text: 'New' } })
@@ -509,6 +557,81 @@ describe('executeAgentTool — auto-navigates to the target node\'s document', (
     })
     expectToolError(result)
     expect(result.error).toContain('not found')
+  })
+
+  it('explains when a document id is passed where a node id is required', async () => {
+    const { templateId } = await makeTemplateDocument()
+    const result = await executeAgentTool('getNodeHtml', { nodeId: templateId })
+    expectToolError(result)
+    expect(result.error).toContain('document id')
+    expect(result.error).toContain('read_document')
+    expect(result.error).toContain('uid')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// document-aware read and open tools
+// ---------------------------------------------------------------------------
+
+describe('executeAgentTool — document targeting', () => {
+  it('read_document reads a non-active template without switching the visible page', async () => {
+    const { homeId, templateId } = await makeTemplateDocument()
+    expect(useEditorStore.getState().activePageId).toBe(homeId)
+
+    const result = await executeAgentTool('read_document', {
+      document: { type: 'template', id: templateId },
+    })
+    const data = expectToolData<{
+      html: string
+      css: string
+      pageInfo: { part: number; totalParts: number; nextPart: number | null }
+      document: { type: string; id: string }
+    }>(result)
+
+    expect(data.document).toEqual({ type: 'template', id: templateId })
+    expect(data.html).toContain('uid=')
+    expect(data.html).toContain('LGT')
+    expect(data.html).toContain('DRK')
+    expect(data.pageInfo).toEqual(expect.objectContaining({
+      part: 1,
+      totalParts: 1,
+      nextPart: null,
+    }))
+    expect(useEditorStore.getState().activePageId).toBe(homeId)
+  })
+
+  it('read_document with no document reads the current active page', async () => {
+    const { rootId } = freshStore()
+    await executeAgentTool('insertHtml', { parentId: rootId, html: '<h1>Current page</h1>' })
+
+    const result = await executeAgentTool('read_document', {})
+    const data = expectToolData<{ html: string; document: { type: string; id: string } }>(result)
+
+    expect(data.document).toEqual({ type: 'page', id: useEditorStore.getState().activePageId })
+    expect(data.html).toContain('Current page')
+  })
+
+  it('open_document switches visibly to a page or template', async () => {
+    const { templateId } = await makeTemplateDocument()
+
+    const result = await executeAgentTool('open_document', {
+      document: { type: 'template', id: templateId },
+    })
+    expectToolOk(result)
+    expect(useEditorStore.getState().activePageId).toBe(templateId)
+    expect(useEditorStore.getState().activeDocument).toBeNull()
+  })
+
+  it('open_document switches visibly to a visual component', async () => {
+    freshStore()
+    const vcId = useEditorStore.getState().createVisualComponent('Card')
+
+    const result = await executeAgentTool('open_document', {
+      document: { type: 'visualComponent', id: vcId },
+    })
+
+    expectToolOk(result)
+    expect(useEditorStore.getState().activeDocument).toEqual({ kind: 'visualComponent', vcId })
   })
 })
 

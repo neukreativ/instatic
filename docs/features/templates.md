@@ -363,7 +363,7 @@ The site-scope AI agent can author templates end-to-end:
 
 1. Build the chrome on a page with `insertHtml`, including one `<instatic-outlet>` element where the wrapped content should appear (the importer maps it to a `base.outlet` node).
 2. Call `setPageTemplate(pageId, target, priority?)` — `target` is `{ kind: 'everywhere' }` or `{ kind: 'postTypes', tableSlugs: [...] }`. For a postTypes target, the agent reads valid slugs from `list_post_types` first.
-3. `clearPageTemplate(pageId)` reverts a template to an ordinary page. `list_pages` reports each page's current `template` config.
+3. `clearPageTemplate(pageId)` reverts a template to an ordinary page. `list_documents` reports each page/template's current `template` config.
 
 No outlet save-guard applies here either — an agent-built template with no outlet simply doesn't apply. See [agent.md → Templates](agent.md) for the tool surface.
 

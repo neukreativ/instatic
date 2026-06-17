@@ -20,7 +20,13 @@ function validSnapshot() {
   // re-attach the page + VC arrays the parser strips out.
   const base = makeSite({ pages: [page] })
   const site = { ...parseSiteDocument(base), pages: [page], visualComponents: [], layouts: [] }
-  return { page, site, selectedNodeId: null, activeBreakpointId: 'desktop' }
+  return {
+    page,
+    currentDocument: { type: 'page' as const, id: page.id },
+    site,
+    selectedNodeId: null,
+    activeBreakpointId: 'desktop',
+  }
 }
 
 describe('buildSystemPromptForScope — site snapshot validation', () => {

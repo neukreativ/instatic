@@ -28,6 +28,26 @@
 import { Type, type Static } from '@core/utils/typeboxHelpers'
 
 // ---------------------------------------------------------------------------
+// Document refs
+// ---------------------------------------------------------------------------
+
+export const AgentDocumentRefSchema = Type.Union([
+  Type.Object({
+    type: Type.Literal('page'),
+    id: Type.String({ minLength: 1 }),
+  }),
+  Type.Object({
+    type: Type.Literal('template'),
+    id: Type.String({ minLength: 1 }),
+  }),
+  Type.Object({
+    type: Type.Literal('visualComponent'),
+    id: Type.String({ minLength: 1 }),
+  }),
+])
+export type AgentDocumentRef = Static<typeof AgentDocumentRefSchema>
+
+// ---------------------------------------------------------------------------
 // HTML-native write tools
 // ---------------------------------------------------------------------------
 
@@ -42,6 +62,17 @@ export const GetNodeHtmlInputSchema = Type.Object({
   nodeId: Type.String({ minLength: 1 }),
 })
 export type GetNodeHtmlInput = Static<typeof GetNodeHtmlInputSchema>
+
+export const ReadDocumentInputSchema = Type.Object({
+  document: Type.Optional(AgentDocumentRefSchema),
+  part: Type.Optional(Type.Integer({ minimum: 1 })),
+})
+export type ReadDocumentInput = Static<typeof ReadDocumentInputSchema>
+
+export const OpenDocumentInputSchema = Type.Object({
+  document: AgentDocumentRefSchema,
+})
+export type OpenDocumentInput = Static<typeof OpenDocumentInputSchema>
 
 export const ReplaceNodeHtmlInputSchema = Type.Object({
   nodeId: Type.String({ minLength: 1 }),

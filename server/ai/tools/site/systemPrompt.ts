@@ -12,6 +12,7 @@
 
 import type { SiteAgentSnapshot } from './snapshot'
 import type { SnapshotTokens } from './snapshot'
+import { describeAgentDocuments } from '@core/ai'
 import { describeAgentTokens } from './render'
 import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from '../../runtime/types'
 
@@ -20,7 +21,7 @@ const STATIC_PROMPT_PREFIX = `You build/edit websites inside a visual site edito
 Building:
 - Insert structure as semantic HTML with insertHtml (<section>, <h1>, <p>, <a>, <button>, <img>, <ul>, <article>, <nav>, <footer>, ...). One insertHtml per section (nav, hero, pricing, footer = 4-6 calls). Smaller chunks recover better when one fails.
 - Empty page → start inserting immediately; the dynamic suffix has the root id + breakpoints. Don't inspect first.
-- Editing existing content → read_page to read the page as annotated HTML + CSS (every element carries uid="<nodeId>"). If read_page returns pageInfo.nextPart, keep calling read_page({ part: nextPart }) until you have the part(s) needed. Use getNodeHtml for one subtree; then updateNodeProps / replaceNodeHtml addressing nodes by their uid.
+- Editing existing content → read_document to read the current document as annotated HTML + CSS (every element carries uid="<nodeId>"). If read_document returns pageInfo.nextPart, keep calling read_document({ part: nextPart }) until you have the part(s) needed. Use getNodeHtml for one subtree; then updateNodeProps / replaceNodeHtml addressing nodes by their uid.
 - Repetition: duplicateNode (N copies of a card) and duplicatePage (clone a page) — don't rebuild from scratch.
 
 Design system first:
@@ -37,9 +38,14 @@ Structure as HTML, styling as CSS:
 Responsive:
 - Design for every breakpoint in the suffix from the start. All variation is CSS via @media (in an insert's <style> block or applyCss), matched against the suffix breakpoint widths.
 
+Documents:
+- Editable documents are pages, templates, and visual components. The dynamic suffix lists them as document refs: page:<id>, template:<id>, visualComponent:<id>.
+- If a request sounds like shared chrome/layout/theme/navigation/footer, inspect templates first: call list_documents if needed, then read_document({ document: { type:"template", id:"..." } }).
+- read_document can inspect any document without switching the visible canvas. open_document visibly switches to a document; use it before render_snapshot for a non-current document, or when the user explicitly asks to open it. Node-targeted edit tools automatically activate the document that owns the uid before mutating.
+
 Pages:
 - Homepage = page with slug "index". Set via renamePage with slug="index". Site must keep ≥1 page; deletePage of the last one fails.
-- Page ids appear in the dynamic suffix's "Pages:" line. Pass those verbatim to duplicatePage / deletePage / renamePage. NEVER invent a page id.
+- Page ids appear in the dynamic suffix's "Pages:" line and in page/template document refs. Pass those verbatim to duplicatePage / deletePage / renamePage. NEVER invent a page id.
 - addPage makes the new page active and returns \`pageId\` + \`rootNodeId\`. To build into it, pass \`rootNodeId\` (NOT the pageId) as insertHtml's parentId, then keep inserting. Don't call addPage twice for the same page — the slug is auto-uniqued, so a second call makes a second page.
 
 Loops (repeated CMS/data lists):
@@ -48,10 +54,10 @@ Loops (repeated CMS/data lists):
 - Inside a loop, use returned tokens exactly: \`{currentEntry.title}\`, \`{currentEntry.permalink}\`, \`{currentEntry.featuredMedia}\`. NEVER use \`{{post.title}}\`, \`{{post.url}}\`, or a made-up alias; invalid tokens render literally or empty.
 
 Templates (CMS layouts):
-- A template is a page that WRAPS other content. Two kinds of target: an "everywhere" layout wraps every page + entry on the site (use for a shared masthead/footer chrome); a "postTypes" template wraps entries of specific post types (e.g. each blog post). The dynamic suffix marks templates as [template:everywhere] or [template:slug,…] on the Pages line.
+- A template is a document/page that WRAPS other content. Two kinds of target: an "everywhere" layout wraps every page + entry on the site (use for a shared masthead/footer chrome); a "postTypes" template wraps entries of specific post types (e.g. each blog post). The dynamic suffix marks templates in the Documents line with summaries such as "Everywhere template wrapping all pages".
 - The wrapped content flows into a single \`<instatic-outlet>\` you place inside the template's HTML (via insertHtml) — put it where the page/entry body should appear, with the template's chrome (header/nav/footer) around it. A template with no outlet simply doesn't apply (no error), so always place exactly one.
 - Create flow: build the chrome on a page with insertHtml (including one \`<instatic-outlet>\`), then call setPageTemplate(pageId, target, priority?). For a postTypes target, get valid slugs from list_post_types first. priority (default 100) breaks ties when multiple templates match — higher wins; broader (everywhere) always wraps narrower (postTypes).
-- clearPageTemplate(pageId) reverts a template to an ordinary page. Use list_pages to see each page's current template config.
+- clearPageTemplate(pageId) reverts a template to an ordinary page. Use list_documents to see each page/template's current template config.
 
 Notes:
 - Use real ids from the suffix or prior tool results — never invent ids. Class refs accept id OR name.
@@ -104,10 +110,19 @@ function buildDynamicSuffix(snap: SiteAgentSnapshot): string {
         .map((bp) => `${bp.id}@${bp.width}px${bp.mediaQuery ? `:${bp.mediaQuery}` : ''}`)
         .join(', ')
     : '(none)'
-  // Inline every page id + slug so the agent has a concrete handle for
-  // duplicatePage / renamePage / deletePage without an extra list_pages
-  // round-trip. The (active) marker lets the model know which page the
-  // user is currently viewing — useful for "edit this page" prompts.
+  // Inline document refs and page ids so the agent has concrete handles for
+  // document reads plus duplicatePage / renamePage / deletePage without an
+  // extra catalog round-trip. The markers distinguish the active page from the
+  // current editor document, which may be a visual component.
+  const documents = describeAgentDocuments(snap.site, snap.page.id, snap.currentDocument)
+  const documentItems = documents.map((doc) => {
+    const markers = [
+      doc.current ? 'current' : '',
+      doc.active ? 'active-page' : '',
+      `root=${doc.rootNodeId || '(empty)'}`,
+    ].filter(Boolean).join(', ')
+    return `${doc.document.type}:${doc.document.id}="${doc.title}" (${markers}; ${doc.summary})`
+  })
   const pages = snap.site.pages.length > 0
     ? snap.site.pages
         .map((p) => {
@@ -123,10 +138,12 @@ function buildDynamicSuffix(snap: SiteAgentSnapshot): string {
     : '(none)'
   return [
     `Page: "${snap.page.title}"`,
+    `current document: ${snap.currentDocument.type}:${snap.currentDocument.id}`,
     `root: ${snap.page.rootNodeId || '(empty)'}`,
     `selected: ${selected}`,
     `active breakpoint: ${active}`,
     `all breakpoints: [${breakpoints}]`,
+    `Documents: [${documentItems.length > 0 ? boundedList(documentItems, 24) : '(none)'}]`,
     `Pages: [${pages}]`,
     describeTokenDigest(describeAgentTokens(snap.site)),
   ].join(' · ')

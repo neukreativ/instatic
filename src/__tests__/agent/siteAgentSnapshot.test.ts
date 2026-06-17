@@ -33,8 +33,10 @@ describe('buildSiteAgentSnapshot', () => {
     const snap = buildSiteAgentSnapshot(active, site, {
       selectedNodeId: 'root',
       activeBreakpointId: 'desktop',
+      currentDocument: { type: 'page', id: active.id },
     })
     expect(snap.page.id).toBe('p1')
+    expect(snap.currentDocument).toEqual({ type: 'page', id: 'p1' })
     expect(Object.keys(snap.page.nodes)).toEqual(['root'])
     expect(snap.selectedNodeId).toBe('root')
     expect(snap.activeBreakpointId).toBe('desktop')
@@ -45,6 +47,7 @@ describe('buildSiteAgentSnapshot', () => {
     const snap = buildSiteAgentSnapshot(active, site, {
       selectedNodeId: null,
       activeBreakpointId: 'desktop',
+      currentDocument: { type: 'page', id: active.id },
     })
     const other = snap.site.pages.find((p) => p.id === 'p2')!
     expect(other.title).toBe('About')
@@ -58,6 +61,7 @@ describe('buildSiteAgentSnapshot', () => {
     const snap = buildSiteAgentSnapshot(active, site, {
       selectedNodeId: null,
       activeBreakpointId: 'desktop',
+      currentDocument: { type: 'page', id: active.id },
     })
     expect(snap.site.styleRules).toBeDefined()
     expect(snap.site.settings).toBeDefined()

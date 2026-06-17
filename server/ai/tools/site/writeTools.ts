@@ -8,7 +8,8 @@
  * runner routes browser-execution tools through the bridge instead.
  *
  * Node/class/page/template mutation tools + design-system token tools +
- * render_snapshot + getNodeHtml (22 total).
+ * browser-backed read/orientation tools (read_document, open_document,
+ * render_snapshot, getNodeHtml).
  *
  * The input schemas are the single source of truth in `@core/ai`
  * (`src/core/ai/toolSchemas.ts`). This module imports each `*InputSchema`
@@ -21,6 +22,8 @@
 import {
   InsertHtmlInputSchema,
   GetNodeHtmlInputSchema,
+  ReadDocumentInputSchema,
+  OpenDocumentInputSchema,
   ReplaceNodeHtmlInputSchema,
   DeleteNodeInputSchema,
   UpdateNodePropsInputSchema,
@@ -50,8 +53,9 @@ import type { AiTool } from '../types'
 // (structure / content / style — see server/handlers/cms/siteDiff.ts and the
 // `site.structure.edit` gate on PUT /admin/api/cms/pages). Selection-time
 // gating only: persistence is independently re-validated server-side.
-// `getNodeHtml` and `render_snapshot` are reads of the browser snapshot and
-// stay ungated beyond the toolset's own write/read split.
+// `getNodeHtml`, `read_document`, `open_document`, and `render_snapshot` are
+// reads/orientation tools backed by the browser snapshot and stay ungated
+// beyond the toolset's own write/read split.
 // ---------------------------------------------------------------------------
 
 const SITE_STRUCTURE_CAPS: readonly CoreCapability[] = ['site.structure.edit']
@@ -86,6 +90,26 @@ const getNodeHtmlTool: AiTool = {
   description:
     'Return the current HTML the published page would emit for a node subtree. Use before replaceNodeHtml to read existing structure.',
   inputSchema: GetNodeHtmlInputSchema,
+}
+
+const readDocumentTool: AiTool = {
+  name: 'read_document',
+  scope: 'site',
+  execution: 'browser',
+  requiredCapabilities: ['site.read'],
+  description:
+    'Read any editable document as annotated HTML + relevant CSS without switching the visible canvas. Pass a document ref from list_documents; omit document to read the current document. If pageInfo.nextPart is not null, call read_document again with the same document and part.',
+  inputSchema: ReadDocumentInputSchema,
+}
+
+const openDocumentTool: AiTool = {
+  name: 'open_document',
+  scope: 'site',
+  execution: 'browser',
+  requiredCapabilities: ['site.read'],
+  description:
+    'Visibly open a page/template/visual component document in the editor. Use before render_snapshot or when the user asks to navigate. For background inspection, prefer read_document because it does not move the canvas.',
+  inputSchema: OpenDocumentInputSchema,
 }
 
 const replaceNodeHtmlTool: AiTool = {
@@ -196,7 +220,7 @@ const addPageTool: AiTool = {
   execution: 'browser',
   requiredCapabilities: SITE_STRUCTURE_CAPS,
   description:
-    'Add an EMPTY page and make it the active page. `slug` defaults to a slugified title and is auto-uniqued (a repeat add becomes `-2`, `-3`) — so never call addPage twice for the same page. Success data: `pageId` and `rootNodeId`. To build into the new page, pass `rootNodeId` as insertHtml\'s `parentId` — a pageId is NOT a node id. The page is already active, so just start inserting; no need to read_page/list_pages first. For copying an existing page use duplicatePage.',
+    'Add an EMPTY page and make it the active page. `slug` defaults to a slugified title and is auto-uniqued (a repeat add becomes `-2`, `-3`) — so never call addPage twice for the same page. Success data: `pageId` and `rootNodeId`. To build into the new page, pass `rootNodeId` as insertHtml\'s `parentId` — a pageId is NOT a node id. The page is already active, so just start inserting; no need to read_document/list_documents first. For copying an existing page use duplicatePage.',
   inputSchema: AddPageInputSchema,
 }
 
@@ -246,7 +270,7 @@ const setPageTemplateTool: AiTool = {
   execution: 'browser',
   requiredCapabilities: SITE_STRUCTURE_CAPS,
   description:
-    'Turn a page INTO a template (or update an existing template\'s target/priority). `target` is `{kind:"everywhere"}` for a site-wide layout that wraps every page+entry, `{kind:"postTypes", tableSlugs:[…]}` to wrap entries of those post types (slugs from list_post_types), or `{kind:"notFound"}` for the page served on public 404s (status 404, wrapped by the everywhere layout; needs no outlet). `priority` (default 100) breaks ties when several templates match at the same breadth level — higher wins. An everywhere/postTypes template needs exactly one `<instatic-outlet>` (insert it via insertHtml) marking where matched content flows; a wrapper template with no outlet simply doesn\'t apply. Pass a real page id from the suffix / list_pages.',
+    'Turn a page INTO a template (or update an existing template\'s target/priority). `target` is `{kind:"everywhere"}` for a site-wide layout that wraps every page+entry, `{kind:"postTypes", tableSlugs:[…]}` to wrap entries of those post types (slugs from list_post_types), or `{kind:"notFound"}` for the page served on public 404s (status 404, wrapped by the everywhere layout; needs no outlet). `priority` (default 100) breaks ties when several templates match at the same breadth level — higher wins. An everywhere/postTypes template needs exactly one `<instatic-outlet>` (insert it via insertHtml) marking where matched content flows; a wrapper template with no outlet simply doesn\'t apply. Pass a real page id from the suffix / list_documents.',
   inputSchema: SetPageTemplateInputSchema,
 }
 
@@ -328,6 +352,8 @@ const renderSnapshotTool: AiTool = {
 export const siteWriteTools: AiTool[] = [
   insertHtmlTool,
   getNodeHtmlTool,
+  readDocumentTool,
+  openDocumentTool,
   replaceNodeHtmlTool,
   deleteNodeTool,
   updateNodePropsTool,

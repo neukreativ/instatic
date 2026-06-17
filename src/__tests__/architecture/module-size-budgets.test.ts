@@ -91,9 +91,6 @@ const EXEMPT = new Set<string>([
  * shorter; the goal is an empty object.
  */
 const GRANDFATHERED: Record<string, number> = {
-  // Grew past the ceiling via parallel work — grandfathered pending a future
-  // split (extract responsibilities into sub-modules), not blessed forever.
-  'src/admin/pages/site/agent/executor.ts': 730,
   'src/admin/pages/site/store/slices/visualComponentsSlice.ts': 715,
   // server/repositories/media.ts graduated: the row ↔ asset mapping unit was
   // extracted into server/repositories/mediaAssetMapping.ts, dropping media.ts

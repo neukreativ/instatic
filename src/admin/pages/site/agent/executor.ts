@@ -24,6 +24,8 @@ import {
   type AiToolOutput,
   InsertHtmlInputSchema,
   GetNodeHtmlInputSchema,
+  ReadDocumentInputSchema,
+  OpenDocumentInputSchema,
   ReplaceNodeHtmlInputSchema,
   DeleteNodeInputSchema,
   UpdateNodePropsInputSchema,
@@ -42,6 +44,8 @@ import {
   RenderSnapshotInputSchema,
   type InsertHtmlInput,
   type GetNodeHtmlInput,
+  type ReadDocumentInput,
+  type OpenDocumentInput,
   type ReplaceNodeHtmlInput,
   type DeleteNodeInput,
   type UpdateNodePropsInput,
@@ -64,7 +68,7 @@ import { sanitizeRichtext, isRichtextPropKey } from '@core/sanitize'
 import { importHtml } from '@core/htmlImport'
 import { cssToStyleRules } from '@core/siteImport'
 import type { NewStyleRule } from '@core/siteImport'
-import type { BaseNode, ConditionDef, Page, PageTemplateConfig } from '@core/page-tree'
+import type { BaseNode, ConditionDef, PageTemplateConfig } from '@core/page-tree'
 import { renderNode, type RenderConfig, type RenderAccumulators } from '@core/publisher'
 import { getAgentStoreApi } from './storeRef'
 import { captureAgentRenderSnapshot, SnapshotNodeNotFoundError } from './renderEvidence'
@@ -75,6 +79,15 @@ import {
   runSetTypeScale,
   runSetSpacingScale,
 } from './tokenRunners'
+import {
+  activeDocumentNodes,
+  activeRenderPage,
+  describeDocumentId,
+  describeForeignNode,
+  focusNodeDocument,
+  runOpenDocument,
+  runReadDocument,
+} from './documentTools'
 import { getErrorMessage } from '@core/utils/errorMessage'
 
 // Live access to the editor store. Routed through `./storeRef` so this module
@@ -160,35 +173,6 @@ function validateBreakpointId(
 }
 
 /**
- * The node map of the ACTIVE document — the single tree every write tool
- * actually mutates (`mutateActiveTree`). Page mode → the active page's nodes;
- * VC mode → the active component's tree. Mirrors the active-document routing in
- * `mutateActiveTree`/`insertComponentRef` without importing the store module.
- */
-function activeDocNodes(store: EditorStore): Record<string, BaseNode> | null {
-  const site = store.site
-  if (!site) return null
-  const ad = store.activeDocument
-  if (ad?.kind === 'visualComponent') {
-    const vc = site.visualComponents?.find((v) => v.id === ad.vcId)
-    return vc ? (vc.tree.nodes as Record<string, BaseNode>) : null
-  }
-  const pageId = ad?.kind === 'page' ? ad.pageId : store.activePageId
-  const page = site.pages.find((p) => p.id === pageId)
-  return page ? page.nodes : null
-}
-
-/** The active PAGE object (page mode only — null while editing a VC). */
-function getActivePage(store: EditorStore): Page | null {
-  const site = store.site
-  if (!site) return null
-  const ad = store.activeDocument
-  if (ad?.kind === 'visualComponent') return null
-  const pageId = ad?.kind === 'page' ? ad.pageId : store.activePageId
-  return site.pages.find((p) => p.id === pageId) ?? null
-}
-
-/**
  * Resolve a node by ID **within the active document only** — never across other
  * pages, templates, or VCs. Write tools mutate the active tree, so resolving an
  * id that lives in a different document would silently target the wrong tree
@@ -196,28 +180,7 @@ function getActivePage(store: EditorStore): Page | null {
  * it belongs to the active doc, else undefined.
  */
 function findNodeInActiveDoc(store: EditorStore, nodeId: string): BaseNode | undefined {
-  return activeDocNodes(store)?.[nodeId]
-}
-
-/**
- * When a node id is NOT in the active document, locate which OTHER document
- * owns it so the agent gets a precise, actionable error ("that node is in the
- * 'Global Layout' template — open it to edit") instead of "not found" or a
- * misleading mutation failure. Returns null when the id exists nowhere.
- */
-function describeForeignNode(store: EditorStore, nodeId: string): string | null {
-  const site = store.site
-  if (!site) return null
-  for (const page of site.pages) {
-    if (page.nodes[nodeId]) {
-      const what = page.template ? 'template' : 'page'
-      return `the "${page.title}" ${what} (a different document)`
-    }
-  }
-  for (const vc of site.visualComponents ?? []) {
-    if (vc.tree.nodes[nodeId]) return `the "${vc.name}" component (a different document)`
-  }
-  return null
+  return activeDocumentNodes(store)?.[nodeId]
 }
 
 /**
@@ -226,35 +189,14 @@ function describeForeignNode(store: EditorStore, nodeId: string): string | null 
  * nowhere (a bad id).
  */
 function nodeNotInActiveDocError(store: EditorStore, nodeId: string): AiToolOutput {
+  const documentIdError = describeDocumentId(store, nodeId)
+  if (documentIdError) return aiToolError(documentIdError)
   const foreign = describeForeignNode(store, nodeId)
   return aiToolError(
     foreign
       ? `Node ${nodeId} lives in ${foreign} and could not be activated automatically.`
       : `Node not found: ${nodeId}`,
   )
-}
-
-/**
- * Ensure the document that owns `nodeId` is the ACTIVE one, navigating the
- * canvas to it when needed. Write tools mutate the active tree, so when the
- * agent targets a node in another page/template/VC we switch to that document
- * first — the edit then lands in the correct tree AND the user watches it
- * happen, instead of the tool silently no-op'ing on the wrong tree. No-op when
- * the node is already active or exists nowhere.
- */
-function focusNodeDocument(store: EditorStore, nodeId: string): void {
-  if (activeDocNodes(store)?.[nodeId]) return
-  const site = store.site
-  if (!site) return
-  const ownerPage = site.pages.find((p) => p.nodes[nodeId])
-  if (ownerPage) {
-    store.openPageInCanvas(ownerPage.id)
-    return
-  }
-  const ownerVc = site.visualComponents?.find((vc) => vc.tree.nodes[nodeId])
-  if (ownerVc) {
-    store.setActiveDocument({ kind: 'visualComponent', vcId: ownerVc.id })
-  }
 }
 
 /**
@@ -340,11 +282,9 @@ function runGetNodeHtml(input: GetNodeHtmlInput): AiToolOutput {
   const site = store.site
   if (!site) return aiToolError('No active site.')
 
-  // Scope to the ACTIVE page only — never resolve a node from a different page
-  // or template. read_page already exposes only the active page's nodes, so an
-  // id from elsewhere is either stale or a wrapper/outlet-preview node the agent
-  // can't edit from here.
-  const activePage = getActivePage(store)
+  // Scope to the active document only. Visual components are materialized as
+  // virtual pages so getNodeHtml and read_document share publisher semantics.
+  const activePage = activeRenderPage(store)
   if (!activePage?.nodes[input.nodeId]) {
     return nodeNotInActiveDocError(store, input.nodeId)
   }
@@ -365,6 +305,14 @@ function runGetNodeHtml(input: GetNodeHtmlInput): AiToolOutput {
 
   const html = renderNode(input.nodeId, config, acc)
   return aiToolOk({ html })
+}
+
+function runReadDocumentTool(input: ReadDocumentInput): AiToolOutput {
+  return runReadDocument(input, getStoreState())
+}
+
+function runOpenDocumentTool(input: OpenDocumentInput): AiToolOutput {
+  return runOpenDocument(input, getStoreState())
 }
 
 /**
@@ -680,6 +628,10 @@ export async function executeAgentTool(
         return runInsertHtml(parseValue(InsertHtmlInputSchema, rawInput))
       case 'getNodeHtml':
         return runGetNodeHtml(parseValue(GetNodeHtmlInputSchema, rawInput))
+      case 'read_document':
+        return runReadDocumentTool(parseValue(ReadDocumentInputSchema, rawInput))
+      case 'open_document':
+        return runOpenDocumentTool(parseValue(OpenDocumentInputSchema, rawInput))
       case 'replaceNodeHtml':
         return runReplaceNodeHtml(parseValue(ReplaceNodeHtmlInputSchema, rawInput))
       case 'deleteNode':

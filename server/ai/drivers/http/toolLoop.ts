@@ -261,7 +261,7 @@ function prepareToolInput(call: TurnToolCall, req: AiStreamRequest): unknown {
  * model has since mutated — useless to re-send. Any result with an image
  * attachment is heavy regardless of tool name.
  */
-const HEAVY_TOOL_NAMES = new Set(['render_snapshot', 'read_page', 'getNodeHtml'])
+const HEAVY_TOOL_NAMES = new Set(['render_snapshot', 'read_document', 'getNodeHtml'])
 
 function isHeavyResult(r: TurnToolResult): boolean {
   return (r.output.images?.length ?? 0) > 0 || HEAVY_TOOL_NAMES.has(r.name)
@@ -285,7 +285,7 @@ function stubHeavyResult(r: TurnToolResult): TurnToolResult {
  * Rewrite every tracked heavy tool-result message so that, per heavy tool name,
  * only the most recent message keeps full fidelity; all earlier heavy results
  * are stubbed. Non-heavy results in the same message are left untouched (a turn
- * can mix a heavy `read_page` with a cheap `updateNodeProps`). Messages are
+ * can mix a heavy `read_document` with a cheap `updateNodeProps`). Messages are
  * rebuilt through the adapter so this stays provider-agnostic.
  */
 function applyHeavyElision<TMessage>(

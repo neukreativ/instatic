@@ -48,9 +48,9 @@ server/ai/
 ├── contextTokens.ts        — normalizeContextTokens(): provider-normalised "context used" for the meter
 ├── tools/
 │   ├── site/
-│   │   ├── writeTools.ts      — 22 browser-bridged write tools (TypeBox schemas)
-│   │   ├── readTools.ts       — 7 server-side read tools
-│   │   ├── render.ts          — server-side page render (`renderAgentPage`) + catalog derivations (`describeAgentModules`, `describeAgentTokens`, `filterTokenFamily`)
+│   │   ├── writeTools.ts      — browser-bridged site tools (TypeBox schemas), including document reads/opening and write mutations
+│   │   ├── readTools.ts       — server-side catalog read tools
+│   │   ├── render.ts          — catalog derivations (`describeAgentModules`, `describeAgentTokens`, `filterTokenFamily`)
 │   │   ├── systemPrompt.ts    — HTML-native static prefix + buildDynamicSuffix
 │   │   └── snapshot.ts        — `SiteAgentSnapshotSchema` + `SiteAgentSnapshot` re-export + catalog output types (ModuleInfo, SnapshotTokens, …)
 │   └── content/            — content-workspace tools (separate scope)
@@ -82,6 +82,7 @@ src/admin/pages/site/agent/
 ├── siteAgentSnapshot.ts    — `SiteAgentSnapshotSchema` (TypeBox) + derived `SiteAgentSnapshot` type + `buildSiteAgentSnapshot` serializer
 ├── pageContext.ts          — editor adapter: reads active page + store scalars, calls `buildSiteAgentSnapshot`
 ├── executor.ts             — browser-side dispatcher: validates + runs write tools; auto-navigates canvas to node's owning document before each write
+├── documentTools.ts        — list/read/open document helpers for pages, templates, and visual components
 ├── tokenRunners.ts         — set_color_tokens / set_font_tokens / set_type_scale / set_spacing_scale runners (split from executor.ts)
 ├── renderEvidence.ts       — captureAgentRenderSnapshot (render_snapshot tool)
 ├── storeRef.ts             — setAgentStoreApi / getAgentStoreApi (avoids store ↔ executor cycle)
@@ -156,8 +157,13 @@ Server: chat.ts
           │  Direct HTTP drivers have no server-side session — every turn
           │  replays the whole log, mapped into the provider's message array.
           │
-          ├─→ read tool (e.g. read_page)
+          ├─→ catalog read tool (e.g. list_documents)
           │     → resolved server-side from snapshot; result returned to model
+          │
+          ├─→ document read/open tool (read_document / open_document)
+          │     → bridge.callBrowser(toolName, input)
+          │     → browser reads or opens the target page/template/visual component
+          │     → result returned to model
           │
           └─→ write tool (e.g. insertHtml)
                 → bridge.callBrowser(toolName, input)
@@ -192,23 +198,24 @@ The two-endpoint design keeps the **browser as editor-store authority** (write t
 
 ## The page snapshot
 
-Before each `sendAgentMessage` call, `buildCurrentPageContext(get)` (in `pageContext.ts`) builds a `SiteAgentSnapshot` from the live editor store. `pageContext.ts` reads the active page and the two editor-only scalars (`selectedNodeId`, `activeBreakpointId`) off the store and calls `buildSiteAgentSnapshot(activePage, state.site, opts)` (in `siteAgentSnapshot.ts`). The result is the raw authoritative tree — no pre-flattening.
+Before each `sendAgentMessage` call, `buildCurrentPageContext(get)` (in `pageContext.ts`) builds a `SiteAgentSnapshot` from the live editor store. `pageContext.ts` reads the active page, current editor document (`page`, `template`, or `visualComponent`), and the two editor-only scalars (`selectedNodeId`, `activeBreakpointId`) off the store and calls `buildSiteAgentSnapshot(activePage, state.site, opts)` (in `siteAgentSnapshot.ts`). The result is the raw authoritative tree — no pre-flattening.
 
 ```ts
 // SiteAgentSnapshot = Static<typeof SiteAgentSnapshotSchema>
 type SiteAgentSnapshot = {
   page: Page           // active page with full nodes map
+  currentDocument: AgentDocumentRef
   site: SiteDocument   // breakpoints, styleRules, settings intact; non-active pages emptied
   selectedNodeId: string | null
   activeBreakpointId: string
 }
 ```
 
-Only the active page carries full `nodes`. Non-active pages keep metadata (`id`, `title`, `slug`) with empty `nodes`, bounding the per-turn payload on multi-page sites. The server derives everything from this raw tree — `renderAgentPage` runs `publishPage` for the annotated body and builds page-relevant CSS for `read_page`; catalog tools read `site.settings` and the server module registry. No bespoke flattened shapes cross the wire.
+Only the active page carries full `nodes`. Non-active pages keep metadata (`id`, `title`, `slug`, `template`) with empty `nodes`, bounding the per-turn payload on multi-page sites. Server-side catalog tools read `site.settings`, document metadata, and the server module registry from this snapshot. Full annotated document reads are browser-backed (`read_document`) so the agent can inspect any page, template, or visual component from the live store without shipping every tree in every turn.
 
 **Server-side validation.** The chat handler validates the incoming snapshot against `SiteAgentSnapshotSchema` via `safeParseValue` (a soft boundary). A malformed or absent snapshot falls back silently to an empty placeholder — the stream continues with `Untitled` page context rather than crashing. `SiteAgentSnapshotSchema` lives in `src/admin/pages/site/agent/siteAgentSnapshot.ts` and is the source of truth for the type; there is no parallel `interface SiteAgentSnapshot`.
 
-**Mid-turn refresh.** The snapshot is rebuilt once per `sendAgentMessage`, but a single turn runs many tool calls, and browser write tools mutate the live store *during* the turn. To keep server-side read tools (`read_page`, `list_pages`, …) from seeing stale turn-start state, the browser re-captures `buildSnapshot()` after **every** browser tool and posts it with the tool result (`postToolResult(..., snapshot)`). The server threads it through `resolveBridgeToolResult(..., snapshot)` → the bridge's `onSnapshot` → `toolContextBase.snapshot` (a mutable per-turn field). Because `executeAiTool` re-reads `toolContextBase` for each call, the next read tool sees the state the previous write produced. Without this, a read after a write (e.g. `list_pages` right after `addPage`) returned the page set from the start of the turn.
+**Mid-turn refresh.** The snapshot is rebuilt once per `sendAgentMessage`, but a single turn runs many tool calls, and browser tools mutate the live store *during* the turn. To keep server-side catalog tools (`list_documents`, `list_tokens`, …) from seeing stale turn-start state, the browser re-captures `buildSnapshot()` after **every** browser tool and posts it with the tool result (`postToolResult(..., snapshot)`). The server threads it through `resolveBridgeToolResult(..., snapshot)` → the bridge's `onSnapshot` → `toolContextBase.snapshot` (a mutable per-turn field). Because `executeAiTool` re-reads `toolContextBase` for each call, the next catalog tool sees the state the previous browser tool produced. Without this, a catalog read after a write (e.g. `list_documents` right after `addPage`) returned the document set from the start of the turn.
 
 ---
 
@@ -281,23 +288,29 @@ Requires `ai.tools.write`. Calls `resolveBridgeToolResult(bridgeId, requestId, r
 
 ## Tools
 
-### Read tools — 7, server-side
+### Catalog read tools — 6, server-side
 
-Resolved server-side from the posted `SiteAgentSnapshot` or the data repositories via `ctx.db`. No browser round-trip. Results are returned directly to the model.
+Resolved server-side from the posted `SiteAgentSnapshot` or the data repositories via `ctx.db`. No browser round-trip. Results are returned directly to the model. Full annotated HTML reads are browser-backed because the live browser store owns every page/template/visual-component tree.
 
 | Tool              | What it returns                                                         |
 |-------------------|-------------------------------------------------------------------------|
-| `read_page`       | The active page as annotated HTML (`<body>` where every element carries `uid="<nodeId>"`) + page-relevant CSS in a `<style>` block. Result is size-budgeted and carries `pageInfo`; call `read_page({ part: pageInfo.nextPart })` until `nextPart` is `null` to read the remaining cleaned slices. Browser-only `@font-face` blocks, unrelated cross-page ambient selectors, long base64/data URLs, and very long URLs are omitted or summarized. Addresses nodes by `uid` — the same id write tools accept. Replaces the old JSON page-tree tools (`inspect_page`, `inspect_node`, `search_nodes`, `list_classes`, `inspect_class`). |
+| `list_documents`  | Editable document refs for pages, templates, and visual components. Each item includes `{ document: { type, id }, title, rootNodeId, active, current, summary, template? }`; pass those refs to `read_document` / `open_document` |
 | `list_modules`    | Module registry (id, name, category, props schema, defaults); `category` filter |
 | `list_breakpoints`| Configured breakpoints + active id                                      |
-| `list_pages`      | All pages in the site (id, title, slug, active, isHomepage, and `template`: `null` or `{ target, priority }`) |
 | `list_post_types` | Routable collections eligible as a `postTypes` template target — `{ slug, label, routeBase, kind }` per entry, filtered to a non-empty `routeBase`. Queries the data repositories via `ctx.db` |
 | `list_loop_sources` | Loop source ids, source fields, order/filter options, and data-table field catalogs with valid `{currentEntry.field}` tokens. For post/custom table loops, use source id `data.rows`, the returned table `id` as `<instatic-loop data-table-id>`, and the returned tokens inside the loop body |
 | `list_tokens`     | Design tokens: colors (with shades/tints), typography/spacing scale steps, font tokens — each with CSS variable + utility classes; optional `family` filter (`colors`\|`typography`\|`spacing`\|`fonts`) |
 
-### Write tools — 22, browser-bridged
+### Browser tools — 24, browser-bridged
 
-All 22 tools carry `execution: 'browser'` in their `AiTool` definition. The server emits `toolRequest`; the browser executor validates input with TypeBox, runs the store action, and POSTs the canonical `AiToolOutput` result back.
+All 24 tools carry `execution: 'browser'` in their `AiTool` definition. The server emits `toolRequest`; the browser executor validates input with TypeBox, runs the store action or read helper, and POSTs the canonical `AiToolOutput` result back.
+
+**Documents**
+
+| Tool              | Input                                  | Success `data`                        | What it does                                           |
+|-------------------|----------------------------------------|---------------------------------------|--------------------------------------------------------|
+| `read_document`   | `{ document?: { type, id }, part? }`   | `{ document, title, html, css, pageInfo }` | Read a page/template/visual-component document as annotated HTML (`uid="<nodeId>"`) plus compact CSS without switching the visible canvas. Omit `document` to read the current editor document. Result is size-budgeted; call again with `part: pageInfo.nextPart` until `nextPart` is `null` |
+| `open_document`   | `{ document: { type, id } }`           | `{ document }`                        | Visibly switch the editor to a page/template/visual component. Use before `render_snapshot` when the target is not current |
 
 **Structure (HTML-native)**
 
@@ -392,17 +405,17 @@ The agent works **design-system-first**: it establishes or reuses tokens, then r
 
 When a node-targeting write tool (`insertHtml`, `getNodeHtml`, `replaceNodeHtml`, `deleteNode`, `updateNodeProps`, `moveNode`, `renameNode`, `duplicateNode`, `assignClass`, `removeClass`) receives a node id that belongs to a different document (another page, a template, or a VC), the executor automatically navigates the canvas to that document **before** running the mutation. This is done via `focusNodeDocument` in `executor.ts`, which calls `store.openPageInCanvas` or `store.setActiveDocument` as appropriate. The effect: the edit lands in the correct tree, stays visible to the user, and the mid-turn snapshot refresh picks up the navigated state for any subsequent read tool in the same turn.
 
-`render_snapshot`, catalog tools (`list_pages`, etc.), and token tools have no node target — they are excluded from auto-navigation.
+`render_snapshot`, catalog tools (`list_documents`, etc.), and token tools have no node target — they are excluded from auto-navigation.
 
 ### Heavy evidence — image channel + vision gating + elision
 
-`render_snapshot` (and `read_page` / `getNodeHtml`) return large payloads. Five rules keep them from exploding context (a screenshot inlined as base64 JSON text once pushed a single turn past 1M tokens):
+`render_snapshot` (and `read_document` / `getNodeHtml`) return large payloads. Five rules keep them from exploding context (a screenshot inlined as base64 JSON text once pushed a single turn past 1M tokens):
 
 1. **Image channel, not text.** `AiToolOutput` carries an optional `images: { mimeType, data }[]` (`src/core/ai/toolOutput.ts`). `render_snapshot` puts the PNG there — never in `data`. The Anthropic driver forwards it as a **native `image` block** inside the `tool_result` (billed at the rendered image's token cost). Text-only tool channels (Ollama / OpenAI-compatible `function_call_output`) **drop** the image and append a one-line `[N screenshot(s) omitted…]` note. The capture caps the screenshot's long edge at `MAX_IMAGE_EDGE` (1568px in `renderEvidence.ts`) — a tall landing page would otherwise exceed Anthropic's hard 8000px-per-dimension limit (400 error), and the model downsizes the long edge to ~1568px anyway.
 2. **Capture is vision-gated.** The chat handler resolves `driver.capabilities(modelId)` into `AiStreamRequest.modelCapabilities`. The shared tool loop injects `captureScreenshot: visionInput` into every `render_snapshot` call, so a non-vision model never pays the html-to-image cost — it gets the layout report only. (The model never sets `captureScreenshot` itself.)
-3. **`read_page` CSS is page-relevant, not the public full-site CSS bundle.** Public pages can share page-invariant CSS files, but `read_page` inlines CSS into model context. It keeps framework variables/utilities, font token variables, active-page module CSS, used class rules, ambient selectors whose class tokens all exist on the active page, classless/global ambient selectors, and page-targeted user stylesheets. It omits browser-only `@font-face` file declarations and ambient selectors from unrelated imported pages.
-4. **`read_page` is cleaned and paged before it reaches the model.** `renderAgentPage` strips pathological strings from the broad read surface: long base64/data URLs become `data:<mime>;base64,[omitted N chars]`, and very long URLs are middle-truncated. The returned object always includes `pageInfo` with `part`, `totalParts`, `nextPart`, `ranges`, `serializedChars`, and cleanup counts. The hard budget is measured against `JSON.stringify({ html, css, pageInfo }).length`, because that is the text providers receive as the tool result. If `nextPart` is not `null`, the agent calls `read_page({ part: nextPart })` to continue. For exact node-level markup, use the `uid` with `getNodeHtml`.
-5. **Stale evidence is elided.** Within one tool loop, only the **most recent** heavy result per tool name (`render_snapshot`, `read_page`, `getNodeHtml`, or anything with an image) is replayed at full fidelity; earlier ones are rewritten to a one-line breadcrumb (`"Earlier <tool> output removed… Call <tool> again…"`). Older snapshots describe page state the model has since mutated, so they carry no value. See `applyHeavyElision` in `server/ai/drivers/http/toolLoop.ts`.
+3. **`read_document` CSS is document-relevant, not the public full-site CSS bundle.** Public pages can share page-invariant CSS files, but `read_document` inlines CSS into model context. It keeps framework variables/utilities, font token variables, target-document module CSS, used class rules, ambient selectors whose class tokens all exist on the target document, classless/global ambient selectors, and document-targeted user stylesheets. It omits browser-only `@font-face` file declarations and ambient selectors from unrelated imported pages.
+4. **`read_document` is cleaned and paged before it reaches the model.** `renderAgentDocument` strips pathological strings from the broad read surface: long base64/data URLs become `data:<mime>;base64,[omitted N chars]`, and very long URLs are middle-truncated. The returned object always includes `pageInfo` with `part`, `totalParts`, `nextPart`, `ranges`, `serializedChars`, and cleanup counts. The hard budget is measured against `JSON.stringify({ html, css, pageInfo }).length`, because that is the text providers receive as the tool result. If `nextPart` is not `null`, the agent calls `read_document({ document, part: nextPart })` to continue. For exact node-level markup, use the `uid` with `getNodeHtml`.
+5. **Stale evidence is elided.** Within one tool loop, only the **most recent** heavy result per tool name (`render_snapshot`, `read_document`, `getNodeHtml`, or anything with an image) is replayed at full fidelity; earlier ones are rewritten to a one-line breadcrumb (`"Earlier <tool> output removed… Call <tool> again…"`). Older snapshots describe page state the model has since mutated, so they carry no value. See `applyHeavyElision` in `server/ai/drivers/http/toolLoop.ts`.
 
 ---
 
@@ -422,15 +435,17 @@ Drivers that support explicit prompt-cache controls (Anthropic) apply `cache_con
 - `<style>` blocks inside imported HTML are parsed: a bare `.foo {}` rule becomes a Selectors-panel class bound to `class="foo"`; any other selector (`.hero a`, `a:hover`, `@media …`) becomes an ambient rule, and supported `@keyframes` publish as raw keyframes CSS. `style=` attributes land on the node's inline styles. These are applied — not stripped.
 - One `insertHtml` call per logical section (nav, hero, pricing, footer = 4–6 calls); smaller chunks recover better if one fails.
 - Per-breakpoint variation: `@media` queries — in the `<style>` block of an insert or inside `applyCss` — with min/max-width queries that line up with the breakpoint widths in the dynamic suffix. Never invent ids like `"mobile"` or `"desktop"`.
-- Page ids come from the dynamic suffix; never invent them.
+- Document refs come from the dynamic suffix or `list_documents`; never invent them. Shared chrome/layout/theme/navigation/footer requests should inspect template documents first.
+- Page ids for page operations come from the dynamic suffix; never invent them.
 - Write-tool success data uses explicit keys: `cssRulesCreated`/`cssRulesUpdated` for `applyCss`, `pageId` for `addPage`/`duplicatePage`, `nodeId`/`nodeIds` for `duplicateNode`, `nodeIds` for HTML inserts.
-- Editing existing content: call `read_page` first — it returns annotated page HTML where every element carries `uid="<nodeId>"` plus `pageInfo`; follow `pageInfo.nextPart` when more of the page is needed. Pass `uid` verbatim to write tools (`updateNodeProps`, `replaceNodeHtml`, etc.). For a single subtree, `getNodeHtml` is sufficient.
+- Editing existing content: call `read_document` first — it returns annotated document HTML where every element carries `uid="<nodeId>"` plus `pageInfo`; follow `pageInfo.nextPart` when more of the document is needed. Pass `uid` verbatim to write tools (`updateNodeProps`, `replaceNodeHtml`, etc.). For a single subtree, `getNodeHtml` is sufficient.
 - Reply rule: 1–2 narrating sentences only. No raw HTML/CSS/JSON in the reply.
 
 **Dynamic suffix** (built per request by `buildDynamicSuffix(snap: SiteAgentSnapshot)`):
 ```text
 Page: "My Site" · root: <rootNodeId> · selected: <nodeId|none>
 · active breakpoint: <id> · all breakpoints: [<id>@<width>px, …]
+· Documents: [page:<id>="Home" (current, active-page, root=<rootNodeId>; Homepage), template:<id>="Chrome" (root=<rootNodeId>; Everywhere template wrapping all pages), …]
 · Pages: [<id>=<slug> (active), <id>=<slug>, …]
 · Tokens — colors: [primary=…, ink=…]; type --text-*: [xs, s, m, …]; spacing --space-*: […]; fonts: [--font-heading→Inter]
 ```
@@ -449,7 +464,7 @@ The previous tool surface required the model to reference internal module ids (`
 
 The same importer that powers the Agent's `insertHtml` tool also powers the paste-HTML UI — see `docs/features/html-import.md`. No duplicated mapping logic.
 
-**Reads are HTML-native.** The `read_page` tool replaced the five JSON page-tree tools (`inspect_page`, `inspect_node`, `search_nodes`, `list_classes`, `inspect_class`). The `snapshot-tokens` benchmark compares that retired JSON surface with the live `read_page` tool result. `read_page` renders the active page via `publishPage(..., { annotateNodeIds: true })`, returning an annotated `<body>` where every element carries `uid="<nodeId>"`, plus page-relevant CSS rather than the public full-site CSS bundle. The response is cleaned and size-budgeted; if `pageInfo.nextPart` is set, subsequent `read_page({ part })` calls return the remaining cleaned ranges. The agent reads `uid` values from the HTML and passes them verbatim to write tools — no separate node-lookup round-trip. Catalog tools (`list_modules`, `list_tokens`, `list_pages`, `list_post_types`, `list_loop_sources`, `list_breakpoints`) describe things not visible in the page HTML (what is insertable, design token CSS vars, page list, CMS route targets, and loop binding fields) and remain as JSON tools.
+**Reads are HTML-native.** The `read_document` tool returns the same semantic surface the agent writes: annotated HTML where every element carries `uid="<nodeId>"`, plus document-relevant CSS rather than the public full-site CSS bundle. It accepts document refs for pages, templates, and visual components, and omitting `document` reads the current editor document. The response is cleaned and size-budgeted; if `pageInfo.nextPart` is set, subsequent `read_document({ document, part })` calls return the remaining cleaned ranges. The agent reads `uid` values from the HTML and passes them verbatim to write tools — no separate node-lookup round-trip. Catalog tools (`list_modules`, `list_tokens`, `list_documents`, `list_post_types`, `list_loop_sources`, `list_breakpoints`) describe things not visible in the document HTML (what is insertable, design token CSS vars, editable document refs, CMS route targets, and loop binding fields) and remain as JSON tools.
 
 ---
 
@@ -591,11 +606,13 @@ When `POST /admin/api/ai/credentials` creates a new credential, `seedEmptyDefaul
 - `docs/features/auth-and-access.md` — capability model (`ai.chat`, `ai.tools.write`)
 - Source-of-truth files:
   - `src/core/ai/toolOutput.ts` — `AiToolOutput` type, `AiToolOutputSchema`, `aiToolOk`, `aiToolError` (canonical bridge result)
-  - `src/core/ai/toolSchemas.ts` — all site write-tool input schemas (single source of truth; imported by both the server registry and the browser executor)
+  - `src/core/ai/toolSchemas.ts` — all site browser-tool input schemas (single source of truth; imported by both the server registry and the browser executor)
+  - `src/core/ai/documentRefs.ts` — document refs/descriptors for pages, templates, and visual components
+  - `src/core/ai/readSurface.ts` — runtime-agnostic `renderAgentDocument` annotated HTML + compact CSS renderer
   - `src/core/ai/index.ts` — barrel re-exporting the above
-  - `server/ai/tools/site/writeTools.ts` — 22 browser-bridged write tool definitions (uses `@core/ai` input schemas)
-  - `server/ai/tools/site/readTools.ts` — 7 server-side read tool definitions
-  - `server/ai/tools/site/render.ts` — `renderAgentPage`, `describeAgentModules`, `describeAgentTokens`, `filterTokenFamily`
+  - `server/ai/tools/site/writeTools.ts` — 24 browser-bridged site tool definitions (uses `@core/ai` input schemas)
+  - `server/ai/tools/site/readTools.ts` — 6 server-side catalog tool definitions
+  - `server/ai/tools/site/render.ts` — `describeAgentModules`, `describeAgentTokens`, `filterTokenFamily`
   - `server/ai/tools/site/systemPrompt.ts` — HTML-native system prompt
   - `server/ai/tools/site/snapshot.ts` — `SiteAgentSnapshotSchema` + `SiteAgentSnapshot` re-export + catalog output types (`ModuleInfo`, `SnapshotTokens`, …)
   - `src/admin/pages/site/agent/siteAgentSnapshot.ts` — `SiteAgentSnapshotSchema` (TypeBox source of truth) + `SiteAgentSnapshot` (derived type) + `buildSiteAgentSnapshot`

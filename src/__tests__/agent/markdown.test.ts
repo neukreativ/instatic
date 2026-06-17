@@ -24,8 +24,8 @@ describe('renderMarkdownToHtml', () => {
   })
 
   it('renders inline code', () => {
-    const html = renderMarkdownToHtml('Call `read_page` first.')
-    expect(html).toContain('<code>read_page</code>')
+    const html = renderMarkdownToHtml('Call `read_document` first.')
+    expect(html).toContain('<code>read_document</code>')
   })
 
   it('renders fenced code blocks', () => {

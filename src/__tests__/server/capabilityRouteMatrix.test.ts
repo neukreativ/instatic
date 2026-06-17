@@ -552,10 +552,19 @@ describe('capability route matrix', () => {
       })
       expectPastAuth(invalidChat)
 
-      const readOnlyTools = selectToolsForScope('site', ['ai.chat'])
-      const writeTools = selectToolsForScope('site', ['ai.chat', 'ai.tools.write'])
+      const readOnlyTools = selectToolsForScope('site', ['ai.chat', 'site.read'])
+      const writeTools = selectToolsForScope('site', [
+        'ai.chat',
+        'ai.tools.write',
+        'site.structure.edit',
+      ])
+      const readOnlyToolNames = readOnlyTools.map((tool) => tool.name)
       expect(readOnlyTools.length).toBeGreaterThan(0)
       expect(readOnlyTools.every((tool) => !tool.mutates)).toBe(true)
+      expect(readOnlyToolNames).toContain('list_documents')
+      expect(readOnlyToolNames).toContain('read_document')
+      expect(readOnlyToolNames).toContain('open_document')
+      expect(readOnlyToolNames).not.toContain('insertHtml')
       expect(writeTools.some((tool) => tool.mutates)).toBe(true)
       expect(writeTools.length).toBeGreaterThan(readOnlyTools.length)
     } finally {

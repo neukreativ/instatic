@@ -32,6 +32,8 @@ import { siteWriteTools } from '../../../server/ai/tools/site/writeTools'
 import {
   InsertHtmlInputSchema,
   GetNodeHtmlInputSchema,
+  ReadDocumentInputSchema,
+  OpenDocumentInputSchema,
   ReplaceNodeHtmlInputSchema,
   DeleteNodeInputSchema,
   UpdateNodePropsInputSchema,
@@ -60,6 +62,8 @@ const PROJECT_ROOT = join(import.meta.dir, '../../../')
 const EXPECTED_SCHEMA_BY_TOOL = {
   insertHtml: InsertHtmlInputSchema,
   getNodeHtml: GetNodeHtmlInputSchema,
+  read_document: ReadDocumentInputSchema,
+  open_document: OpenDocumentInputSchema,
   replaceNodeHtml: ReplaceNodeHtmlInputSchema,
   deleteNode: DeleteNodeInputSchema,
   updateNodeProps: UpdateNodePropsInputSchema,
