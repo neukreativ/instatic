@@ -2,13 +2,13 @@
 
 `src/admin/modals/SiteImport` is the canonical import surface. It routes static-site bundles (HTML pages, CSS files, images, fonts, JS) through `src/core/siteImport`, and routes CMS-exported site-transfer ZIP bundles through the CMS transfer endpoints for full import/export parity.
 
-The static-site pipeline has two parts: a pure analysis function (`buildImportPlan`) that produces an `ImportPlan` preview, and an async commit function (`commitImportPlan`) that uploads assets and writes to the store. CMS bundle imports keep their native semantics: validate the `SiteBundle`, preview against `/admin/api/cms/import/preview`, then apply through `/admin/api/cms/import` or `/admin/api/cms/import/archive`. The modal still uses the same Review category navigator for CMS bundles, so tables, media, folders, redirects, and import mode live in the same picker pattern as HTML/CSS/media imports.
+The static-site pipeline has two parts: a pure analysis function (`buildImportPlan`) that produces an `ImportPlan` preview, and an async commit function (`commitImportPlan`) that uploads assets and writes to the store. CMS bundle imports keep their native semantics: validate the `SiteBundle`, preview against `/admin/api/cms/import/preview`, resolve any row slug conflicts in the shared Conflicts step, then apply through `/admin/api/cms/import` or `/admin/api/cms/import/archive`. The modal uses the same Review category navigator and Import progress surface for CMS bundles, so tables, media, folders, redirects, conflict resolution, and completion all live in the same picker pattern as HTML/CSS/media imports.
 
 ---
 
 ## TL;DR
 
-- Entry: global admin-shell modal, opened from Spotlight or workspace actions. Drop files, a folder, a static `.zip`, or a CMS-exported `.zip` bundle. Static files use the four-stage modal (Drop → Review → Conflicts → Import, with completion shown inside the Import stage). CMS bundles use the same Drop → Review route and import directly from Review after category selection.
+- Entry: global admin-shell modal, opened from Spotlight or workspace actions. Drop files, a folder, a static `.zip`, or a CMS-exported `.zip` bundle. Static files and CMS bundles both use the four-stage modal (Drop → Review → Conflicts → Import, with completion shown inside the Import stage); Conflicts is skipped when there is nothing to resolve.
 - `buildImportPlan({ fileMap, currentSite, options })` — pure, synchronous — produces an `ImportPlan` with pages, style rules, kept stylesheet files, media, color tokens, custom fonts, Google font install requests, font tokens, and scripts.
 - **Per-stylesheet import modes:** each top-level linked stylesheet either converts to editable style rules (default) or imports verbatim as a page-scoped `SiteFile` stylesheet (`options.stylesheetModes`, picked in the Review step). There are no generated scope classes — page isolation comes from the kept file's runtime scope.
 - `commitImportPlan(plan, adapter)` — uploads assets, then wraps all store writes in a single `adapter.commit` call → one Cmd+Z reverts the whole import.
@@ -51,15 +51,19 @@ src/core/siteImport/
 src/admin/modals/SiteImport/
 ├── index.ts
 ├── SiteImportModal.tsx          — canonical import wizard shell + CMS bundle router
+├── SiteImportFooter.tsx         — shared wizard footer actions
 ├── SiteImportModal.module.css
 ├── steps/
 │   ├── DropStep.tsx             — full-modal drop zone (files, folder, .zip)
-│   ├── AnalyzeStep.tsx          — category navigator (left) + detail pane (right) for static imports and CMS bundles
+│   ├── AnalyzeStep.tsx          — category navigator (left) + detail pane (right) for static imports
+│   ├── CmsBundleAnalyzeStep.tsx — category navigator (left) + detail pane (right) for CMS bundles
 │   ├── ConflictsStep.tsx        — page-slug + class-name + design-token conflict resolution rows
+│   ├── CmsBundleConflictsStep.tsx — row slug conflict resolution for CMS bundles
 │   └── ImportStep.tsx           — determinate progress surface + complete/failed states
 └── shared/
     ├── createSiteImportAdapter.ts  — wires adapter to editor store + media API
     ├── useCmsBundleImport.ts       — CMS bundle parse/preview/import flow
+    ├── cmsBundleFlow.ts            — CMS bundle selection counts + conflict-resolution helpers
     ├── ConflictRow.tsx             — single slug / class-name / token-variable conflict row with resolution picker
     ├── ImportStepper.tsx           — shared four-stage progress rail (Review + Import)
     └── importProgress.ts           — RunProgress model used by ImportStep
@@ -74,7 +78,8 @@ User drops files / folder / static .zip / CMS bundle .zip
             │
             ├─ valid CMS bundle → previewSiteBundle → Review navigator
             │                                      │
-            │                                      └─ importSiteBundle/importSiteBundleArchive(strategy, selection)
+            │                                      ├─ row slug conflicts? → Conflicts step
+            │                                      └─ ImportStep → importSiteBundle/importSiteBundleArchive(strategy, selection)
             │
             ▼
     ingestInput(input)
@@ -282,7 +287,7 @@ The modal is mounted once at the authenticated admin shell (`AuthenticatedAdmin.
 
 **Drop** — full-modal drop zone. Accepts loose files, a folder, a static `.zip`, or a CMS-exported `.zip` bundle. A single ZIP is classified before analysis: an Instatic transfer archive has `.instatic/site-bundle.json` as its first stored entry and routes to the CMS bundle review path; any other ZIP is treated as a static-site import and normalized through `ingestInput` to `FileMap`. JSON `SiteBundle` files are still accepted by the internal parser for tests and direct API work, but the exported user-facing artifact is ZIP. Static import analysis needs a `currentSite`; when the modal opens outside the Site editor, it loads the CMS draft through `cmsAdapter.loadSite('default')` before calling `buildImportPlan`. Size guards: 1 GB aggregate, 10 k files, 5 GB uncompressed (zip-bomb guard).
 
-**CMS bundle review** — shown when the dropped archive validates as an Instatic transfer archive. The wizard reads only the manifest for preview, calls `previewSiteBundle` to render a diff against the local site, then lets the user pick `replace`, `merge-add`, or `merge-overwrite`. Commit calls `importSiteBundleArchive` with the original ZIP `File`, so media assets stream through `/admin/api/cms/import/archive` instead of expanding into browser memory. On success the modal closes and the caller can refresh workspace data.
+**CMS bundle review** — shown when the dropped archive validates as an Instatic transfer archive. The wizard reads only the manifest for preview, calls `previewSiteBundle` to render a diff against the local site, then lets the user pick `replace`, `merge-add`, or `merge-overwrite` and include/exclude the shell, rows, media, folders, and redirects. Continue routes through the same Conflicts and Import steps as static import. Commit calls `importSiteBundleArchive` with the original ZIP `File`, so media assets stream through `/admin/api/cms/import/archive` instead of expanding into browser memory.
 
 **Analyze (Review)** — category navigator. Left column: one nav entry per import category with its count and include-toggle, plus "Add more files" (files can be added at any point — re-ingests and rebuilds the plan) and a "Can't import" entry for skipped items. Right pane: detail view per category:
 - **Pages** — checkbox + inline slug editor per page.
@@ -293,9 +298,9 @@ The modal is mounted once at the authenticated admin shell (`AuthenticatedAdmin.
 - **Scripts** — Switch per JS file.
 - **Can't import** — list of `unusedCss` + `droppedAtRules` with reasons.
 
-**Conflicts** — shown only when conflicts exist. Page-slug rows and class-name rows each use a segmented control: `Rename | Skip | Overwrite | Custom`.
+**Conflicts** — shown only when conflicts exist. Static imports resolve page slugs, class names, design tokens, and cross-sheet classes. CMS bundle imports resolve row slug collisions reported by `/admin/api/cms/import/preview`; the default action renames the incoming row to the server-provided next slug, but users can skip or custom-rename each row before import. Those decisions travel as `selection.rowSlugOverrides` to the archive endpoint while the browser still uploads the original ZIP unchanged.
 
-**Import** (`ImportStep`) — a calm, determinate progress surface (no terminal log). A headline activity (phase verb + N of M), a determinate bar with a travelling shimmer, a one-line current-item ticker, and a per-category breakdown mirroring the Review navigator (pending ring → spinner → mint check, with a tint-washed progress fill). Everything is driven by real pipeline state: media (asset uploads) is the only incremental phase, so it dominates the bar; the other categories land together at the atomic commit. The commit phase is uncancellable; the upload phase is cancellable (orphaned uploads are harmless).
+**Import** (`ImportStep`) — a calm, determinate progress surface (no terminal log). A headline activity (phase verb + N of M), a determinate bar with a travelling shimmer, a one-line current-item ticker, and a per-category breakdown mirroring the Review navigator (pending ring → spinner → mint check, with a tint-washed progress fill). Static imports are driven by real pipeline state: media (asset uploads) is the only incremental phase, so it dominates the bar; the other categories land together at the atomic commit. CMS bundle imports show the same surface with CMS-native categories (site, rows, media, folders, redirects) while the server streams the archive. The commit phase is uncancellable; the upload phase is cancellable (orphaned uploads are harmless).
 
 On success the same step switches to its **complete** state — a success mark, an "Imported into &lt;site&gt;" summary, and every category shown as done. Footer actions: **View import log** (reveals per-category counts + warnings) and **Open site →** (jumps to the first imported page). On failure it shows an inline error surface, and the failure is also surfaced via toast.
 

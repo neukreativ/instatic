@@ -26,10 +26,9 @@
 // modules itself rather than rely on the site editor's chunk having loaded.
 // This rides the modal's own lazy chunk; it adds nothing to the shell bundle.
 import '@modules/base'
-import { useState, type ReactNode } from 'react'
+import { useState } from 'react'
 import { nanoid } from 'nanoid'
 import { Dialog } from '@ui/components/Dialog'
-import { Button } from '@ui/components/Button'
 import { pushToast } from '@ui/components/Toast'
 import {
   ingestInput,
@@ -46,11 +45,21 @@ import { useEditorStore } from '@site/store/store'
 import { DropStep } from './steps/DropStep'
 import { AnalyzeStep } from './steps/AnalyzeStep'
 import { CmsBundleAnalyzeStep } from './steps/CmsBundleAnalyzeStep'
+import { CmsBundleConflictsStep } from './steps/CmsBundleConflictsStep'
 import { ConflictsStep } from './steps/ConflictsStep'
 import { ImportStep } from './steps/ImportStep'
+import { SiteImportFooter } from './SiteImportFooter'
 import { makeInitialRunProgress, type RunProgress } from './shared/importProgress'
 import { createSiteImportAdapter } from './shared/createSiteImportAdapter'
 import { describeCmsBundleLoadError, useCmsBundleImport } from './shared/useCmsBundleImport'
+import {
+  selectedCmsConflicts,
+  selectedCmsMediaCount,
+  selectedCmsMediaFolderCount,
+  selectedCmsRedirectCount,
+  selectedCmsRowCount,
+  withCmsConflictResolutions,
+} from './shared/cmsBundleFlow'
 import {
   type ImportSelection,
   tokenConflictKey,
@@ -64,7 +73,10 @@ import {
 } from './shared/importPlanning'
 import styles from './SiteImportModal.module.css'
 import { getErrorMessage } from '@core/utils/errorMessage'
-import type { BundleImportSelection, SiteBundle } from '@core/data/bundleSchema'
+import type {
+  BundleImportSelection,
+  ImportResult as CmsImportResult,
+} from '@core/data/bundleSchema'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -76,21 +88,6 @@ export type { ImportSelection }
 
 interface SiteImportModalProps {
   onCmsBundleImportComplete?: () => void
-}
-
-function selectedCmsRowCount(selection: BundleImportSelection, bundle: SiteBundle): number {
-  const rowsByTable = new Map<string, number>()
-  for (const row of bundle.rows) {
-    rowsByTable.set(row.tableId, (rowsByTable.get(row.tableId) ?? 0) + 1)
-  }
-  return selection.tables.reduce((sum, table) => (
-    sum + (table.rowIds?.length ?? rowsByTable.get(table.tableId) ?? 0)
-  ), 0)
-}
-
-function selectedCmsMediaCount(selection: BundleImportSelection, mediaTotal: number): number {
-  if (!selection.includeMedia) return 0
-  return selection.mediaIds?.length ?? mediaTotal
 }
 
 // ---------------------------------------------------------------------------
@@ -114,7 +111,6 @@ export function SiteImportModal({ onCmsBundleImportComplete }: SiteImportModalPr
     setCmsSelection,
     setCmsStrategy,
   } = useCmsBundleImport({
-    closeModal,
     onImportComplete: onCmsBundleImportComplete,
   })
 
@@ -128,10 +124,12 @@ export function SiteImportModal({ onCmsBundleImportComplete }: SiteImportModalPr
   const [ruleResolutions, setRuleResolutions] = useState<Map<string, ConflictResolution>>(new Map())
   const [tokenResolutions, setTokenResolutions] = useState<Map<string, ConflictResolution>>(new Map())
   const [crossSheetResolutions, setCrossSheetResolutions] = useState<Map<string, ConflictResolution>>(new Map())
+  const [cmsRowResolutions, setCmsRowResolutions] = useState<Map<string, ConflictResolution>>(new Map())
   const [stylesheetModes, setStylesheetModes] = useState<Record<string, StylesheetImportMode>>({})
   const [pageSlugOverrides, setPageSlugOverrides] = useState<Map<string, string>>(new Map())
   const [runProgress, setRunProgress] = useState<RunProgress>(makeInitialRunProgress)
   const [result, setResult] = useState<ImportResult | null>(null)
+  const [cmsResult, setCmsResult] = useState<CmsImportResult | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [logOpen, setLogOpen] = useState(false)
@@ -148,6 +146,8 @@ export function SiteImportModal({ onCmsBundleImportComplete }: SiteImportModalPr
         setFileMap(null)
         setPlan(null)
         setSelection(null)
+        setCmsRowResolutions(new Map())
+        setCmsResult(null)
         setBusy(false)
         setStep('analyze')
         return
@@ -171,6 +171,8 @@ export function SiteImportModal({ onCmsBundleImportComplete }: SiteImportModalPr
         setFileMap(null)
         setPlan(null)
         setSelection(null)
+        setCmsRowResolutions(new Map())
+        setCmsResult(null)
         setBusy(false)
         setStep('analyze')
         return
@@ -279,13 +281,44 @@ export function SiteImportModal({ onCmsBundleImportComplete }: SiteImportModalPr
     }
   }
 
+  function handleCmsAnalyzeNext() {
+    if (!cmsBundleState?.preview) return
+    const conflicts = cmsBundleState.strategy === 'replace'
+      ? []
+      : selectedCmsConflicts(
+          cmsBundleState.selection,
+          cmsBundleState.bundle,
+          cmsBundleState.preview.rowConflicts ?? [],
+        )
+
+    if (conflicts.length > 0) {
+      setStep('conflicts')
+      return
+    }
+
+    void kickOffCmsRun(cmsBundleState.selection)
+  }
+
   function handleConflictsImport() {
+    if (cmsBundleState?.preview) {
+      const finalSelection = withCmsConflictResolutions(
+        cmsBundleState.selection,
+        cmsBundleState.bundle,
+        cmsBundleState.preview.rowConflicts ?? [],
+        cmsRowResolutions,
+      )
+      setCmsSelection(finalSelection)
+      void kickOffCmsRun(finalSelection)
+      return
+    }
     if (!plan) return
     void kickOffRun(plan, pageResolutions, ruleResolutions, tokenResolutions)
   }
 
   function handleCmsChooseDifferentFile() {
     clearCmsBundle()
+    setCmsRowResolutions(new Map())
+    setCmsResult(null)
     setErrorMsg(null)
     setBusy(false)
     setStep('drop')
@@ -323,6 +356,10 @@ export function SiteImportModal({ onCmsBundleImportComplete }: SiteImportModalPr
         total: resolvedPlan.fonts.length + resolvedPlan.googleFonts.length + resolvedPlan.fontTokens.length,
       },
       scripts: { done: 0, total: resolvedPlan.scripts.length },
+      site: { done: 0, total: 0 },
+      rows: { done: 0, total: 0 },
+      mediaFolders: { done: 0, total: 0 },
+      redirects: { done: 0, total: 0 },
     }
     setLogOpen(false)
     setResult(null)
@@ -383,6 +420,10 @@ export function SiteImportModal({ onCmsBundleImportComplete }: SiteImportModalPr
             total: importResult.fonts.length + importResult.fontTokens.length,
           },
           scripts: { done: importResult.scripts.length, total: importResult.scripts.length },
+          site: { done: 0, total: 0 },
+          rows: { done: 0, total: 0 },
+          mediaFolders: { done: 0, total: 0 },
+          redirects: { done: 0, total: 0 },
         },
       }))
       setResult(importResult)
@@ -397,6 +438,65 @@ export function SiteImportModal({ onCmsBundleImportComplete }: SiteImportModalPr
       const msg = getErrorMessage(err, 'Unknown import error')
       setRunProgress((prev) => ({ ...prev, phase: 'failed', currentItem: '', errorMessage: msg }))
       pushToast({ kind: 'error', title: 'Import failed', body: msg })
+    }
+  }
+
+  async function kickOffCmsRun(selectionToImport: BundleImportSelection) {
+    if (!cmsBundleState) return
+
+    const rowCount = selectedCmsRowCount(selectionToImport, cmsBundleState.bundle)
+    const mediaCount = selectedCmsMediaCount(selectionToImport, cmsBundleState.bundle.media?.length ?? 0)
+    const mediaFolderCount = selectedCmsMediaFolderCount(selectionToImport, cmsBundleState.bundle)
+    const redirectCount = selectedCmsRedirectCount(selectionToImport, cmsBundleState.bundle)
+    const siteCount = selectionToImport.includeSite && cmsBundleState.bundle.site ? 1 : 0
+
+    setLogOpen(false)
+    setResult(null)
+    setCmsResult(null)
+    setRunProgress({
+      phase: 'applying',
+      currentItem: 'Importing site bundle…',
+      categories: {
+        pages: { done: 0, total: 0 },
+        styles: { done: 0, total: 0 },
+        colors: { done: 0, total: 0 },
+        fonts: { done: 0, total: 0 },
+        scripts: { done: 0, total: 0 },
+        site: { done: 0, total: siteCount },
+        rows: { done: 0, total: rowCount },
+        media: { done: 0, total: mediaCount },
+        mediaFolders: { done: 0, total: mediaFolderCount },
+        redirects: { done: 0, total: redirectCount },
+      },
+    })
+    setStep('run')
+
+    try {
+      const importResult = await importCmsBundle(selectionToImport)
+      if (!importResult) {
+        setStep('analyze')
+        return
+      }
+      setRunProgress({
+        phase: 'done',
+        currentItem: '',
+        categories: {
+          pages: { done: 0, total: 0 },
+          styles: { done: 0, total: 0 },
+          colors: { done: 0, total: 0 },
+          fonts: { done: 0, total: 0 },
+          scripts: { done: 0, total: 0 },
+          site: { done: siteCount, total: siteCount },
+          rows: { done: importResult.rowsInserted + importResult.rowsReplaced + importResult.rowsSkipped, total: rowCount },
+          media: { done: importResult.mediaImported, total: mediaCount },
+          mediaFolders: { done: importResult.mediaFoldersImported, total: mediaFolderCount },
+          redirects: { done: importResult.redirectsImported, total: redirectCount },
+        },
+      })
+      setCmsResult(importResult)
+    } catch (err) {
+      const msg = getErrorMessage(err, 'Unknown import error')
+      setRunProgress((prev) => ({ ...prev, phase: 'failed', currentItem: '', errorMessage: msg }))
     }
   }
 
@@ -422,126 +522,6 @@ export function SiteImportModal({ onCmsBundleImportComplete }: SiteImportModalPr
     closeModal()
   }
 
-  // ── Footer ────────────────────────────────────────────────────────────────
-
-  function renderFooter(): ReactNode {
-    if (step === 'drop') return null
-
-    if (step === 'analyze') {
-      if (cmsBundleState) {
-        const rowCount = selectedCmsRowCount(cmsBundleState.selection, cmsBundleState.bundle)
-        const mediaCount = selectedCmsMediaCount(cmsBundleState.selection, cmsBundleState.bundle.media?.length ?? 0)
-        return (
-          <>
-            <span className={styles.footNote}>
-              {rowCount} {rowCount === 1 ? 'row' : 'rows'} · {mediaCount} media selected
-            </span>
-            <Button
-              variant="secondary"
-              type="button"
-              disabled={cmsBundleState.importing}
-              onClick={handleBack}
-            >
-              Back
-            </Button>
-            <Button
-              variant={cmsBundleState.strategy === 'replace' ? 'destructive' : 'primary'}
-              type="button"
-              disabled={!cmsCanImport}
-              onClick={() => { void importCmsBundle() }}
-            >
-              {cmsImportButtonLabel}
-            </Button>
-          </>
-        )
-      }
-
-      const pageCount = selection ? selection.pagesIncluded.size : 0
-      const ruleCount = selection ? selection.styleRulesIncluded.size : 0
-      const mediaCount = selection ? selection.assetsIncluded.size : 0
-      return (
-        <>
-          <span className={styles.footNote}>
-            {pageCount} {pageCount === 1 ? 'page' : 'pages'} · {ruleCount} rules · {mediaCount} media selected
-          </span>
-          <Button variant="secondary" type="button" onClick={handleClose}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            type="button"
-            disabled={pageCount === 0}
-            onClick={handleAnalyzeNext}
-          >
-            Continue →
-          </Button>
-        </>
-      )
-    }
-
-    if (step === 'conflicts') {
-      return (
-        <>
-          <Button variant="secondary" type="button" onClick={handleBack}>
-            ← Back
-          </Button>
-          <Button variant="primary" type="button" onClick={handleConflictsImport}>
-            Import
-          </Button>
-        </>
-      )
-    }
-
-    if (step === 'run') {
-      const phase = runProgress.phase
-
-      if (phase === 'done') {
-        return (
-          <>
-            <span className={styles.footNote}>
-              <strong>{siteName}</strong> is ready
-            </span>
-            <Button variant="ghost" type="button" onClick={() => setLogOpen((o) => !o)}>
-              {logOpen ? 'Hide import log' : 'View import log'}
-            </Button>
-            <Button variant="primary" type="button" onClick={handleOpenSite}>
-              Open site →
-            </Button>
-          </>
-        )
-      }
-
-      if (phase === 'failed') {
-        return (
-          <>
-            <span className={styles.footNote}>Import didn’t finish</span>
-            <Button variant="secondary" type="button" onClick={handleClose}>
-              Close
-            </Button>
-          </>
-        )
-      }
-
-      // Running (idle / uploading / applying).
-      const canCancel = phase === 'uploading' || phase === 'idle'
-      return (
-        <>
-          <span className={styles.footNote}>Keep this window open while importing…</span>
-          <Button
-            variant="secondary"
-            type="button"
-            disabled={!canCancel}
-            onClick={handleRunCancel}
-          >
-            Cancel
-          </Button>
-        </>
-      )
-    }
-
-    return null
-  }
-
   // ── Step titles ───────────────────────────────────────────────────────────
 
   const titleByStep: Record<Step, string> = {
@@ -565,7 +545,27 @@ export function SiteImportModal({ onCmsBundleImportComplete }: SiteImportModalPr
       eyebrow="Instatic"
       size={step === 'analyze' ? '2xl' : 'xl'}
       tone={isCmsReplace ? 'danger' : 'neutral'}
-      footer={renderFooter() ?? undefined}
+      footer={step === 'drop' ? undefined : (
+        <SiteImportFooter
+          step={step}
+          cmsBundleState={cmsBundleState}
+          selection={selection}
+          runProgress={runProgress}
+          cmsResult={cmsResult}
+          logOpen={logOpen}
+          siteName={siteName}
+          cmsCanImport={cmsCanImport}
+          cmsImportButtonLabel={cmsImportButtonLabel}
+          onBack={handleBack}
+          onClose={handleClose}
+          onAnalyzeNext={handleAnalyzeNext}
+          onCmsAnalyzeNext={handleCmsAnalyzeNext}
+          onConflictsImport={handleConflictsImport}
+          onRunCancel={handleRunCancel}
+          onToggleLog={() => setLogOpen((o) => !o)}
+          onOpenSite={handleOpenSite}
+        />
+      )}
       bodyClassName={step === 'analyze' ? styles.analyzeBody : step === 'run' ? styles.importBody : undefined}
       closeOnEscape={runProgress.phase !== 'applying' && !isCmsImporting}
       closeOnBackdrop={runProgress.phase !== 'applying' && !isCmsImporting}
@@ -610,7 +610,25 @@ export function SiteImportModal({ onCmsBundleImportComplete }: SiteImportModalPr
           />
         )}
 
-        {step === 'conflicts' && plan && (
+        {step === 'conflicts' && cmsBundleState?.preview && (
+          <CmsBundleConflictsStep
+            conflicts={selectedCmsConflicts(
+              cmsBundleState.selection,
+              cmsBundleState.bundle,
+              cmsBundleState.preview.rowConflicts ?? [],
+            )}
+            resolutions={cmsRowResolutions}
+            onResolutionChange={(key, resolution) => {
+              setCmsRowResolutions((prev) => {
+                const next = new Map(prev)
+                next.set(key, resolution)
+                return next
+              })
+            }}
+          />
+        )}
+
+        {step === 'conflicts' && !cmsBundleState && plan && (
           <ConflictsStep
             plan={plan}
             pageResolutions={pageResolutions}
@@ -653,8 +671,10 @@ export function SiteImportModal({ onCmsBundleImportComplete }: SiteImportModalPr
             progress={runProgress}
             siteName={siteName}
             result={result}
+            cmsResult={cmsResult}
             droppedAtRules={plan?.droppedAtRules.length ?? 0}
             logOpen={logOpen}
+            mode={cmsBundleState ? 'cms' : 'static'}
           />
         )}
       </div>

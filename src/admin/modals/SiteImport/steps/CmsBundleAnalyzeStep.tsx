@@ -3,6 +3,9 @@ import { Checkbox } from '@ui/components/Checkbox'
 import { Switch } from '@ui/components/Switch'
 import { assignRailAccents, railTintVar, type RailAccent } from '@ui/railAccent'
 import { DragAndDropSolidIcon } from 'pixel-art-icons/icons/drag-and-drop-solid'
+import { FileTextSolidIcon } from 'pixel-art-icons/icons/file-text-solid'
+import { HeadingIcon } from 'pixel-art-icons/icons/heading'
+import { ImageSolidIcon } from 'pixel-art-icons/icons/image-solid'
 import type { BundleImportSelection, BundlePreview, ImportStrategy } from '@core/data/bundleSchema'
 import type { CmsBundleState } from '../shared/useCmsBundleImport'
 import { ImportStepper } from '../shared/ImportStepper'
@@ -493,7 +496,7 @@ function renderCmsMedia(
             const on = selectedMedia.has(asset.id)
             return (
               <div key={asset.id} className={styles.mediaTile}>
-                <span className={styles.thumb} aria-hidden="true" />
+                {renderCmsMediaThumb(asset)}
                 <div className={styles.info}>
                   <span className={styles.title}>{asset.filename}</span>
                   <span className={styles.meta}>{asset.mimeType} · {formatBytes(asset.sizeBytes)}</span>
@@ -531,7 +534,7 @@ function renderCmsToggleCategory(input: {
         hideBulk
       />
       <div className={styles.rows}>
-        <div className={styles.listRow}>
+        <div className={styles.cmsToggleRow}>
           <div className={styles.info}>
             <span className={styles.title}>{input.title}</span>
             <span className={styles.meta}>{input.total} in bundle</span>
@@ -545,6 +548,33 @@ function renderCmsToggleCategory(input: {
         </div>
       </div>
     </>
+  )
+}
+
+function renderCmsMediaThumb(asset: NonNullable<CmsBundleState['bundle']['media']>[number]) {
+  if (asset.mimeType.startsWith('image/') && asset.bytesBase64) {
+    return (
+      <img
+        className={styles.thumb}
+        src={`data:${asset.mimeType};base64,${asset.bytesBase64}`}
+        alt=""
+      />
+    )
+  }
+
+  const Icon = asset.mimeType.startsWith('image/')
+    ? ImageSolidIcon
+    : asset.mimeType.startsWith('font/')
+      ? HeadingIcon
+      : FileTextSolidIcon
+  const style = asset.mimeType.startsWith('image/') && asset.dominantColor
+    ? { '--cms-thumb-bg': asset.dominantColor } as CSSProperties
+    : undefined
+
+  return (
+    <span className={styles.cmsFileThumb} style={style} aria-hidden="true">
+      <Icon size={17} />
+    </span>
   )
 }
 

@@ -19,6 +19,10 @@ export type ImportCategoryId =
   | 'colors'
   | 'fonts'
   | 'scripts'
+  | 'site'
+  | 'rows'
+  | 'mediaFolders'
+  | 'redirects'
 
 export interface CategoryCount {
   done: number
@@ -46,6 +50,10 @@ export function makeInitialRunProgress(): RunProgress {
       colors: { ...zero },
       fonts: { ...zero },
       scripts: { ...zero },
+      site: { ...zero },
+      rows: { ...zero },
+      mediaFolders: { ...zero },
+      redirects: { ...zero },
     },
   }
 }

@@ -794,6 +794,69 @@ describe('archive import validation', () => {
     }
   })
 
+  test('merge-add archive import skips rows whose slug is already used locally', async () => {
+    const uploadsDir = await mkdtemp(join(tmpdir(), 'instatic-import-slug-conflict-'))
+    try {
+      const db = createSqliteClient(':memory:')
+      await runMigrations(db, sqliteMigrations)
+      const cookie = await seedRoundtripAuth(db, 'slug-conflict@roundtrip.test')
+      await createDataRow(db, {
+        id: 'local-existing-row',
+        tableId: 'posts',
+        cells: { title: 'Local row', slug: 'shared-slug' },
+        slug: 'shared-slug',
+      })
+      const postsTable = (await listDataTables(db)).find((table) => table.id === 'posts')
+      expect(postsTable).toBeDefined()
+      const manifest = {
+        schemaVersion: 1,
+        exportedAt: new Date().toISOString(),
+        tables: [postsTable!],
+        rows: [
+          {
+            id: 'bundle-conflicting-row',
+            tableId: 'posts',
+            cells: { title: 'Bundle row', slug: 'shared-slug' },
+            slug: 'shared-slug',
+            status: 'draft',
+            authorUserId: null,
+            createdByUserId: null,
+            updatedByUserId: null,
+            publishedByUserId: null,
+            author: null,
+            createdBy: null,
+            updatedBy: null,
+            publishedBy: null,
+            publishedAt: null,
+            scheduledPublishAt: null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            deletedAt: null,
+          },
+        ],
+      }
+      const archiveBytes = zipSync({
+        [BUNDLE_ARCHIVE_MANIFEST_PATH]: strToU8(JSON.stringify(manifest)),
+      }, { level: 0 })
+
+      const req = new Request('http://localhost/admin/api/cms/import/archive?strategy=merge-add', {
+        method: 'POST',
+        headers: { 'content-type': 'application/zip' },
+        body: archiveBytes,
+      })
+      req.headers.set('cookie', cookie)
+      const res = await handleImportArchiveRoute(req, db, { uploadsDir })
+      expect(res!.status).toBe(200)
+      const body = parseValue(ImportResultSchema, JSON.parse(await res!.text()))
+      expect(body.rowsInserted).toBe(0)
+      expect(body.rowsSkipped).toBe(1)
+      expect(await getDataRow(db, 'bundle-conflicting-row')).toBeNull()
+      expect(await getDataRow(db, 'local-existing-row')).not.toBeNull()
+    } finally {
+      await rm(uploadsDir, { recursive: true, force: true })
+    }
+  })
+
   test('skips unselected media entries while streaming a selected archive import', async () => {
     const uploadsDir = await mkdtemp(join(tmpdir(), 'instatic-import-skip-media-'))
     try {

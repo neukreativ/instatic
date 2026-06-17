@@ -53,8 +53,9 @@ export async function upsertDataRow(
 }
 
 /**
- * Insert a row only if its id does not already exist. Returns `true` when the
- * row was inserted, `false` when it was skipped (id conflict). Used by the
+ * Insert a row only when no uniqueness constraint is hit. Returns `true` when
+ * the row was inserted, `false` when it was skipped (id conflict, or an active
+ * row in the same table already owns the imported slug). Used by the
  * `merge-add` import strategy.
  *
  * RETURNING id is supported by both Postgres and SQLite, making this dialect-
@@ -75,7 +76,7 @@ export async function insertDataRowIfAbsent(
       ${input.id}, ${input.tableId}, ${input.cells}, ${input.slug}, ${input.status},
       ${input.publishedAt}, ${createdAt}, ${updatedAt}
     )
-    on conflict (id) do nothing
+    on conflict do nothing
     returning id
   `
   return rows.length > 0

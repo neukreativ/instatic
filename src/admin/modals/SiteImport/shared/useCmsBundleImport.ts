@@ -41,7 +41,6 @@ export interface CmsBundleState {
 }
 
 interface UseCmsBundleImportInput {
-  closeModal: () => void
   onImportComplete?: () => void
 }
 
@@ -118,7 +117,6 @@ export function describeCmsBundleLoadError(err: unknown): string {
 }
 
 export function useCmsBundleImport({
-  closeModal,
   onImportComplete,
 }: UseCmsBundleImportInput) {
   const { runStepUp } = useStepUp()
@@ -189,22 +187,23 @@ export function useCmsBundleImport({
     setCmsBundleState((prev) => prev ? { ...prev, selection } : prev)
   }
 
-  async function importCmsBundle() {
+  async function importCmsBundle(selectionOverride?: BundleImportSelection): Promise<CmsImportResult | null> {
     if (
       !cmsBundleState ||
       !cmsBundleState.preview ||
-      !selectionHasContent(cmsBundleState.bundle, cmsBundleState.selection) ||
+      !selectionHasContent(cmsBundleState.bundle, selectionOverride ?? cmsBundleState.selection) ||
       cmsBundleState.importing
     ) {
-      return
+      return null
     }
 
+    const selection = selectionOverride ?? cmsBundleState.selection
     setCmsBundleState({ ...cmsBundleState, importing: true })
     try {
-      const selectedBundle = filterSiteBundleForImportSelection(cmsBundleState.bundle, cmsBundleState.selection)
-      const archiveSelection = isFullBundleImportSelection(cmsBundleState.bundle, cmsBundleState.selection)
+      const selectedBundle = filterSiteBundleForImportSelection(cmsBundleState.bundle, selection)
+      const archiveSelection = isFullBundleImportSelection(cmsBundleState.bundle, selection)
         ? undefined
-        : cmsBundleState.selection
+        : selection
       const importResult = await runStepUp(() => cmsBundleState.archiveFile
         ? importSiteBundleArchive(cmsBundleState.archiveFile, cmsBundleState.strategy, archiveSelection)
         : importSiteBundle(selectedBundle, cmsBundleState.strategy))
@@ -219,11 +218,12 @@ export function useCmsBundleImport({
       }
       requestCmsSiteReload()
       onImportComplete?.()
-      closeModal()
+      setCmsBundleState((prev) => prev ? { ...prev, importing: false } : prev)
+      return importResult
     } catch (err) {
       if (err instanceof Error && err.message === StepUpCancelledMessage) {
         setCmsBundleState((prev) => prev ? { ...prev, importing: false } : prev)
-        return
+        return null
       }
       console.error('[SiteImportModal] bundle import failed:', err)
       pushToast({
@@ -233,6 +233,7 @@ export function useCmsBundleImport({
         location: 'site-workspace',
       })
       setCmsBundleState((prev) => prev ? { ...prev, importing: false } : prev)
+      throw err
     }
   }
 

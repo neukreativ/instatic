@@ -27,6 +27,7 @@ import { CodeIcon } from 'pixel-art-icons/icons/code'
 import { CheckIcon } from 'pixel-art-icons/icons/check'
 import { WarningDiamondSolidIcon } from 'pixel-art-icons/icons/warning-diamond-solid'
 import type { ImportResult } from '@core/siteImport'
+import type { ImportResult as CmsImportResult } from '@core/data/bundleSchema'
 import { ImportStepper } from '../shared/ImportStepper'
 import { withSiteImportCategoryTints } from '../shared/importCategoryAccent'
 import type { CategoryCount, ImportCategoryId, RunProgress } from '../shared/importProgress'
@@ -57,29 +58,48 @@ const CATEGORIES: CategoryConfig[] = withSiteImportCategoryTints<BaseCategoryCon
   { id: 'scripts', label: 'Scripts', unit: 'files', verb: 'Attaching scripts', Icon: CodeIcon },
 ])
 
+const CMS_CATEGORIES: CategoryConfig[] = withSiteImportCategoryTints<BaseCategoryConfig>([
+  { id: 'site', label: 'Theme & settings', unit: 'shell', verb: 'Applying site shell', Icon: PaintBucketSolidIcon },
+  { id: 'rows', label: 'Rows', unit: 'rows', verb: 'Importing rows', Icon: FileTextSolidIcon },
+  { id: 'media', label: 'Media', unit: 'files', verb: 'Streaming media', Icon: ImageSolidIcon },
+  { id: 'mediaFolders', label: 'Media folders', unit: 'folders', verb: 'Restoring folders', Icon: HeadingIcon },
+  { id: 'redirects', label: 'Redirects', unit: 'redirects', verb: 'Restoring redirects', Icon: CodeIcon },
+])
+
 type RowState = 'pending' | 'active' | 'done'
 
 interface ImportStepProps {
   progress: RunProgress
   siteName: string
   result: ImportResult | null
+  cmsResult?: CmsImportResult | null
+  mode?: 'static' | 'cms'
   droppedAtRules: number
   /** When true, the complete state additionally reveals the import-log details. */
   logOpen: boolean
 }
 
-export function ImportStep({ progress, siteName, result, droppedAtRules, logOpen }: ImportStepProps) {
+export function ImportStep({
+  progress,
+  siteName,
+  result,
+  cmsResult = null,
+  mode = 'static',
+  droppedAtRules,
+  logOpen,
+}: ImportStepProps) {
   const { phase, categories, currentItem } = progress
+  const configs = mode === 'cms' ? CMS_CATEGORIES : CATEGORIES
   const done = phase === 'done'
   const failed = phase === 'failed'
 
-  const media = categories.media
+  const media = categoryCount(categories, 'media')
   const uploadFrac = media.total > 0 ? media.done / media.total : 1
   // Reserve the final slice for the atomic commit so the bar doesn't sit at
   // 100% while pages/rules/tokens are still being written.
   const pct = done ? 100 : Math.min(99, Math.round(uploadFrac * 92))
 
-  function rowState(id: ImportCategoryId, c: CategoryCount): RowState {
+  function rowState(id: string, c: CategoryCount): RowState {
     if (done) return 'done'
     if (c.total === 0) return 'done' // nothing to import in this category
     if (id === 'media') {
@@ -94,9 +114,9 @@ export function ImportStep({ progress, siteName, result, droppedAtRules, logOpen
   // still has work (only briefly visible — the commit is atomic).
   const activeCfg =
     phase === 'uploading' && media.total > 0 && media.done < media.total
-      ? CATEGORIES.find((c) => c.id === 'media')!
-      : CATEGORIES.find((c) => categories[c.id].total > 0) ?? CATEGORIES[0]
-  const activeCount = categories[activeCfg.id]
+      ? configs.find((c) => c.id === 'media')!
+      : configs.find((c) => categoryCount(categories, c.id).total > 0) ?? configs[0]
+  const activeCount = categoryCount(categories, activeCfg.id)
 
   return (
     <div className={styles.step}>
@@ -119,7 +139,8 @@ export function ImportStep({ progress, siteName, result, droppedAtRules, logOpen
               <CheckIcon size={28} />
             </span>
             <h3 className={styles.doneTitle}>Imported into {siteName}</h3>
-            {result && <p className={styles.doneSub}>{summaryLine(result)}</p>}
+            {mode === 'cms' && cmsResult && <p className={styles.doneSub}>{cmsSummaryLine(cmsResult)}</p>}
+            {mode !== 'cms' && result && <p className={styles.doneSub}>{summaryLine(result)}</p>}
           </div>
         ) : (
           <div className={styles.summary} role="status" aria-live="polite">
@@ -151,8 +172,8 @@ export function ImportStep({ progress, siteName, result, droppedAtRules, logOpen
           <>
             <p className={styles.catsLabel}>{done ? 'Imported' : 'Progress'}</p>
             <div className={styles.cats}>
-              {CATEGORIES.map((cfg) => {
-                const c = categories[cfg.id]
+              {configs.map((cfg) => {
+                const c = categoryCount(categories, cfg.id)
                 const state = rowState(cfg.id, c)
                 const local = state === 'done' ? 1 : cfg.id === 'media' && c.total > 0 ? c.done / c.total : 0
                 const countText =
@@ -198,8 +219,11 @@ export function ImportStep({ progress, siteName, result, droppedAtRules, logOpen
           </>
         )}
 
-        {logOpen && done && result && (
+        {mode === 'static' && logOpen && done && result && (
           <ImportLog result={result} droppedAtRules={droppedAtRules} />
+        )}
+        {mode === 'cms' && logOpen && done && cmsResult && (
+          <CmsImportLog result={cmsResult} />
         )}
       </div>
     </div>
@@ -262,6 +286,28 @@ function ImportLog({ result, droppedAtRules }: { result: ImportResult; droppedAt
   )
 }
 
+function CmsImportLog({ result }: { result: CmsImportResult }) {
+  const counts = [
+    `${result.rowsInserted} ${plural(result.rowsInserted, 'row')} added`,
+    `${result.rowsReplaced} ${plural(result.rowsReplaced, 'row')} replaced`,
+    `${result.rowsSkipped} ${plural(result.rowsSkipped, 'row')} skipped`,
+    `${result.mediaImported} media ${plural(result.mediaImported, 'file')} imported`,
+    `${result.mediaFoldersImported} ${plural(result.mediaFoldersImported, 'folder')} imported`,
+    `${result.redirectsImported} ${plural(result.redirectsImported, 'redirect')} imported`,
+  ]
+
+  return (
+    <section className={styles.log} aria-label="Import log">
+      <p className={styles.logHeading}>Import log</p>
+      <ul className={styles.logList}>
+        {counts.map((line) => (
+          <li key={line} className={styles.logLine}>{line}</li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -277,6 +323,22 @@ function summaryLine(result: ImportResult): string {
     parts.push(`${result.fontTokens.length} font ${plural(result.fontTokens.length, 'token')}`)
   }
   return parts.join(' · ')
+}
+
+function cmsSummaryLine(result: CmsImportResult): string {
+  const parts = [
+    `${result.rowsInserted} ${plural(result.rowsInserted, 'row')} added`,
+    `${result.rowsReplaced} ${plural(result.rowsReplaced, 'row')} replaced`,
+    `${result.mediaImported} media`,
+  ]
+  if (result.rowsSkipped > 0) parts.push(`${result.rowsSkipped} ${plural(result.rowsSkipped, 'row')} skipped`)
+  if (result.mediaFoldersImported > 0) parts.push(`${result.mediaFoldersImported} ${plural(result.mediaFoldersImported, 'folder')}`)
+  if (result.redirectsImported > 0) parts.push(`${result.redirectsImported} ${plural(result.redirectsImported, 'redirect')}`)
+  return parts.join(' · ')
+}
+
+function categoryCount(categories: RunProgress['categories'], id: ImportCategoryId): CategoryCount {
+  return categories[id] ?? { done: 0, total: 0 }
 }
 
 function plural(n: number, word: string): string {

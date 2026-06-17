@@ -518,6 +518,17 @@
   border-radius: var(--radius);
   background-color: var(--bg-body);
   background-image: var(--canvas-placeholder-bg);
+  object-fit: cover;
+}
+.cmsFileThumb {
+  --cms-thumb-bg: var(--editor-surface-3);
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--editor-radius);
+  background: var(--cms-thumb-bg);
+  color: var(--editor-text-secondary);
 }
 .colorChip {
   display: grid;
@@ -549,6 +560,15 @@
 }
 .listRow[data-off='true'] {
   opacity: 0.5;
+}
+.cmsToggleRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 12px;
+  border-radius: var(--editor-radius);
+  background: var(--editor-surface-2);
 }
 .listIcon {
   display: grid;

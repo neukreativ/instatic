@@ -175,6 +175,14 @@ export const TableSelectionSchema = Type.Object({
 
 export type TableSelection = Static<typeof TableSelectionSchema>
 
+export const RowSlugOverrideSchema = Type.Object({
+  tableId: Type.String(),
+  rowId: Type.String(),
+  slug: Type.String(),
+})
+
+export type RowSlugOverride = Static<typeof RowSlugOverrideSchema>
+
 /**
  * Request body accepted by `POST /admin/api/cms/export` (and query string
  * equivalent for `GET`). All fields are optional — omitting them produces a
@@ -218,6 +226,7 @@ export const BundleImportSelectionSchema = Type.Object({
   mediaIds: Type.Optional(Type.Array(Type.String())),
   includeMediaFolders: Type.Boolean(),
   includeRedirects: Type.Boolean(),
+  rowSlugOverrides: Type.Optional(Type.Array(RowSlugOverrideSchema)),
 })
 
 export type BundleImportSelection = Static<typeof BundleImportSelectionSchema>
@@ -281,6 +290,18 @@ const BundlePreviewTableEntrySchema = Type.Object({
   currentLocal: Type.Number(),
 })
 
+export const BundleRowConflictSchema = Type.Object({
+  tableId: Type.String(),
+  tableName: Type.String(),
+  rowId: Type.String(),
+  rowTitle: Type.String(),
+  slug: Type.String(),
+  existingRowId: Type.String(),
+  suggestedSlug: Type.String(),
+})
+
+export type BundleRowConflict = Static<typeof BundleRowConflictSchema>
+
 /**
  * Read-only diff returned by `POST /admin/api/cms/import/preview`.
  * Shows the operator what would happen before they commit an import.
@@ -292,6 +313,7 @@ export const BundlePreviewSchema = Type.Object({
     schemaVersion: Type.Literal(1),
   }),
   tables: Type.Array(BundlePreviewTableEntrySchema),
+  rowConflicts: Type.Optional(Type.Array(BundleRowConflictSchema)),
   totals: Type.Object({
     rows: Type.Number(),
     mediaFiles: Type.Number(),

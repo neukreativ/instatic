@@ -690,6 +690,95 @@ describe('SiteImportModal — CMS bundle import', () => {
     expect(importBody).toBe(zipFile)
   })
 
+  it('routes CMS bundle row slug conflicts through the shared conflicts stage before import', async () => {
+    let importUrl: string | null = null
+    globalThis.fetch = async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url === '/admin/api/cms/import/preview') {
+        return jsonResponse({
+          meta: {
+            exportedAt: CMS_BUNDLE.exportedAt,
+            sourceSiteName: CMS_BUNDLE.sourceSiteName,
+            schemaVersion: 1,
+          },
+          tables: [
+            {
+              id: 'pages',
+              name: 'Pages',
+              kind: 'page',
+              inBundle: 1,
+              willReplace: 0,
+              willAdd: 1,
+              currentLocal: 1,
+            },
+          ],
+          rowConflicts: [
+            {
+              tableId: 'pages',
+              tableName: 'Pages',
+              rowId: 'cms-page-1',
+              rowTitle: 'Imported page',
+              slug: 'imported-page',
+              existingRowId: 'local-page-1',
+              suggestedSlug: 'imported-page-2',
+            },
+          ],
+          totals: {
+            rows: 1,
+            mediaFiles: 1,
+            mediaEmbedded: true,
+            mediaFolders: 0,
+            redirects: 0,
+          },
+        })
+      }
+      if (url.startsWith('/admin/api/cms/import/archive')) {
+        importUrl = url
+        return jsonResponse({
+          ok: true,
+          strategy: 'merge-add',
+          tablesAffected: 0,
+          rowsInserted: 1,
+          rowsReplaced: 0,
+          rowsSkipped: 0,
+          mediaImported: 1,
+          mediaFoldersImported: 0,
+          redirectsImported: 0,
+        })
+      }
+      return jsonResponse({ error: `Unexpected request: ${url}` }, 500)
+    }
+
+    useEditorStore.setState({
+      site: makeSite(),
+    } as Parameters<typeof useEditorStore.setState>[0])
+
+    renderSiteImportModal()
+
+    dropCmsBundleZip()
+    expect(await screen.findByText('Review import')).toBeDefined()
+
+    fireEvent.click(screen.getByRole('button', { name: /add rows/i }))
+
+    expect(await screen.findByText('Resolve conflicts')).toBeDefined()
+    expect(screen.getByText(/row slug conflicts/i)).toBeDefined()
+    expect(screen.getByText(/Imported page/)).toBeDefined()
+    expect(importUrl).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: /^import$/i }))
+
+    await waitFor(() => {
+      expect(importUrl).toContain('/admin/api/cms/import/archive')
+    })
+    const url = new URL(importUrl!, 'http://localhost')
+    const selection = JSON.parse(url.searchParams.get('selection') ?? '{}') as {
+      rowSlugOverrides?: Array<{ tableId: string; rowId: string; slug: string }>
+    }
+    expect(selection.rowSlugOverrides).toEqual([
+      { tableId: 'pages', rowId: 'cms-page-1', slug: 'imported-page-2' },
+    ])
+  })
+
   it('opens the shared step-up dialog and retries when replace import requires step-up', async () => {
     let importAttempts = 0
     const stepUpRequests: Array<Record<string, unknown>> = []
@@ -774,7 +863,7 @@ describe('SiteImportModal — CMS bundle import', () => {
     expect(screen.queryByTestId('step-up-dialog')).toBeNull()
   })
 
-  it('imports the CMS bundle with the selected strategy and closes through the store flag', async () => {
+  it('imports the CMS bundle with the selected strategy through the shared import step', async () => {
     let importUrl: string | null = null
     let importBody: unknown = null
     let callbackCalled = false
@@ -847,7 +936,9 @@ describe('SiteImportModal — CMS bundle import', () => {
       await waitFor(() => {
         expect(callbackCalled).toBe(true)
       })
-      expect(useAdminUi.getState().siteImportOpen).toBe(false)
+      expect(useAdminUi.getState().siteImportOpen).toBe(true)
+      expect(await screen.findByText('Import complete')).toBeDefined()
+      expect(screen.getByText(/1 row added/i)).toBeDefined()
       expect(importUrl).toContain('strategy=merge-add')
       expect((importBody as SiteBundle).schemaVersion).toBe(1)
       expect(capturedToasts.some((toast) => toast.kind === 'success' && toast.title === 'Import complete')).toBe(true)

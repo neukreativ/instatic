@@ -190,12 +190,15 @@ function filterArchiveManifestForSelection(
 ): SiteBundleArchiveManifest {
   const tableSelections = new Map(selection.tables.map((entry) => [entry.tableId, entry]))
   const tables = manifest.tables.filter((table) => tableSelections.has(table.id))
-  const rows = manifest.rows.filter((row) => {
-    const tableSelection = tableSelections.get(row.tableId)
-    if (!tableSelection) return false
-    if (tableSelection.rowIds === undefined) return true
-    return tableSelection.rowIds.includes(row.id)
-  })
+  const slugOverrides = rowSlugOverrideMap(selection)
+  const rows = manifest.rows
+    .filter((row) => {
+      const tableSelection = tableSelections.get(row.tableId)
+      if (!tableSelection) return false
+      if (tableSelection.rowIds === undefined) return true
+      return tableSelection.rowIds.includes(row.id)
+    })
+    .map((row) => applyRowSlugOverride(row, slugOverrides.get(rowOverrideKey(row.tableId, row.id))))
   const selectedRowIds = new Set(rows.map((row) => row.id))
   const media = filterArchiveManifestMedia(manifest, selection)
   const redirects = selection.includeRedirects && manifest.redirects
@@ -213,6 +216,31 @@ function filterArchiveManifestForSelection(
     ...(selection.includeMediaFolders && manifest.mediaFolders ? { mediaFolders: manifest.mediaFolders } : {}),
     ...(redirects ? { redirects } : {}),
   })
+}
+
+function rowSlugOverrideMap(selection: BundleImportSelection): Map<string, string> {
+  return new Map((selection.rowSlugOverrides ?? []).map((override) => [
+    rowOverrideKey(override.tableId, override.rowId),
+    override.slug,
+  ]))
+}
+
+function rowOverrideKey(tableId: string, rowId: string): string {
+  return `${tableId}:${rowId}`
+}
+
+function applyRowSlugOverride(
+  row: SiteBundleArchiveManifest['rows'][number],
+  slug: string | undefined,
+): SiteBundleArchiveManifest['rows'][number] {
+  if (!slug) return row
+  return {
+    ...row,
+    slug,
+    cells: typeof row.cells.slug === 'string'
+      ? { ...row.cells, slug }
+      : row.cells,
+  }
 }
 
 function filterArchiveManifestMedia(

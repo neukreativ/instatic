@@ -27,7 +27,9 @@ import {
   SiteBundleSchema,
   BundlePreviewSchema,
   type BundlePreview,
+  type BundleRowConflict,
 } from '@core/data/bundleSchema'
+import type { DataRow, DataTable } from '@core/data/schemas'
 import { CMS_API_PREFIX } from './shared'
 
 export async function handleImportPreviewRoute(
@@ -50,22 +52,25 @@ export async function handleImportPreviewRoute(
   const localTables = await listDataTables(db)
   const localTableIds = new Set(localTables.map((t) => t.id))
 
-  // For each bundle table, compute the diff against local row ids
+  const rowConflicts: BundleRowConflict[] = []
+
+  // For each bundle table, compute the diff against local row ids and active slugs.
   const tableEntries = await Promise.all(
     bundle.tables.map(async (table) => {
       // Rows in the bundle for this table
-      const bundleRowIdsForTable = bundle.rows
+      const bundleRowsForTable = bundle.rows
         .filter((r) => r.tableId === table.id)
-        .map((r) => r.id)
+      const bundleRowIdsForTable = bundleRowsForTable.map((r) => r.id)
 
       // Local rows for this table (0 if the table doesn't exist locally yet)
-      let localRowIds: Set<string>
+      let localRows: DataRow[]
       if (localTableIds.has(table.id)) {
-        const localRows = await listDataRows(db, table.id)
-        localRowIds = new Set(localRows.map((r) => r.id))
+        localRows = await listDataRows(db, table.id)
       } else {
-        localRowIds = new Set()
+        localRows = []
       }
+      const localRowIds = new Set(localRows.map((r) => r.id))
+      rowConflicts.push(...findRowSlugConflicts(table, bundleRowsForTable, localRows))
 
       const willReplace = bundleRowIdsForTable.filter((id) => localRowIds.has(id)).length
       const willAdd = bundleRowIdsForTable.filter((id) => !localRowIds.has(id)).length
@@ -89,6 +94,7 @@ export async function handleImportPreviewRoute(
       schemaVersion: bundle.schemaVersion,
     },
     tables: tableEntries,
+    rowConflicts,
     totals: {
       rows: bundle.rows.length,
       mediaFiles: bundle.media?.length ?? 0,
@@ -102,4 +108,54 @@ export async function handleImportPreviewRoute(
   parseValue(BundlePreviewSchema, preview)
 
   return jsonResponse(preview)
+}
+
+function findRowSlugConflicts(
+  table: DataTable,
+  bundleRows: DataRow[],
+  localRows: DataRow[],
+): BundleRowConflict[] {
+  const localRowsBySlug = new Map(
+    localRows
+      .filter((row) => row.slug)
+      .map((row) => [row.slug, row]),
+  )
+  const reservedSlugs = new Set([
+    ...localRowsBySlug.keys(),
+    ...bundleRows.map((row) => row.slug).filter((slug) => slug.length > 0),
+  ])
+  const conflicts: BundleRowConflict[] = []
+
+  for (const row of bundleRows) {
+    const localRow = row.slug ? localRowsBySlug.get(row.slug) : undefined
+    if (!localRow || localRow.id === row.id) continue
+    conflicts.push({
+      tableId: table.id,
+      tableName: table.name,
+      rowId: row.id,
+      rowTitle: rowTitle(row, table.primaryFieldId),
+      slug: row.slug,
+      existingRowId: localRow.id,
+      suggestedSlug: nextAvailableSlug(row.slug, reservedSlugs),
+    })
+  }
+
+  return conflicts
+}
+
+function rowTitle(row: DataRow, primaryFieldId: string): string {
+  const primary = row.cells[primaryFieldId]
+  if (typeof primary === 'string' && primary.trim()) return primary
+  return row.slug || row.id
+}
+
+function nextAvailableSlug(slug: string, reservedSlugs: Set<string>): string {
+  let index = 2
+  let candidate = `${slug}-${index}`
+  while (reservedSlugs.has(candidate)) {
+    index++
+    candidate = `${slug}-${index}`
+  }
+  reservedSlugs.add(candidate)
+  return candidate
 }

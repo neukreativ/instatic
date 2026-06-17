@@ -192,10 +192,19 @@ Returns a `BundlePreview`:
     mediaFolders:  number   // total folders in bundle
     redirects:     number   // total redirects in bundle
   }
+  rowConflicts: Array<{
+    tableId:       string
+    tableName:     string
+    rowId:         string
+    rowTitle:      string
+    slug:          string
+    existingRowId: string
+    suggestedSlug: string
+  }>
 }
 ```
 
-The preview runs a **dry-run** of the import logic — same code path, just doesn't write. The UI shows the preview before applying.
+The preview runs a **dry-run** of the import logic — same code path, just doesn't write. It also reports row slug collisions where an incoming row id is new but its slug is already used by another active local row in the same table. Super Import routes those rows through the shared Conflicts step before applying.
 
 Capability-gated by `data.export`.
 
@@ -211,7 +220,7 @@ Body: an internal `SiteBundle` JSON (verbatim). Strategy is a query-string param
 
 Body: the user-facing ZIP archive emitted by export. The manifest must be the first stored entry at `.instatic/site-bundle.json`; media entries must be stored under `media/<storagePath>`. This is the path used by Super Import when a dropped ZIP is an Instatic transfer archive.
 
-The archive endpoint also accepts a `selection` query parameter containing `BundleImportSelection` JSON. The browser still posts the original ZIP Blob; the server filters the manifest before delegating to the JSON import handler and streams only selected media entries to disk, draining unselected archive entries as needed.
+The archive endpoint also accepts a `selection` query parameter containing `BundleImportSelection` JSON. The browser still posts the original ZIP Blob; the server filters the manifest before delegating to the JSON import handler and streams only selected media entries to disk, draining unselected archive entries as needed. Row slug conflict resolutions travel in the same selection as `rowSlugOverrides: { tableId, rowId, slug }[]`; the server applies those overrides to the manifest row before import.
 
 ```ts
 type ImportStrategy = 'replace' | 'merge-add' | 'merge-overwrite'
@@ -220,7 +229,7 @@ type ImportStrategy = 'replace' | 'merge-add' | 'merge-overwrite'
 | Strategy           | Tables                            | Rows                              | Media                              | Folders + redirects          |
 |--------------------|-----------------------------------|-----------------------------------|------------------------------------|------------------------------|
 | `replace`          | Wipe + recreate from bundle       | Wipe + recreate                   | Wipe + write all bytes             | Wipe + recreate from bundle  |
-| `merge-add`        | Skip if exists; add if new        | Skip if exists; add if new        | Skip if exists; add if new         | Left untouched               |
+| `merge-add`        | Skip if exists; add if new        | Skip if id or active slug exists; add if new | Skip if exists; add if new         | Left untouched               |
 | `merge-overwrite`  | Upsert (incoming wins)            | Upsert (incoming wins)            | Upsert (incoming bytes win)        | Left untouched               |
 
 Folder membership (`media_asset_folders`) is restored **after** the media bytes land, and only into folders the bundle actually carried. Redirect rows are inserted after their target rows exist (in `replace`, the rows' cascade-delete clears the old redirects first). Folders + redirects ride only the `replace` (full-restore) path because merging a folder tree or redirect set into a populated instance risks unique-key collisions — the same reason the site shell is `replace`/`merge-overwrite`-only.
@@ -240,9 +249,10 @@ The archive handler:
 
 1. Capability-gates on `data.import`.
 2. Reads and validates the first ZIP entry as `.instatic/site-bundle.json`.
-3. Delegates the manifest's site/data/folder/redirect content to the JSON import handler without media bytes.
-4. Streams each declared media entry from the request body to disk and upserts the matching media row.
-5. Returns the same `ImportResult` shape with `mediaImported` from the streamed entries.
+3. Applies the optional selection filter and row slug overrides to the manifest.
+4. Delegates the manifest's site/data/folder/redirect content to the JSON import handler without media bytes.
+5. Streams each declared media entry from the request body to disk and upserts the matching media row.
+6. Returns the same `ImportResult` shape with `mediaImported` from the streamed entries.
 
 The transaction is **all-or-nothing** for the DB side — if any insert fails, the DB rolls back. Media may have been partially written; the warning reports which bytes landed.
 
@@ -254,7 +264,7 @@ Per strategy:
 - **`merge-add`**: existing rows / tables / media are untouched. Incoming-only items added.
 - **`merge-overwrite`**: matching ids upsert. Items not in the bundle are **kept** (vs. `replace` which deletes them).
 
-Conflicts are resolved by **id**, not slug or name. A row in the bundle with the same id as an existing row is the same row.
+Primary merge identity is **id**: a row in the bundle with the same id as an existing row is the same row. Row slugs still have a table-scoped uniqueness constraint for active rows, so a new incoming row can collide with an unrelated local row's slug. Preview reports those collisions as `rowConflicts`; Super Import lets the operator rename or skip them. The `merge-add` repository path also uses `on conflict do nothing`, so a missed slug collision is skipped instead of surfacing as a 500.
 
 ### Capability gates
 

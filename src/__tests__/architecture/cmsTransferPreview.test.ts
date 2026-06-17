@@ -225,6 +225,39 @@ describe('handleImportPreviewRoute — 2 of 5 local rows overlap with bundle', (
   })
 })
 
+describe('handleImportPreviewRoute — row slug conflicts', () => {
+  test('suggests a slug that is free locally and within the incoming bundle', async () => {
+    const db = createSqliteClient(':memory:')
+    await runMigrations(db, sqliteMigrations)
+    const cookie = await seedAuth(db)
+
+    await createDataRow(db, { tableId: 'posts', cells: { title: 'Local', slug: 'shared' }, slug: 'shared' })
+
+    const bundle = {
+      schemaVersion: 1,
+      exportedAt: new Date().toISOString(),
+      tables: [bundleTableEntry('posts', 'Posts')],
+      rows: [
+        bundleRowEntry('bundle-conflict', 'posts', 'shared'),
+        bundleRowEntry('bundle-suffix', 'posts', 'shared-2'),
+      ],
+    }
+
+    const req = makePreviewRequest(cookie, bundle)
+    const res = await handleImportPreviewRoute(req, db)
+    const body = JSON.parse(await res!.text())
+    const preview = parseValue(BundlePreviewSchema, body)
+
+    expect(preview.rowConflicts).toHaveLength(1)
+    expect(preview.rowConflicts?.[0]).toMatchObject({
+      tableId: 'posts',
+      rowId: 'bundle-conflict',
+      slug: 'shared',
+      suggestedSlug: 'shared-3',
+    })
+  })
+})
+
 describe('handleImportPreviewRoute — bundle table not present locally', () => {
   test('currentLocal=0 for a table that exists only in the bundle', async () => {
     const db = createSqliteClient(':memory:')
