@@ -1,4 +1,4 @@
-import type { Page, PageNode } from '@core/page-tree'
+import { flattenSubtree, getParent, type Page, type PageNode } from '@core/page-tree'
 import { normalizeIdentifierValue } from '@core/utils/identifier'
 import type {
   FormControlBinding,
@@ -19,7 +19,7 @@ const FORM_CONTROL_MODULES = new Set([
 export function derivePageFormSnapshots(page: Page): PublishedFormSnapshot[] {
   const snapshots: PublishedFormSnapshot[] = []
 
-  for (const nodeId of walkTree(page, page.rootNodeId)) {
+  for (const nodeId of flattenSubtree(page, page.rootNodeId)) {
     const node = page.nodes[nodeId]
     if (!node || node.moduleId !== 'base.form') continue
     const mode = stringProp(node, 'mode', 'cms')
@@ -36,7 +36,7 @@ function deriveFormSnapshot(
 ): PublishedFormSnapshot {
   const fallbackFormId = normalizeIdentifierValue(formNode.id, 'form')
   const formId = normalizeIdentifierValue(stringProp(formNode, 'formId', formNode.id), fallbackFormId)
-  const descendantIds = walkTree(page, formNode.id).filter((nodeId) => nodeId !== formNode.id)
+  const descendantIds = flattenSubtree(page, formNode.id).filter((nodeId) => nodeId !== formNode.id)
   const controls: FormControlBinding[] = []
   const labels: PublishedFormLabel[] = []
   const submits: PublishedFormSubmit[] = []
@@ -131,32 +131,18 @@ function inferLabelTarget(
     return target?.id ?? explicit
   }
 
-  const parentId = page.nodes[labelNode.id]?.parentId
-  if (!parentId) return null
-  const parent = page.nodes[parentId]
+  const parent = getParent(page, labelNode.id)
   if (!parent) return null
   const labelIndex = parent.children.indexOf(labelNode.id)
   const siblingIds = parent.children.slice(labelIndex + 1)
   for (const siblingId of siblingIds) {
-    for (const candidateId of walkTree(page, siblingId)) {
+    for (const candidateId of flattenSubtree(page, siblingId)) {
       if (candidateId === formNodeId) continue
       const candidate = page.nodes[candidateId]
       if (candidate && FORM_CONTROL_MODULES.has(candidate.moduleId)) return candidate.id
     }
   }
   return null
-}
-
-function walkTree(page: Page, startNodeId: string): string[] {
-  const out: string[] = []
-  const visit = (nodeId: string) => {
-    const node = page.nodes[nodeId]
-    if (!node) return
-    out.push(nodeId)
-    for (const childId of node.children) visit(childId)
-  }
-  visit(startNodeId)
-  return out
 }
 
 function stringProp(node: PageNode, key: string, fallback: string): string {

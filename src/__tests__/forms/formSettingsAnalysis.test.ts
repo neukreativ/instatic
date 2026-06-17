@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import type { DataTable } from '@core/data/schemas'
 import type { Page, PageNode } from '@core/page-tree'
+import { reindexNodeParents } from '@core/page-tree'
 import {
   analyzeFormSettings,
   buildDataTableDraftFromForm,
@@ -46,7 +47,7 @@ const table: DataTable = {
 }
 
 function makePage(): Page {
-  return {
+  return withParentIndex({
     id: 'page-home',
     slug: 'index',
     title: 'Home',
@@ -74,7 +75,12 @@ function makePage(): Page {
       submit: node('submit', 'base.submit', { label: 'Send', formId: '' }),
       'outside-input': node('outside-input', 'base.input', { fieldId: 'email', name: 'email' }),
     },
-  }
+  })
+}
+
+function withParentIndex(page: Page): Page {
+  reindexNodeParents(page.nodes)
+  return page
 }
 
 describe('analyzeFormSettings', () => {
@@ -144,7 +150,7 @@ describe('analyzeFormSettings', () => {
   })
 
   it('infers a create-table draft from controls inside the selected form', () => {
-    const page: Page = {
+    const page: Page = withParentIndex({
       id: 'page-home',
       slug: 'index',
       title: 'Home',
@@ -174,7 +180,7 @@ describe('analyzeFormSettings', () => {
         'label-consent': node('label-consent', 'base.label', { text: 'Consent', targetMode: 'auto', targetId: '' }),
         consent: node('consent', 'base.checkbox', { name: 'consent', required: true }),
       },
-    }
+    })
 
     const analysis = analyzeFormSettings({ page, nodeId: 'form' })
     expect(analysis.inferredFields).toEqual([

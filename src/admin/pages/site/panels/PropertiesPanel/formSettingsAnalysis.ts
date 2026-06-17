@@ -1,7 +1,6 @@
 import type { CreateDataTableInput, DataField, DataTable, DataSelectOption } from '@core/data/schemas'
 import type { ImportFragment } from '@core/htmlImport'
-import type { Page, PageNode } from '@core/page-tree'
-import { createNode } from '@core/page-tree'
+import { createNode, flattenSubtree, getParent, type Page, type PageNode } from '@core/page-tree'
 import { formDisplayName, humanizeIdentifier, slugifyFormTableName } from './formSettingsNaming'
 
 export { formDisplayName } from './formSettingsNaming'
@@ -111,12 +110,11 @@ export function analyzeFormSettings(input: {
     return emptyAnalysis(selectedNode, table)
   }
 
-  const parentByNodeId = buildParentMap(page)
   const formNode = selectedNode.moduleId === 'base.form'
     ? selectedNode
-    : nearestAncestorForm(page, selectedNode.id, parentByNodeId)
+    : nearestAncestorForm(page, selectedNode.id)
   const form = formNode ? formSummary(formNode) : null
-  const inferredFields = formNode ? inferFieldsFromForm(page, formNode, parentByNodeId) : []
+  const inferredFields = formNode ? inferFieldsFromForm(page, formNode) : []
   const missingFields = table && formNode ? fieldsMissingFromForm(page, formNode, table) : []
   const kind = settingsKind(selectedNode.moduleId)
   const warnings: FormSettingsWarning[] = []
@@ -171,7 +169,7 @@ export function analyzeFormSettings(input: {
 
   let inferredTarget: FormTargetSummary | null = null
   if (kind === 'label') {
-    inferredTarget = inferLabelTarget(page, selectedNode, parentByNodeId)
+    inferredTarget = inferLabelTarget(page, selectedNode)
     if (!inferredTarget) {
       warnings.push({
         code: 'label_without_target',
@@ -351,7 +349,7 @@ function formSummary(node: PageNode): FormContextSummary {
 function duplicateNameWarnings(page: Page, formNode: PageNode): FormSettingsWarning[] {
   const seen = new Map<string, string>()
   const warnings: FormSettingsWarning[] = []
-  for (const nodeId of walkTree(page, formNode.id)) {
+  for (const nodeId of flattenSubtree(page, formNode.id)) {
     if (nodeId === formNode.id) continue
     const node = page.nodes[nodeId]
     if (!node || !FORM_CONTROL_MODULES.has(node.moduleId)) continue
@@ -373,15 +371,14 @@ function duplicateNameWarnings(page: Page, formNode: PageNode): FormSettingsWarn
 function inferFieldsFromForm(
   page: Page,
   formNode: PageNode,
-  parentByNodeId: Map<string, string>,
 ): DataField[] {
   const fields: DataField[] = []
   const usedIds = new Set<string>()
-  for (const nodeId of walkTree(page, formNode.id)) {
+  for (const nodeId of flattenSubtree(page, formNode.id)) {
     if (nodeId === formNode.id) continue
     const node = page.nodes[nodeId]
     if (!node || !FORM_CONTROL_MODULES.has(node.moduleId)) continue
-    const field = inferFieldFromControl(page, node, parentByNodeId, usedIds)
+    const field = inferFieldFromControl(page, node, usedIds)
     if (field) fields.push(field)
   }
   return fields
@@ -390,10 +387,9 @@ function inferFieldsFromForm(
 function inferFieldFromControl(
   page: Page,
   node: PageNode,
-  parentByNodeId: Map<string, string>,
   usedIds: Set<string>,
 ): DataField | null {
-  const label = labelForControl(page, node, parentByNodeId)
+  const label = labelForControl(page, node)
   const rawId = stringProp(node, 'fieldId', '')
     || stringProp(node, 'name', '')
     || stringProp(node, 'id', '')
@@ -462,7 +458,7 @@ function inferFieldFromControl(
 
 function fieldsMissingFromForm(page: Page, formNode: PageNode, table: DataTable): DataField[] {
   const representedFieldIds = new Set<string>()
-  for (const nodeId of walkTree(page, formNode.id)) {
+  for (const nodeId of flattenSubtree(page, formNode.id)) {
     if (nodeId === formNode.id) continue
     const node = page.nodes[nodeId]
     if (!node || !FORM_CONTROL_MODULES.has(node.moduleId)) continue
@@ -475,10 +471,8 @@ function fieldsMissingFromForm(page: Page, formNode: PageNode, table: DataTable)
 function labelForControl(
   page: Page,
   node: PageNode,
-  parentByNodeId: Map<string, string>,
 ): string {
-  const parentId = parentByNodeId.get(node.id)
-  const parent = parentId ? page.nodes[parentId] : null
+  const parent = getParent(page, node.id)
   if (parent) {
     const nodeIndex = parent.children.indexOf(node.id)
     for (const siblingId of parent.children.slice(0, nodeIndex).reverse()) {
@@ -510,7 +504,6 @@ function optionFieldsFromSelect(page: Page, selectNode: PageNode): DataSelectOpt
 function inferLabelTarget(
   page: Page,
   labelNode: PageNode,
-  parentByNodeId: Map<string, string>,
 ): FormTargetSummary | null {
   const explicit = stringProp(labelNode, 'targetId', '')
   if (stringProp(labelNode, 'targetMode', 'auto') === 'explicit' && explicit) {
@@ -520,12 +513,11 @@ function inferLabelTarget(
       : { nodeId: explicit, label: explicit }
   }
 
-  const parentId = parentByNodeId.get(labelNode.id)
-  const parent = parentId ? page.nodes[parentId] : null
+  const parent = getParent(page, labelNode.id)
   if (!parent) return null
   const labelIndex = parent.children.indexOf(labelNode.id)
   for (const siblingId of parent.children.slice(labelIndex + 1)) {
-    for (const candidateId of walkTree(page, siblingId)) {
+    for (const candidateId of flattenSubtree(page, siblingId)) {
       const candidate = page.nodes[candidateId]
       if (candidate && FORM_CONTROL_MODULES.has(candidate.moduleId)) {
         return { nodeId: candidate.id, label: controlLabel(candidate) }
@@ -535,39 +527,13 @@ function inferLabelTarget(
   return null
 }
 
-function nearestAncestorForm(
-  page: Page,
-  nodeId: string,
-  parentByNodeId: Map<string, string>,
-): PageNode | null {
-  let currentId = parentByNodeId.get(nodeId)
-  while (currentId) {
-    const current = page.nodes[currentId]
-    if (!current) return null
+function nearestAncestorForm(page: Page, nodeId: string): PageNode | null {
+  let current = getParent(page, nodeId)
+  while (current) {
     if (current.moduleId === 'base.form') return current
-    currentId = parentByNodeId.get(current.id)
+    current = getParent(page, current.id)
   }
   return null
-}
-
-function buildParentMap(page: Page): Map<string, string> {
-  const map = new Map<string, string>()
-  for (const node of Object.values(page.nodes)) {
-    for (const childId of node.children) map.set(childId, node.id)
-  }
-  return map
-}
-
-function walkTree(page: Page, startNodeId: string): string[] {
-  const out: string[] = []
-  const visit = (nodeId: string) => {
-    const node = page.nodes[nodeId]
-    if (!node) return
-    out.push(nodeId)
-    for (const childId of node.children) visit(childId)
-  }
-  visit(startNodeId)
-  return out
 }
 
 function stringProp(node: PageNode, key: string, fallback: string): string {
