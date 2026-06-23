@@ -54,3 +54,27 @@
     gap: var(--space-s);
     align-items: center;
 }
+
+@media (max-width: 760px) {
+    .gridHeader {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .gridHeaderLeft {
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .gridHeaderRight {
+        flex-wrap: wrap;
+        align-items: flex-start;
+    }
+
+    .gridHeaderRight > :first-child {
+        flex: 1 1 100%;
+        max-width: 100%;
+    }
+}

@@ -1,6 +1,6 @@
 .sidebar {
     position: relative;
-    z-index: 55;
+    z-index: 85;
     display: flex;
     --right-sidebar-panel-width: 0px;
     --right-sidebar-panel-layout-width: var(--right-sidebar-panel-width);

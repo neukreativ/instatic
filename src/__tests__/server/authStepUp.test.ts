@@ -94,6 +94,7 @@ async function stepUp(
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ password, ...(mfaCode ? { mfaCode } : {}) }),
   })
+  stampSocketIp(req, IP)
   req.headers.set('cookie', cookie)
   return handleCmsRequest(req, db)
 }
@@ -207,6 +208,15 @@ describe('Step-up auth', () => {
     `
     expect(newSession.rows[0]?.revoked_at).toBeNull()
     expect(newSession.rows[0]?.step_up_expires_at).not.toBeNull()
+  })
+
+  it('successful step-up clears the per-IP limiter for repeated protected actions', async () => {
+    const { db } = testDb
+    let cookie = await login(db)
+
+    for (let i = 0; i < 35; i += 1) {
+      cookie = await stepUpCookie(db, cookie, PASSWORD)
+    }
   })
 
   it('POST /step-up for an MFA-enabled account requires a second-factor code', async () => {
