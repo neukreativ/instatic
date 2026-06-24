@@ -9,7 +9,7 @@
 .proseSurface {
     min-height: 220px;
     color: var(--text);
-    font-size: 16px;
+    font-size: var(--text-xl);
     line-height: 1.65;
     outline: none;
 }
@@ -33,15 +33,15 @@
 }
 
 .proseSurface :global(h2) {
-    font-size: 28px;
+    font-size: var(--text-5xl);
 }
 
 .proseSurface :global(h3) {
-    font-size: 22px;
+    font-size: var(--text-4xl);
 }
 
 .proseSurface :global(h4) {
-    font-size: 18px;
+    font-size: var(--text-2xl);
 }
 
 /* Paragraphs */
@@ -118,7 +118,7 @@
     background: var(--bg-surface-3);
     color: var(--text);
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 13px;
+    font-size: var(--text-m);
     line-height: 1.55;
     overflow-x: auto;
     white-space: pre;

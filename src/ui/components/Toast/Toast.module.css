@@ -37,7 +37,7 @@
     box-shadow: var(--shadow-panel);
     backdrop-filter: blur(var(--panel-blur));
     color: var(--text);
-    font-size: 12px;
+    font-size: var(--text-s);
     line-height: 1.4;
     animation: toast-enter 140ms ease-out;
 }
@@ -110,7 +110,7 @@
 .title {
     margin: 0;
     color: var(--text-bright);
-    font-size: 12px;
+    font-size: var(--text-s);
     font-weight: 500;
     line-height: 1.35;
     overflow-wrap: anywhere;
@@ -119,7 +119,7 @@
 .body {
     margin: 0;
     color: var(--text-muted);
-    font-size: 11px;
+    font-size: var(--text-xs);
     line-height: 1.45;
     overflow-wrap: anywhere;
     /* Cap to ~3 lines so a noisy stack trace can't fill the viewport. */
@@ -140,7 +140,7 @@
         Consolas,
         "Liberation Mono",
         monospace;
-    font-size: 10px;
+    font-size: var(--text-2xs);
     letter-spacing: 0.01em;
 }
 

@@ -198,7 +198,7 @@
 .barValueLabel {
     overflow: hidden;
     color: var(--text-subtle);
-    font-size: 8px;
+    font-size: var(--text-3xs);
     font-variant-numeric: tabular-nums;
     line-height: 1.1;
     letter-spacing: 0.02em;
@@ -258,7 +258,7 @@
 .barChartStepLabel {
     padding: 0 4px;
     color: var(--text-subtle);
-    font-size: 9px;
+    font-size: var(--text-3xs);
     font-weight: 700;
     letter-spacing: 0.06em;
     line-height: 1.4;

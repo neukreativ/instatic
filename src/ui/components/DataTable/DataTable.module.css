@@ -17,7 +17,7 @@
 .headerCell {
     padding: 0 12px 4px;
     color: var(--text-subtle);
-    font-size: 11px;
+    font-size: var(--text-xs);
     font-weight: 700;
     line-height: 1.2;
     text-align: left;
@@ -27,7 +27,7 @@
     padding: 12px;
     background: var(--bg-surface-2);
     color: var(--text);
-    font-size: 12px;
+    font-size: var(--text-s);
     line-height: 1.45;
     vertical-align: middle;
     transition: background-color 120ms ease;

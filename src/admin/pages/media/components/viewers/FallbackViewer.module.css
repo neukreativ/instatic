@@ -12,7 +12,7 @@
 }
 
 .title {
-  font-size: 13px;
+  font-size: var(--text-m);
   color: var(--text);
   margin: 0;
   word-break: break-word;
@@ -20,6 +20,6 @@
 }
 
 .meta {
-  font-size: 11px;
+  font-size: var(--text-xs);
   margin: 0;
 }

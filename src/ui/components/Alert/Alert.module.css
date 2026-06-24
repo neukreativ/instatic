@@ -9,17 +9,17 @@
     border: 1px solid var(--border);
     background: var(--bg-surface);
     color: var(--text);
-    font-size: 13px;
+    font-size: var(--text-m);
     line-height: 1.5;
 }
 
 .alertTitle {
     font-weight: 700;
-    font-size: 12px;
+    font-size: var(--text-s);
 }
 
 .alertBody {
-    font-size: 13px;
+    font-size: var(--text-m);
 }
 
 .alertInfo {

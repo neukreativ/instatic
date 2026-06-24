@@ -15,7 +15,7 @@
     background: var(--bg-body);
     color: var(--text);
     box-shadow: var(--canvas-chrome-shadow);
-    font-size: 12px;
+    font-size: var(--text-s);
 }
 
 /* Muted labels ("Editing template", "Previewing") — no border, no padding. */
@@ -23,7 +23,7 @@
 .previewLabel {
     flex-shrink: 0;
     color: var(--text-subtle);
-    font-size: 12px;
+    font-size: var(--text-s);
     font-weight: 500;
     user-select: none;
 }
@@ -57,7 +57,7 @@
     border-radius: 0;
     background: transparent;
     color: var(--text);
-    font-size: 12px;
+    font-size: var(--text-s);
     cursor: pointer;
 }
 

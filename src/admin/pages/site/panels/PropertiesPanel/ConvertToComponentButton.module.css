@@ -34,7 +34,7 @@
 /* ── Error alert ──────────────────────────────────────────────────────────── */
 
 .errorAlert {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: var(--danger-text);
   line-height: 1.4;
 }

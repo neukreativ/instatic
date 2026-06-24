@@ -47,7 +47,7 @@
 
 .headerTitle {
     flex: 1;
-    font-size: 13px;
+    font-size: var(--text-m);
     font-weight: 500;
     color: var(--text-muted);
     overflow: hidden;

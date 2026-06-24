@@ -116,7 +116,7 @@
     border: none;
     outline: none;
     font-family: var(--font-sans);
-    font-size: 20px;
+    font-size: var(--text-3xl);
     font-weight: 500;
     color: var(--text-bright);
     line-height: 1;
@@ -221,13 +221,13 @@
 
 .groupTitle {
     color: var(--text-bright);
-    font-size: 16px;
+    font-size: var(--text-xl);
     font-weight: 700;
 }
 
 .groupCount {
     color: var(--text-subtle);
-    font-size: 12px;
+    font-size: var(--text-s);
 }
 
 /* ─── Scope breadcrumb ────────────────────────────────────────────────────── */
@@ -238,7 +238,7 @@
     gap: 4px;
     height: 28px;
     padding: 0 10px 6px;
-    font-size: 12px;
+    font-size: var(--text-s);
     color: var(--text-muted);
     font-weight: 500;
     flex-shrink: 0;
@@ -252,7 +252,7 @@
 
 .scopeBreadcrumbSep {
     color: var(--text-disabled);
-    font-size: 10px;
+    font-size: var(--text-2xs);
 }
 
 /* ─── Result row ──────────────────────────────────────────────────────────── */
@@ -308,7 +308,7 @@
 .confirmText {
     font-style: italic;
     color: var(--danger-light);
-    font-size: 13px;
+    font-size: var(--text-m);
 }
 
 /* Accent-tinted icon chip — mirrors the module inserter section icons. */
@@ -352,7 +352,7 @@
 }
 
 .rowLabel {
-    font-size: 14px;
+    font-size: var(--text-l);
     font-weight: 600;
     color: var(--text);
     white-space: nowrap;
@@ -362,7 +362,7 @@
 }
 
 .rowSublabel {
-    font-size: 12px;
+    font-size: var(--text-s);
     color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;
@@ -403,7 +403,7 @@
 }
 
 .emptyStateText {
-    font-size: 14px;
+    font-size: var(--text-l);
     color: var(--text-subtle);
     text-align: center;
 }
@@ -429,7 +429,7 @@
     display: flex;
     align-items: center;
     gap: 4px;
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--text-disabled);
     white-space: nowrap;
 }
@@ -448,7 +448,7 @@
     gap: 6px;
     height: 36px;
     padding: 0 10px;
-    font-size: 12px;
+    font-size: var(--text-s);
     flex-shrink: 0;
 }
 
@@ -459,7 +459,7 @@
 
 .argBreadcrumbSeparator {
     color: var(--text-disabled);
-    font-size: 10px;
+    font-size: var(--text-2xs);
 }
 
 .argBreadcrumbCurrent {
@@ -489,26 +489,26 @@
 }
 
 .argRowGlyph {
-    font-size: 12px;
+    font-size: var(--text-s);
     color: var(--text-subtle);
     flex-shrink: 0;
     width: 16px;
 }
 
 .argRowLabel {
-    font-size: 13px;
+    font-size: var(--text-m);
     color: var(--text-muted);
     flex-shrink: 0;
 }
 
 .argRowValue {
-    font-size: 13px;
+    font-size: var(--text-m);
     color: var(--text);
     font-weight: 500;
 }
 
 .argRowValueActive {
-    font-size: 14px;
+    font-size: var(--text-l);
     color: var(--text);
     font-weight: 500;
     flex: 1;

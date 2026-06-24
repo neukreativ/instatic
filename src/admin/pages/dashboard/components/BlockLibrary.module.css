@@ -127,7 +127,7 @@
     border: 1px solid var(--overlay-10);
     box-shadow: 0 16px 40px var(--scrim-50);
     color: var(--text);
-    font-size: 12px;
+    font-size: var(--text-s);
     z-index: 50;
     animation: pillIn 180ms cubic-bezier(0.4, 0, 0.2, 1);
     transition:
@@ -187,7 +187,7 @@
 
 .pillLabel {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--text-xs);
     letter-spacing: 0.04em;
     white-space: nowrap;
 }
@@ -244,14 +244,14 @@
 
 .title h3 {
     margin: 0;
-    font-size: 13px;
+    font-size: var(--text-m);
     font-weight: 600;
     color: var(--text-bright);
 }
 
 .title p {
     margin: 2px 0 0;
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--text-subtle);
 }
 
@@ -272,7 +272,7 @@
     border: 1px solid var(--border);
     border-radius: 10px;
     color: var(--text-subtle);
-    font-size: 12px;
+    font-size: var(--text-s);
 }
 
 .search input {
@@ -282,7 +282,7 @@
     outline: none;
     color: var(--text);
     font: inherit;
-    font-size: 12px;
+    font-size: var(--text-s);
 }
 
 /* ── Scrollable body — each category is a stacked section ─────────── */
@@ -311,7 +311,7 @@
 }
 
 .empty {
-    font-size: 12px;
+    font-size: var(--text-s);
     color: var(--text-subtle);
     text-align: center;
     padding: 40px 8px;
@@ -330,7 +330,7 @@
     background: var(--bg-surface);
     border: 1px dashed var(--border-strong);
     color: var(--text-subtle);
-    font-size: 12px;
+    font-size: var(--text-s);
     text-align: center;
     line-height: 1.5;
 }
@@ -338,7 +338,7 @@
 .everythingPlaced strong {
     color: var(--text-bright);
     font-weight: 600;
-    font-size: 13px;
+    font-size: var(--text-m);
 }
 
 .everythingPlacedIcon {
@@ -367,7 +367,7 @@
 
 .groupLabel {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--text-2xs);
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -375,7 +375,7 @@
 }
 
 .groupDescription {
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--text-subtle);
     flex: 1;
     min-width: 0;
@@ -387,7 +387,7 @@
 
 .groupCount {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--text-2xs);
     color: var(--text-disabled);
 }
 
@@ -511,7 +511,7 @@
 
 .itemName {
     display: block;
-    font-size: 12px;
+    font-size: var(--text-s);
     font-weight: 500;
     color: var(--text-bright);
     white-space: nowrap;
@@ -521,7 +521,7 @@
 
 .itemDescription {
     display: block;
-    font-size: 10px;
+    font-size: var(--text-2xs);
     color: var(--text-subtle);
     font-family: var(--font-mono);
     white-space: nowrap;
@@ -535,7 +535,7 @@
     align-items: center;
     gap: 4px;
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--text-2xs);
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--text-subtle);

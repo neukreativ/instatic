@@ -45,7 +45,7 @@
 .error {
     margin: 0;
     color: var(--danger-light);
-    font-size: 10px;
+    font-size: var(--text-2xs);
 }
 
 .addTrigger {

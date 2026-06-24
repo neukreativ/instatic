@@ -1,6 +1,6 @@
 .help {
   margin: 0 0 8px 0;
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-subtle);
   line-height: 1.4;
 }
@@ -10,7 +10,7 @@
   padding: 6px 8px;
   background: var(--bg-surface-2);
   border-radius: var(--radius-sm);
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-subtle);
 }
 
@@ -22,7 +22,7 @@
 }
 
 .sectionTitle {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -51,7 +51,7 @@
 }
 
 .folderPickerLabel {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-subtle);
 }
 
@@ -71,7 +71,7 @@
   padding: 2px 4px 2px 6px;
   background: var(--bg-surface-2);
   border-radius: var(--radius-sm);
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 
 .suggestions {
@@ -84,7 +84,7 @@
 }
 
 .suggestion {
-  font-size: 11px;
+  font-size: var(--text-xs);
   display: inline-flex;
   align-items: center;
   gap: 4px;

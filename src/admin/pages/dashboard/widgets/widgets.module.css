@@ -11,7 +11,7 @@
     display: flex;
     justify-content: space-between;
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--text-2xs);
     color: var(--text-disabled);
     margin-top: 4px;
 }
@@ -32,7 +32,7 @@
     gap: 10px;
     padding: 10px 0;
     border-top: 1px solid var(--border);
-    font-size: 13px;
+    font-size: var(--text-m);
     color: var(--text);
 }
 
@@ -51,7 +51,7 @@
 
 .wlistMeta {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--text-subtle);
     display: inline-flex;
     align-items: center;
@@ -60,7 +60,7 @@
 
 .wlistPath {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--text-disabled);
 }
 
@@ -106,7 +106,7 @@
 }
 
 .feedBody {
-    font-size: 12.5px;
+    font-size: var(--text-s);
     color: var(--text);
     white-space: nowrap;
     overflow: hidden;
@@ -120,7 +120,7 @@
 
 .feedBody code {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--text-bright);
     background: var(--overlay-10);
     padding: 1px 4px;
@@ -129,7 +129,7 @@
 
 .feedTime {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--text-2xs);
     color: var(--text-disabled);
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -143,7 +143,7 @@
     align-items: center;
     padding: 9px 0;
     border-top: 1px solid var(--border);
-    font-size: 12.5px;
+    font-size: var(--text-s);
 }
 
 .pluginRow:first-of-type {
@@ -184,7 +184,7 @@
 .pluginName small {
     display: block;
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--text-2xs);
     color: var(--text-disabled);
     margin-top: 2px;
 }
@@ -216,7 +216,7 @@
     gap: 4px;
     padding: 2px 7px;
     border-radius: 999px;
-    font-size: 10px;
+    font-size: var(--text-2xs);
     font-weight: 600;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -254,7 +254,7 @@
     display: flex;
     gap: 16px;
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--text-subtle);
 }
 
@@ -274,7 +274,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 12.5px;
+    font-size: var(--text-s);
     color: var(--text);
 }
 
@@ -287,7 +287,7 @@
 /* ── Domain widget ─────────────────────────────────────────────────── */
 .domainName {
     font-family: var(--font-mono);
-    font-size: 14px;
+    font-size: var(--text-l);
     color: var(--text-bright);
     margin-top: 2px;
 }
@@ -298,7 +298,7 @@
     flex-direction: column;
     gap: 6px;
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--text-subtle);
 }
 

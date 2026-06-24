@@ -15,14 +15,16 @@ import { EditorChromeInjector } from '@site/canvas/EditorChromeInjector'
 
 afterEach(cleanup)
 
-/** A detached document whose :root carries the admin `--font-sans`. */
+/** A detached document whose :root carries admin typography tokens. */
 function makeParentDoc(): Document {
   document.documentElement.style.setProperty('--font-sans', '"Inter Variable", system-ui, sans-serif')
+  document.documentElement.style.setProperty('--text-xs', 'clamp(10px, calc(9.629px + 0.095vw), 11px)')
+  document.documentElement.style.setProperty('--text-s', 'clamp(11px, calc(10.629px + 0.095vw), 12px)')
   return document
 }
 
 describe('EditorChromeInjector font isolation', () => {
-  it('forwards the editor font under a chrome-namespaced variable, never the site --font-sans', () => {
+  it('forwards editor typography under chrome-namespaced variables, never site Framework tokens', () => {
     const target = document.implementation.createHTMLDocument('iframe')
     render(<EditorChromeInjector targetDocument={target} parentDocument={makeParentDoc()} />)
 
@@ -33,10 +35,18 @@ describe('EditorChromeInjector font isolation', () => {
     expect(css).toContain('--chrome-font-sans: "Inter Variable", system-ui, sans-serif;')
     // …and chrome rules reference it.
     expect(css).toContain('font-family: var(--chrome-font-sans);')
+    expect(css).toContain('--chrome-text-xs: clamp(10px, calc(9.629px + 0.095vw), 11px);')
+    expect(css).toContain('--chrome-text-s: clamp(11px, calc(10.629px + 0.095vw), 12px);')
+    expect(css).toContain('font-size: var(--chrome-text-s);')
+    expect(css).toContain('font-size: var(--chrome-text-xs);')
 
     // It must NEVER set the site's own --font-sans on :root, nor reference it —
     // doing so clobbers the site's font tokens for all canvas content.
     expect(css).not.toMatch(/^\s*--font-sans:/m)
     expect(css).not.toContain('var(--font-sans)')
+    expect(css).not.toMatch(/^\s*--text-s:/m)
+    expect(css).not.toMatch(/^\s*--text-xs:/m)
+    expect(css).not.toContain('var(--text-s)')
+    expect(css).not.toContain('var(--text-xs)')
   })
 })

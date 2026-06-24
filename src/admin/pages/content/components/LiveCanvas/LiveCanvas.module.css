@@ -39,14 +39,14 @@
 
 .errorState h2 {
     margin: 0;
-    font-size: 20px;
+    font-size: var(--text-3xl);
     letter-spacing: 0;
 }
 
 .errorState p {
     margin: 0;
     color: var(--text-subtle);
-    font-size: 12px;
+    font-size: var(--text-s);
     line-height: 1.5;
 }
 

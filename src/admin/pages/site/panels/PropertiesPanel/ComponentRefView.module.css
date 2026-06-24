@@ -26,7 +26,7 @@
 
 .headerName {
   flex: 1;
-  font-size: 12px;
+  font-size: var(--text-s);
   font-weight: 600;
   color: var(--text);
   white-space: nowrap;
@@ -38,7 +38,7 @@
 
 .noParams {
   padding: 20px 12px;
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-disabled);
   text-align: center;
   line-height: 1.6;
@@ -48,7 +48,7 @@
 
 .unknownVC {
   padding: 16px 12px;
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--danger-light);
   text-align: center;
 }

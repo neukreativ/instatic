@@ -4,7 +4,7 @@
     margin: 0;
     color: var(--text);
     font-family: var(--font-sans);
-    font-size: 13px;
+    font-size: var(--text-m);
     line-height: 1.55;
 }
 
@@ -21,9 +21,9 @@
 }
 
 .textSm {
-    font-size: 11px;
+    font-size: var(--text-xs);
 }
 
 .textLg {
-    font-size: 15px;
+    font-size: var(--text-xl);
 }

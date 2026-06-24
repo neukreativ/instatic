@@ -6,7 +6,7 @@
 .summary {
     margin: 0;
     color: var(--text);
-    font-size: 12px;
+    font-size: var(--text-s);
     line-height: 1.4;
 }
 
@@ -17,7 +17,7 @@
 .subline {
     margin: 0 0 8px 0;
     color: var(--text-subtle);
-    font-size: 11px;
+    font-size: var(--text-xs);
     line-height: 1.4;
 }
 
@@ -45,13 +45,13 @@
 .classSelector {
     color: var(--text);
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: var(--text-s);
     font-weight: 600;
 }
 
 .classCount {
     color: var(--text-subtle);
-    font-size: 11px;
+    font-size: var(--text-xs);
 }
 
 .usageList {
@@ -68,7 +68,7 @@
     align-items: baseline;
     gap: 8px;
     color: var(--text-subtle);
-    font-size: 11px;
+    font-size: var(--text-xs);
     line-height: 1.4;
 }
 

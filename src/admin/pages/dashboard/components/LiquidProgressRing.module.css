@@ -155,7 +155,7 @@
     align-items: baseline;
     gap: 1px;
     font-family: var(--font-mono);
-    font-size: 36px;
+    font-size: var(--text-6xl);
     font-weight: 600;
     color: var(--text-bright);
     letter-spacing: -0.04em;
@@ -170,7 +170,7 @@
 
 .fraction small {
     color: var(--overlay-70);
-    font-size: 14px;
+    font-size: var(--text-l);
     font-weight: 500;
     letter-spacing: -0.02em;
 }

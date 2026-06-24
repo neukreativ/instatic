@@ -20,6 +20,21 @@
     --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
         monospace;
 
+    /* Fluid admin type scale. Suffixes mirror Core Framework text steps. */
+    --text-3xs: clamp(8px, calc(7.629px + 0.095vw), 9px);
+    --text-2xs: clamp(9px, calc(8.629px + 0.095vw), 10px);
+    --text-xs: clamp(10px, calc(9.629px + 0.095vw), 11px);
+    --text-s: clamp(11px, calc(10.629px + 0.095vw), 12px);
+    --text-m: clamp(12px, calc(11.629px + 0.095vw), 13px);
+    --text-l: clamp(13px, calc(12.629px + 0.095vw), 14px);
+    --text-xl: clamp(14px, calc(13.257px + 0.19vw), 16px);
+    --text-2xl: clamp(16px, calc(15.257px + 0.19vw), 18px);
+    --text-3xl: clamp(18px, calc(17.257px + 0.19vw), 20px);
+    --text-4xl: clamp(20px, calc(18.514px + 0.381vw), 24px);
+    --text-5xl: clamp(24px, calc(22.514px + 0.381vw), 28px);
+    --text-6xl: clamp(32px, calc(29.029px + 0.762vw), 40px);
+    --text-7xl: clamp(40px, calc(34.057px + 1.524vw), 56px);
+
     /* Surfaces */
     --bg-body: #000000;
     --bg-surface: #1b1b1b;

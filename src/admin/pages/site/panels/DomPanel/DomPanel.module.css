@@ -77,7 +77,7 @@
 .noMatchMsg {
     padding: 16px;
     color: var(--text-disabled);
-    font-size: 12px;
+    font-size: var(--text-s);
 }
 
 /* Search-result pill layout only; shared visuals live in TagPill. */

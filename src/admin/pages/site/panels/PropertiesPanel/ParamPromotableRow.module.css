@@ -48,7 +48,7 @@
 }
 
 .exposeMenuLabel {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: var(--text-disabled);
   padding: 2px 4px;
   text-transform: uppercase;
@@ -64,7 +64,7 @@
 .existingParamType {
   margin-left: auto;
   color: var(--text-disabled);
-  font-size: 10px;
+  font-size: var(--text-2xs);
 }
 
 /* ── Create param form ───────────────────────────────────────────────────── */
@@ -77,7 +77,7 @@
 }
 
 .createParamError {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: var(--danger-text);
   padding: 0 4px;
 }

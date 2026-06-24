@@ -15,7 +15,7 @@
 .secondaryText {
     margin: 0;
     color: var(--text-subtle);
-    font-size: 12px;
+    font-size: var(--text-s);
     line-height: 1.45;
 }
 
@@ -40,7 +40,7 @@
 .sectionHeader h2 {
     margin: 0;
     color: var(--text-bright);
-    font-size: 18px;
+    font-size: var(--text-2xl);
     line-height: 1.25;
 }
 
@@ -72,7 +72,7 @@
 .cardTitle {
     margin: 0;
     color: var(--text-bright);
-    font-size: 14px;
+    font-size: var(--text-l);
     font-weight: 800;
     line-height: 1.2;
 }
@@ -80,7 +80,7 @@
 .cardDesc {
     margin: 0;
     color: var(--text-subtle);
-    font-size: 12px;
+    font-size: var(--text-s);
     line-height: 1.45;
 }
 
@@ -102,7 +102,7 @@
     align-items: center;
     gap: 6px;
     color: var(--text);
-    font-size: 11px;
+    font-size: var(--text-xs);
     font-weight: 700;
     white-space: nowrap;
 }
@@ -110,7 +110,7 @@
 .cardStatus {
     margin: 0;
     color: var(--text-subtle);
-    font-size: 11px;
+    font-size: var(--text-xs);
     font-weight: 700;
     line-height: 1.4;
 }
@@ -131,7 +131,7 @@
     --badge-color: var(--text-subtle);
     background: linear-gradient(0deg, var(--badge-bg), transparent);
     color: var(--badge-color);
-    font-size: 10px;
+    font-size: var(--text-2xs);
     font-weight: 620;
     line-height: 1.4;
 }
@@ -165,7 +165,7 @@
 .avatarHint {
     margin: 0;
     color: var(--text-subtle);
-    font-size: 10px;
+    font-size: var(--text-2xs);
     line-height: 1.4;
 }
 
@@ -193,7 +193,7 @@
 
 .profileFieldLabel {
     color: var(--text-subtle);
-    font-size: 11px;
+    font-size: var(--text-xs);
     font-weight: 700;
     letter-spacing: 0.02em;
     text-transform: uppercase;
@@ -201,7 +201,7 @@
 
 .profileFieldValue {
     color: var(--text-bright);
-    font-size: 13px;
+    font-size: var(--text-m);
     font-weight: 600;
     word-break: break-word;
 }
@@ -214,7 +214,7 @@
 .error {
     margin: 0;
     color: var(--danger);
-    font-size: 12px;
+    font-size: var(--text-s);
     font-weight: 700;
     line-height: 1.45;
 }
@@ -222,7 +222,7 @@
 .emptyState {
     margin: 0;
     color: var(--text-subtle);
-    font-size: 12px;
+    font-size: var(--text-s);
     font-weight: 700;
     line-height: 1.45;
 }
@@ -236,7 +236,7 @@
     background: var(--bg-surface-3);
     border: 1px solid var(--border);
     color: var(--warning);
-    font-size: 12px;
+    font-size: var(--text-s);
     font-weight: 700;
 }
 
@@ -257,14 +257,14 @@
 
 .deviceLabel strong {
     color: var(--text-bright);
-    font-size: 13px;
+    font-size: var(--text-m);
     font-weight: 700;
     line-height: 1.2;
 }
 
 .deviceLabel span {
     color: var(--text-subtle);
-    font-size: 11px;
+    font-size: var(--text-xs);
     line-height: 1.4;
 }
 
@@ -276,7 +276,7 @@
 }
 
 .activityResult {
-    font-size: 11px;
+    font-size: var(--text-xs);
     font-weight: 700;
     letter-spacing: 0.02em;
     text-transform: uppercase;
@@ -315,7 +315,7 @@
 
 .dialogLabel {
     color: var(--text-subtle);
-    font-size: 11px;
+    font-size: var(--text-xs);
     font-weight: 700;
     letter-spacing: 0.02em;
     text-transform: uppercase;
@@ -355,7 +355,7 @@
 .qrPlaceholder {
     max-width: 160px;
     color: var(--bg-body);
-    font-size: 12px;
+    font-size: var(--text-s);
     font-weight: 800;
     line-height: 1.4;
     text-align: center;
@@ -375,7 +375,7 @@
 .mfaStep h3 {
     margin: 0;
     color: var(--text-bright);
-    font-size: 15px;
+    font-size: var(--text-xl);
     font-weight: 800;
     line-height: 1.25;
 }
@@ -393,7 +393,7 @@
 .recoveryGrid code {
     color: var(--text-bright);
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-    font-size: 12px;
+    font-size: var(--text-s);
     line-height: 1.4;
     word-break: break-all;
 }
@@ -404,7 +404,7 @@
 
 .authenticatorLink {
     color: var(--text-bright);
-    font-size: 12px;
+    font-size: var(--text-s);
     font-weight: 800;
     line-height: 1.45;
     text-decoration: underline;

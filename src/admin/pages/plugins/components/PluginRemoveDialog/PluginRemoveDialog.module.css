@@ -6,7 +6,7 @@
 
 .lead {
     margin: 0 0 8px 0;
-    font-size: 13px;
+    font-size: var(--text-m);
 }
 
 .checklist {
@@ -14,13 +14,13 @@
     padding-left: 18px;
     display: grid;
     gap: 4px;
-    font-size: 13px;
+    font-size: var(--text-m);
     color: var(--text-subtle);
 }
 
 .checklist code {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 11px;
+    font-size: var(--text-xs);
     padding: 1px 5px;
     background: var(--bg-surface);
     border: 1px solid var(--overlay-10);
@@ -31,7 +31,7 @@
 .note {
     margin: 0;
     color: var(--text-subtle);
-    font-size: 12px;
+    font-size: var(--text-s);
 }
 
 /* Force-remove caveat — state color (warning), not decoration: the plugin's
@@ -39,6 +39,6 @@
 .warning {
     margin: 0;
     color: var(--warning-text);
-    font-size: 12px;
+    font-size: var(--text-s);
     line-height: 1.5;
 }

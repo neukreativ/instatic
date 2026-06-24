@@ -53,19 +53,19 @@
   min-width: 0;
 }
 .activityTitle {
-  font-size: 14px;
+  font-size: var(--text-l);
   font-weight: 600;
   color: var(--text-bright);
   line-height: 1.2;
 }
 .activitySub {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-subtle);
   font-variant-numeric: tabular-nums;
 }
 .percent {
   font-family: var(--font-mono);
-  font-size: 26px;
+  font-size: var(--text-5xl);
   font-weight: 500;
   line-height: 1;
   color: var(--text-bright);
@@ -114,7 +114,7 @@
 }
 .currentFile {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -137,7 +137,7 @@
 /* ── Per-category breakdown ─────────────────────────────────────────────────── */
 
 .catsLabel {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -199,18 +199,18 @@
   min-width: 0;
 }
 .catTitle {
-  font-size: 13px;
+  font-size: var(--text-m);
   font-weight: 500;
   color: var(--text);
 }
 .catMeta {
-  font-size: 10.5px;
+  font-size: var(--text-2xs);
   color: var(--text-subtle);
   font-family: var(--font-mono);
 }
 .catCount {
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -285,13 +285,13 @@
 }
 .doneTitle {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--text-2xl);
   font-weight: 700;
   color: var(--text-bright);
 }
 .doneSub {
   margin: 0;
-  font-size: 12.5px;
+  font-size: var(--text-s);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -318,14 +318,14 @@
 }
 .failedTitle {
   margin: 0;
-  font-size: 17px;
+  font-size: var(--text-xl);
   font-weight: 700;
   color: var(--text-bright);
 }
 .failedSub {
   margin: 0;
   max-width: 42ch;
-  font-size: 12.5px;
+  font-size: var(--text-s);
   color: var(--text-muted);
 }
 
@@ -341,7 +341,7 @@
 }
 .logHeading {
   margin: 0;
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -356,7 +356,7 @@
   gap: 4px;
 }
 .logLine {
-  font-size: 12px;
+  font-size: var(--text-s);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -372,7 +372,7 @@
   align-items: center;
   gap: 6px;
   margin: 0;
-  font-size: 12px;
+  font-size: var(--text-s);
   font-weight: 600;
   color: var(--warning);
 }
@@ -383,11 +383,11 @@
 }
 .warningKind {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: var(--text-subtle);
 }
 .warningMsg {
-  font-size: 11.5px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   line-height: 1.4;
 }

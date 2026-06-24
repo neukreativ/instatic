@@ -220,7 +220,7 @@
     padding: 3px 6px 3px calc(6px + (var(--tree-ladder-depth) * 10px));
     border-radius: calc(var(--panel-radius) - 4px);
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 11px;
+    font-size: var(--text-xs);
     font-weight: 500;
 }
 
@@ -259,7 +259,7 @@
 
 .treeLadderRelation {
     font-family: inherit;
-    font-size: 10px;
+    font-size: var(--text-2xs);
     color: var(--text-subtle);
 }
 

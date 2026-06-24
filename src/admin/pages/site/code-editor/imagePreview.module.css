@@ -45,7 +45,7 @@
   padding: 6px 12px;
   border-top: 1px solid var(--overlay-10);
   background: var(--bg-surface);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: var(--text-disabled);
   overflow: hidden;
 }
@@ -78,18 +78,18 @@
 }
 
 .binaryTitle {
-  font-size: 12px;
+  font-size: var(--text-s);
   color: var(--text-subtle);
 }
 
 .binaryMeta {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: var(--border-muted);
   font-family: var(--font-mono);
 }
 
 .binaryHint {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: var(--text-disabled);
   margin-top: 4px;
 }

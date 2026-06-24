@@ -51,7 +51,7 @@
 
 .rowFamily {
     color: var(--text);
-    font-size: 16px;
+    font-size: var(--text-xl);
     font-weight: 600;
     line-height: 1.2;
     overflow: hidden;
@@ -61,7 +61,7 @@
 
 .rowMeta {
     color: var(--text-subtle);
-    font-size: 10px;
+    font-size: var(--text-2xs);
     font-variant-numeric: tabular-nums;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -90,7 +90,7 @@
 .tokenToolbarTitle {
     min-width: 0;
     color: var(--text-subtle);
-    font-size: 10px;
+    font-size: var(--text-2xs);
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -99,7 +99,7 @@
 .errorAlert {
     margin: 0;
     color: var(--danger);
-    font-size: 11px;
+    font-size: var(--text-xs);
     line-height: 1.4;
 }
 
@@ -129,14 +129,14 @@
 
 .tokenFieldLabel {
     color: var(--text-subtle);
-    font-size: 12px;
+    font-size: var(--text-s);
     font-weight: 700;
 }
 
 .tokenNotice {
     margin: 0;
     color: var(--text-subtle);
-    font-size: 11px;
+    font-size: var(--text-xs);
     line-height: 1.4;
 }
 
@@ -150,7 +150,7 @@
     gap: 6px;
     margin-inline-end: auto;
     color: var(--text-subtle);
-    font-size: 11px;
+    font-size: var(--text-xs);
     line-height: 1.2;
     min-width: 0;
 }
@@ -161,14 +161,14 @@
 
 .estimateValue {
     color: var(--text);
-    font-size: 12px;
+    font-size: var(--text-s);
     font-weight: 700;
     font-variant-numeric: tabular-nums;
 }
 
 .estimateMeta {
     color: var(--text-subtle);
-    font-size: 10px;
+    font-size: var(--text-2xs);
     text-transform: uppercase;
     letter-spacing: 0.06em;
     font-weight: 700;
@@ -240,7 +240,7 @@
 }
 
 .pickerName {
-    font-size: 26px;
+    font-size: var(--text-5xl);
     font-weight: 500;
     line-height: 1.1;
     color: var(--text);
@@ -259,7 +259,7 @@
 
 .pickerCategory {
     color: var(--text-subtle);
-    font-size: 9.5px;
+    font-size: var(--text-2xs);
     text-transform: uppercase;
     letter-spacing: 0.08em;
     font-weight: 700;
@@ -271,7 +271,7 @@
 
 .pickerInstalled {
     color: var(--text-subtle);
-    font-size: 9.5px;
+    font-size: var(--text-2xs);
     text-transform: uppercase;
     letter-spacing: 0.08em;
     font-weight: 700;
@@ -282,13 +282,13 @@
     grid-column: 1 / -1;
     padding: 32px 18px;
     color: var(--text-subtle);
-    font-size: 12px;
+    font-size: var(--text-s);
     text-align: center;
 }
 
 .pickerInfo {
     color: var(--text-subtle);
-    font-size: 11px;
+    font-size: var(--text-xs);
 }
 
 /* ─── Variants + subsets picker (step 2) ─────────────────────────────── */
@@ -315,7 +315,7 @@
 
 .previewFamilyName {
     color: var(--text-subtle);
-    font-size: 10px;
+    font-size: var(--text-2xs);
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -326,7 +326,7 @@
 
 .previewCategory {
     color: var(--text-subtle);
-    font-size: 10px;
+    font-size: var(--text-2xs);
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -334,7 +334,7 @@
 
 .previewSample {
     color: var(--text);
-    font-size: 36px;
+    font-size: var(--text-6xl);
     line-height: 1.15;
     margin: 0;
     word-break: break-word;
@@ -365,14 +365,14 @@
 
 .dialogSectionTitle {
     color: var(--text-subtle);
-    font-size: 14px;
+    font-size: var(--text-l);
     font-weight: 700;
     margin: 0;
 }
 
 .dialogSectionSelectAll {
     color: var(--text-subtle);
-    font-size: 11px;
+    font-size: var(--text-xs);
     background: transparent;
     border: 0;
     padding: 0;
@@ -424,7 +424,7 @@
 }
 
 .variantSample {
-    font-size: 18px;
+    font-size: var(--text-2xl);
     line-height: 1.1;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -433,7 +433,7 @@
 
 .variantWeightLabel {
     color: var(--text-subtle);
-    font-size: 10px;
+    font-size: var(--text-2xs);
     font-variant-numeric: tabular-nums;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -462,7 +462,7 @@
     color: var(--text);
     cursor: pointer;
     font-family: inherit;
-    font-size: 11px;
+    font-size: var(--text-xs);
     font-weight: 600;
     line-height: 1.4;
     transition:
@@ -538,7 +538,7 @@
 
 .customFontPreviewName {
     color: var(--text);
-    font-size: 24px;
+    font-size: var(--text-4xl);
     font-weight: 500;
     line-height: 1.1;
     overflow: hidden;
@@ -548,7 +548,7 @@
 
 .customFontMeta {
     color: var(--text-subtle);
-    font-size: 9.5px;
+    font-size: var(--text-2xs);
     text-transform: uppercase;
     letter-spacing: 0.08em;
     font-weight: 700;
@@ -571,7 +571,7 @@
     align-items: center;
     gap: 6px;
     color: var(--text-subtle);
-    font-size: 11px;
+    font-size: var(--text-xs);
     font-weight: 600;
     white-space: nowrap;
     cursor: pointer;

@@ -15,7 +15,7 @@
     background: transparent;
     border: 1px solid var(--overlay-20);
     color: var(--text);
-    font-size: 12px;
+    font-size: var(--text-s);
     font-weight: 400;
 }
 
@@ -45,7 +45,7 @@
 }
 
 .inlineTrigger .triggerLabel {
-    font-size: 10px;
+    font-size: var(--text-2xs);
 }
 
 .fieldTrigger .triggerLabel {
@@ -63,7 +63,7 @@
     min-height: 22px;
     max-width: 200px;
     color: var(--text-subtle);
-    font-size: 10px;
+    font-size: var(--text-2xs);
     font-weight: 700;
     white-space: nowrap;
 }
@@ -76,7 +76,7 @@
 }
 
 .groupHeader {
-    font-size: 10px;
+    font-size: var(--text-2xs);
     font-weight: 600;
     color: var(--text-muted);
     text-transform: uppercase;
@@ -115,20 +115,20 @@
    information, so they need clear contrast against the menu surface. */
 .modelPrice {
     color: var(--text-muted);
-    font-size: 11px;
+    font-size: var(--text-xs);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
 
 .modelContext {
     color: var(--text-muted);
-    font-size: 11px;
+    font-size: var(--text-xs);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
 
 .emptyOption {
     padding: 6px 9px;
-    font-size: 12px;
+    font-size: var(--text-s);
     color: var(--text-subtle);
 }

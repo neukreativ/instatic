@@ -105,7 +105,7 @@
 
 .boxLabel {
     color: var(--text-subtle);
-    font-size: 9px;
+    font-size: var(--text-3xs);
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -239,7 +239,7 @@
     background: transparent;
     box-shadow: none;
     color: var(--text);
-    font-size: 11px;
+    font-size: var(--text-xs);
     font-weight: 600;
     line-height: 1;
     text-align: center;

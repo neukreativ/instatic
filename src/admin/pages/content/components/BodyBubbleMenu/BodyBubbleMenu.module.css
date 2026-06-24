@@ -38,7 +38,7 @@
     height: 28px;
     padding: 0 8px 0 10px;
     color: var(--text);
-    font-size: 12px;
+    font-size: var(--text-s);
     font-weight: 600;
 }
 

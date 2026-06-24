@@ -68,17 +68,30 @@ const CHROME_TOKENS = [
 ] as const
 
 /**
- * The editor's UI font, forwarded into the iframe for CHROME elements ONLY.
+ * Admin typography tokens, forwarded into the iframe for CHROME elements ONLY.
  *
- * Read from the parent's `--font-sans` but WRITTEN under a chrome-namespaced
- * variable. Setting `--font-sans` itself on the iframe `:root` (as this used
- * to) clobbers the SITE's `--font-sans` — the chrome injector is unlayered,
- * and unlayered always beats the site's font tokens in `@layer user-authored`,
- * so every canvas element silently rendered in the editor's font instead of
- * the site's configured one. CHROME_RULES reference `var(--chrome-font-sans)`.
+ * Read from the parent's admin tokens but WRITTEN under chrome-namespaced
+ * variables. Setting `--font-sans` or `--text-s` itself on the iframe `:root`
+ * clobbers the SITE's matching Framework tokens — the chrome injector is
+ * unlayered, and unlayered always beats the site's tokens in
+ * `@layer user-authored`.
  */
-const CHROME_FONT_SOURCE = '--font-sans'
-const CHROME_FONT_TARGET = '--chrome-font-sans'
+const CHROME_TOKEN_ALIASES = [
+  ['--font-sans', '--chrome-font-sans'],
+  ['--text-3xs', '--chrome-text-3xs'],
+  ['--text-2xs', '--chrome-text-2xs'],
+  ['--text-xs', '--chrome-text-xs'],
+  ['--text-s', '--chrome-text-s'],
+  ['--text-m', '--chrome-text-m'],
+  ['--text-l', '--chrome-text-l'],
+  ['--text-xl', '--chrome-text-xl'],
+  ['--text-2xl', '--chrome-text-2xl'],
+  ['--text-3xl', '--chrome-text-3xl'],
+  ['--text-4xl', '--chrome-text-4xl'],
+  ['--text-5xl', '--chrome-text-5xl'],
+  ['--text-6xl', '--chrome-text-6xl'],
+  ['--text-7xl', '--chrome-text-7xl'],
+] as const
 
 interface EditorChromeInjectorProps {
   /** The iframe document to inject the chrome stylesheet into. */
@@ -90,9 +103,9 @@ interface EditorChromeInjectorProps {
 /**
  * Read the listed tokens from parentDoc's computed :root and return a
  * `:root { ... }` block that sets them on the iframe's root. Only tokens
- * that resolve to a non-empty value are included. The editor font is mapped
- * onto a chrome-namespaced variable so it never overrides the site's own
- * `--font-sans` (see CHROME_FONT_TARGET).
+ * that resolve to a non-empty value are included. Admin typography aliases are
+ * mapped onto chrome-namespaced variables so they never override the site's own
+ * Framework tokens.
  *
  * Module-scope so the React Compiler doesn't flag the getComputedStyle call
  * as a side-effect inside a component body.
@@ -103,8 +116,10 @@ function buildTokenBlock(parentDoc: Document): string {
     const value = parentStyles.getPropertyValue(token).trim()
     return value ? [`  ${token}: ${value};`] : []
   })
-  const chromeFont = parentStyles.getPropertyValue(CHROME_FONT_SOURCE).trim()
-  if (chromeFont) declarations.push(`  ${CHROME_FONT_TARGET}: ${chromeFont};`)
+  for (const [source, target] of CHROME_TOKEN_ALIASES) {
+    const value = parentStyles.getPropertyValue(source).trim()
+    if (value) declarations.push(`  ${target}: ${value};`)
+  }
   if (declarations.length === 0) return ''
   return `:root {\n${declarations.join('\n')}\n}`
 }
@@ -137,7 +152,7 @@ const CHROME_RULES = `
   border-radius: var(--radius);
   background: var(--canvas-placeholder-bg);
   color: var(--text-subtle);
-  font-size: 12px;
+  font-size: var(--chrome-text-s);
   font-family: var(--chrome-font-sans);
   font-weight: 400;
   font-style: normal;
@@ -223,7 +238,7 @@ const CHROME_RULES = `
   margin: 0;
   padding: 0;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--chrome-text-s);
   font-family: var(--chrome-font-sans);
   font-weight: 600;
   font-style: normal;
@@ -243,7 +258,7 @@ const CHROME_RULES = `
   margin: 0;
   padding: 0;
   color: var(--text-subtle);
-  font-size: 11px;
+  font-size: var(--chrome-text-xs);
   font-family: var(--chrome-font-sans);
   font-weight: 500;
   font-style: normal;
@@ -270,7 +285,7 @@ const CHROME_RULES = `
   border-radius: 999px;
   background: var(--bg-surface);
   color: var(--text-bright);
-  font-size: 11px;
+  font-size: var(--chrome-text-xs);
   font-family: var(--chrome-font-sans);
   font-weight: 600;
   font-style: normal;
@@ -305,7 +320,7 @@ const CHROME_RULES = `
   overflow: hidden;
   box-sizing: border-box;
   color: var(--text-subtle);
-  font-size: 11px;
+  font-size: var(--chrome-text-xs);
   font-family: var(--chrome-font-sans);
   font-weight: 400;
   font-style: normal;
@@ -321,7 +336,7 @@ const CHROME_RULES = `
   background: var(--bg-body);
   border-bottom: 1px dashed var(--border);
   color: var(--text-subtle);
-  font-size: 11px;
+  font-size: var(--chrome-text-xs);
   font-family: var(--chrome-font-sans);
   font-weight: 400;
   font-style: normal;
@@ -336,7 +351,7 @@ const CHROME_RULES = `
 
 [data-instatic-slot-instance-header] [data-instatic-slot-label] {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--chrome-text-xs);
   font-style: italic;
   font-family: var(--chrome-font-sans);
   font-weight: 400;
@@ -377,7 +392,7 @@ const CHROME_RULES = `
   padding: 4px;
   color: var(--text-subtle);
   font-family: var(--chrome-font-sans);
-  font-size: 12px;
+  font-size: var(--chrome-text-s);
   font-weight: 400;
   font-style: normal;
   letter-spacing: normal;

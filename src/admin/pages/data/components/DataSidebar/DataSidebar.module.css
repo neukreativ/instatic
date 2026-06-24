@@ -61,7 +61,7 @@
 }
 
 .kindBadge {
-    font-size: 9px;
+    font-size: var(--text-3xs);
     font-weight: 600;
     color: var(--text-subtle);
     background: var(--bg-surface-3);
@@ -75,14 +75,14 @@
 .errorText {
     margin: 0;
     padding: 8px 4px;
-    font-size: 12px;
+    font-size: var(--text-s);
     color: var(--danger);
 }
 
 .emptyText {
     margin: 0;
     padding: 8px 4px;
-    font-size: 12px;
+    font-size: var(--text-s);
     color: var(--text-subtle);
 }
 
@@ -103,7 +103,7 @@
     margin: 0;
     overflow: hidden;
     color: var(--text-subtle);
-    font-size: 11px;
+    font-size: var(--text-xs);
     font-weight: 700;
     line-height: 1.2;
     text-overflow: ellipsis;
@@ -112,7 +112,7 @@
 
 .sectionCount {
     color: var(--text-subtle);
-    font-size: 11px;
+    font-size: var(--text-xs);
     line-height: 1;
 }
 

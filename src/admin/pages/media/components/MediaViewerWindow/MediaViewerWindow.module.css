@@ -51,7 +51,7 @@
 }
 
 .sectionTitle {
-    font-size: 10px;
+    font-size: var(--text-2xs);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -66,7 +66,7 @@
 }
 
 .fieldLabel {
-    font-size: 10px;
+    font-size: var(--text-2xs);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -91,12 +91,12 @@
     display: flex;
     align-items: baseline;
     gap: 8px;
-    font-size: 12px;
+    font-size: var(--text-s);
 }
 
 .detailLabel {
     flex: 0 0 70px;
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--text-subtle);
     margin: 0;
 }
@@ -127,18 +127,18 @@
     background: var(--bg-surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--text);
 }
 
 .placeholder {
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--text-subtle);
     margin: 0;
 }
 
 .warning {
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--warning);
     margin: 0 0 6px 0;
 }

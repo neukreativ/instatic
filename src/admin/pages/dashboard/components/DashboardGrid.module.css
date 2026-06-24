@@ -363,7 +363,7 @@
 }
 
 .addLabel {
-    font-size: 12px;
+    font-size: var(--text-s);
     font-weight: 500;
 }
 

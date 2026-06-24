@@ -31,7 +31,7 @@
   border-radius: 50%;
   background: var(--bg-surface-4);
   color: var(--text-subtle);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -44,7 +44,7 @@
   color: var(--bg-body);
 }
 .stepperLabel {
-  font-size: 12px;
+  font-size: var(--text-s);
   font-weight: 500;
 }
 .stepperItem[data-state='current'] .stepperLabel {

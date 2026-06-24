@@ -41,7 +41,7 @@
     border-radius: 0;
     background: transparent;
     color: var(--text);
-    font-size: 56px;
+    font-size: var(--text-7xl);
     font-weight: 780;
     line-height: 0.98;
     resize: none;
@@ -70,14 +70,14 @@
 
 .emptyState h2 {
     margin: 0;
-    font-size: 24px;
+    font-size: var(--text-4xl);
     letter-spacing: 0;
 }
 
 .emptyState p,
 .error {
     margin: 0;
-    font-size: 12px;
+    font-size: var(--text-s);
     line-height: 1.5;
 }
 
@@ -112,7 +112,7 @@
     margin: 0 0 2px;
     padding: 0;
     color: var(--text-subtle);
-    font-size: 11px;
+    font-size: var(--text-xs);
     font-weight: 700;
 }
 
@@ -122,7 +122,7 @@
     align-items: center;
     gap: 8px;
     color: var(--text);
-    font-size: 12px;
+    font-size: var(--text-s);
     line-height: 1.2;
 }
 
@@ -173,7 +173,7 @@
 
 .entryAuthor {
     color: var(--text-subtle);
-    font-size: 10px;
+    font-size: var(--text-2xs);
     line-height: 1.15;
 }
 
@@ -206,7 +206,7 @@
 .authorBlock > span,
 .featuredMediaField > span {
     color: var(--text-subtle);
-    font-size: 11px;
+    font-size: var(--text-xs);
     font-weight: 750;
 }
 
@@ -220,7 +220,7 @@
 .metaBlock strong {
     overflow-wrap: anywhere;
     color: var(--text);
-    font-size: 12px;
+    font-size: var(--text-s);
     font-weight: 700;
 }
 
@@ -242,7 +242,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--text);
-    font-size: 12px;
+    font-size: var(--text-s);
     font-weight: 700;
 }
 
@@ -255,7 +255,7 @@
     border-radius: 8px;
     background: linear-gradient(0deg, var(--bg-surface-3), transparent);
     color: var(--text-muted);
-    font-size: 11px;
+    font-size: var(--text-xs);
     font-weight: 620;
     line-height: 1;
     white-space: nowrap;
@@ -263,7 +263,7 @@
 
 .featuredMediaField small {
     color: var(--text-subtle);
-    font-size: 11px;
+    font-size: var(--text-xs);
 }
 
 @media (max-width: 720px) {
@@ -276,6 +276,6 @@
     }
 
     .titleInput {
-        font-size: 40px;
+        font-size: var(--text-6xl);
     }
 }

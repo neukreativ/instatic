@@ -10,7 +10,7 @@
 .tab {
     /* Override Button's defaults to render as a compact pill-style tab. */
     color: var(--text-subtle);
-    font-size: 11px;
+    font-size: var(--text-xs);
     font-weight: 500;
     padding: 4px 9px;
     border-radius: 6px;

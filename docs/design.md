@@ -13,7 +13,7 @@ The design is a **two-layer color model**: an achromatic base (surfaces, borders
 - **Bordered transparent inputs.** Inputs have a 1px white-alpha border, transparent background, and a pill 1em radius. Focus adds an inset achromatic glow.
 - **Floating overlay panels.** Spotlight, popovers, and modals use direct globals: `--bg-surface`, `--overlay-10`, `--panel-radius`, `--panel-blur`, and `--shadow-panel`.
 - **Editor controls** (toolbar buttons, chips) use `--radius` (6px) for default and `--radius-sm` (3px) for tight badges.
-- **One source of truth: `src/styles/globals.css`.** No hardcoded hex / rgb / hsl in admin / ui CSS modules — gated by `css-token-policy.test.ts`.
+- **One source of truth: `src/styles/globals.css`.** No hardcoded hex / rgb / hsl in admin / ui CSS modules — gated by `css-token-policy.test.ts`. Admin font sizes use the fluid `--text-*` scale — gated by `admin-typography-token-policy.test.ts`.
 - **CSS Modules only.** No Tailwind utility classes — gated by `noTailwindUtilities.test.ts`. No Tailwind ecosystem deps — gated by `no-tailwind-deps.test.ts`.
 - **Every interactive control goes through a UI primitive** from `src/ui/components/`. Bare `<button>` is gated.
 - **Icons come from `pixel-art-icons`.** Deep-imported for tree-shaking. No `lucide-react`, no inline SVG strings.
@@ -139,6 +139,11 @@ Base text (achromatic):
   --text-bright, --text, --text-muted,
   --text-subtle, --text-disabled
 
+Fluid admin typography scale:
+  --text-3xs, --text-2xs, --text-xs, --text-s, --text-m,
+  --text-l, --text-xl, --text-2xl, --text-3xl, --text-4xl,
+  --text-5xl, --text-6xl, --text-7xl
+
 Overlay scale (white alpha):
   --overlay, --overlay-5, --overlay-10, --overlay-20, --overlay-30,
   --overlay-40, --overlay-50, --overlay-60, --overlay-70, --overlay-80,
@@ -198,6 +203,12 @@ Charts:
 | `--text-disabled`      | `#52525b` | Disabled / very subtle         |
 
 These five are the entire text palette. Add a new tone only by adding a new token.
+
+### Typography tokens — fluid size scale
+
+Admin UI font sizes use a Core Framework-style fluid scale: `--text-3xs` through `--text-7xl`. CSS Modules in `src/admin/` and `src/ui/` should set font sizes with `font-size: var(--text-s)` or the closest scale step, never a hardcoded pixel value. The ranges are intentionally narrow for dense admin chrome, with larger display steps reserved for page headings and KPI-style values.
+
+These are admin tokens. The published-site Framework engine also emits short text-size tokens such as `--text-s`; that is a separate scope. Editor chrome injected into the canvas iframe maps admin sizes to `--chrome-text-*` before using them so it does not overwrite the site's Framework typography.
 
 ### Radius
 

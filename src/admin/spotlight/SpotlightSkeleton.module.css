@@ -30,7 +30,7 @@
 
 .groupTitle {
     color: var(--text-bright);
-    font-size: 16px;
+    font-size: var(--text-xl);
     font-weight: 700;
 }
 

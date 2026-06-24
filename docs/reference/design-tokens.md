@@ -1,13 +1,13 @@
 # Design Tokens
 
-The complete catalog of design tokens declared in `src/styles/globals.css`. Every color, radius, shadow, font, and z-index used by the admin / editor / UI primitives is here. CSS Modules in `src/admin/`, `src/admin/pages/site/`, and `src/ui/` MUST reference these via `var(--*)` — hardcoded hex / rgb / hsl is gated by `css-token-policy.test.ts`.
+The complete catalog of design tokens declared in `src/styles/globals.css`. Every color, radius, shadow, font, font size, and z-index used by the admin / editor / UI primitives is here. CSS Modules in `src/admin/`, `src/admin/pages/site/`, and `src/ui/` MUST reference these via `var(--*)` — hardcoded hex / rgb / hsl is gated by `css-token-policy.test.ts`, and hardcoded font-size pixels are gated by `admin-typography-token-policy.test.ts`.
 
 ---
 
 ## TL;DR
 
 - One file: `src/styles/globals.css`.
-- Grouped by role: core surfaces/text/borders, overlays/scrims, identity accents, semantic state, radii, shadows, canvas, syntax, and z-index.
+- Grouped by role: fonts/fluid type, core surfaces/text/borders, overlays/scrims, identity accents, semantic state, radii, shadows, canvas, syntax, and z-index.
 - **Two-layer color model**: achromatic base + semantic / categorical color layer on top. See [docs/design.md](../design.md) for the rationale.
 - Add a new token by editing `globals.css`. Reference it with `var(--your-token)` in CSS Modules.
 - The `src/modules/` directory is **exempt** from the no-hardcoded-color rule — module CSS ships to published pages where admin tokens are not guaranteed to exist.
@@ -25,7 +25,27 @@ Inter Variable is loaded via a targeted `@font-face` declaration in `globals.css
 
 If the admin UI needs broader character coverage, add a second `@font-face` block in `globals.css` with the appropriate `unicode-range` pointing at the matching subset file under `@fontsource-variable/inter/files/`.
 
-Type sizes are per-component and don't yet have a token scale. If a recurring size emerges across 3+ primitives, promote it to a token.
+## Fluid type scale
+
+Admin UI font sizes use the Core Framework-style `--text-*` scale directly. These tokens are fluid across viewport width but intentionally narrow for dense admin chrome. Use the nearest semantic step instead of introducing one-off pixel sizes.
+
+| Token        | Fluid range | Typical use                                      |
+|--------------|-------------|--------------------------------------------------|
+| `--text-3xs` | 8px → 9px   | Tiny badges, axis labels, micro metadata         |
+| `--text-2xs` | 9px → 10px  | Dense metadata, compact chips                    |
+| `--text-xs`  | 10px → 11px | Panel labels, toolbar chrome, descriptions       |
+| `--text-s`   | 11px → 12px | Default compact body text, inputs, buttons       |
+| `--text-m`   | 12px → 13px | Card/body copy and readable secondary text       |
+| `--text-l`   | 13px → 14px | Section titles and prominent labels              |
+| `--text-xl`  | 14px → 16px | Dialog titles and compact page titles            |
+| `--text-2xl` | 16px → 18px | Page headings                                    |
+| `--text-3xl` | 18px → 20px | Large page headings                              |
+| `--text-4xl` | 20px → 24px | Hero numbers / large empty states                |
+| `--text-5xl` | 24px → 28px | Display headings                                 |
+| `--text-6xl` | 32px → 40px | KPI values                                       |
+| `--text-7xl` | 40px → 56px | Largest admin display values                     |
+
+These are admin tokens. The published-site Framework engine also emits short names such as `--text-s`; those belong to the generated site CSS, not admin chrome. Editor chrome injected into the canvas iframe maps admin sizes to `--chrome-text-*` before using them so it cannot override the site's Framework typography.
 
 ---
 

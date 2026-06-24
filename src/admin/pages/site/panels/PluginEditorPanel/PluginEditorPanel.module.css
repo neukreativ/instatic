@@ -5,7 +5,7 @@
 .unavailable {
     padding: 16px;
     color: var(--text-subtle);
-    font-size: 13px;
+    font-size: var(--text-m);
     text-align: center;
 }
 

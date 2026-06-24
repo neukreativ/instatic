@@ -62,14 +62,14 @@
 }
 
 .title {
-    font-size: 14px;
+    font-size: var(--text-l);
     font-weight: 600;
     color: var(--text-bright);
     letter-spacing: -0.01em;
 }
 
 .subtitle {
-    font-size: 12px;
+    font-size: var(--text-s);
     color: var(--text-subtle);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
@@ -210,7 +210,7 @@
     position: sticky;
     top: 0;
     z-index: 3;
-    font-size: 10.5px;
+    font-size: var(--text-2xs);
     font-weight: 500;
     color: var(--text-subtle);
     letter-spacing: 0.06em;
@@ -279,7 +279,7 @@
 
 .requiredIndicator {
     color: var(--danger);
-    font-size: 11px;
+    font-size: var(--text-xs);
     line-height: 1;
     flex-shrink: 0;
 }
@@ -426,7 +426,7 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    font-size: 10.5px;
+    font-size: var(--text-2xs);
     font-weight: 600;
     color: var(--text);
     letter-spacing: 0.06em;
@@ -434,7 +434,7 @@
 }
 
 .groupCount {
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--text-subtle);
     font-variant-numeric: tabular-nums;
     font-weight: 500;
@@ -492,7 +492,7 @@
     display: flex;
     align-items: center;
     min-width: 0;
-    font-size: 13px;
+    font-size: var(--text-m);
     color: var(--text);
     position: relative;
 }
@@ -527,7 +527,7 @@
 }
 
 .primaryTitle {
-    font-size: 13px;
+    font-size: var(--text-m);
     font-weight: 500;
     color: var(--text-bright);
     white-space: nowrap;
@@ -536,7 +536,7 @@
 }
 
 .primarySubtitle {
-    font-size: 11.5px;
+    font-size: var(--text-xs);
     color: var(--text-subtle);
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     white-space: nowrap;
@@ -685,13 +685,13 @@
 }
 
 .errorText {
-    font-size: 13px;
+    font-size: var(--text-m);
     color: var(--danger);
 }
 
 .errorHint {
     margin-top: 4px;
-    font-size: 12px;
+    font-size: var(--text-s);
     color: var(--text-subtle);
 }
 

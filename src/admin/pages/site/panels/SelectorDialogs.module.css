@@ -1,7 +1,7 @@
 .dialogCopy {
     margin: 0;
     color: var(--text-subtle);
-    font-size: 12px;
+    font-size: var(--text-s);
     line-height: 1.5;
 }
 

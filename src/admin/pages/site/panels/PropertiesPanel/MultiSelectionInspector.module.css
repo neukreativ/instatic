@@ -52,7 +52,7 @@
 
 .layerListHeader {
   padding: 4px 14px 8px;
-  font-size: 10px;
+  font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-disabled);

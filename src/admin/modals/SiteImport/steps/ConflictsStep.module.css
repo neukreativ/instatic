@@ -21,7 +21,7 @@
 
 .heading {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--text-s);
   font-weight: 600;
   color: var(--text);
 }
@@ -51,7 +51,7 @@
 
 .hint {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--text-s);
   color: var(--text-subtle);
 }
 

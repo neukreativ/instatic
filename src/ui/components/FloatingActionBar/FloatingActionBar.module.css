@@ -77,7 +77,7 @@
 }
 
 .label {
-    font-size: 12.5px;
+    font-size: var(--text-s);
     color: var(--text);
     font-weight: 500;
 }

@@ -23,7 +23,7 @@
 .footNote {
   margin-right: auto;
   align-self: center;
-  font-size: 11.5px;
+  font-size: var(--text-xs);
   color: var(--text-subtle);
   font-variant-numeric: tabular-nums;
 }

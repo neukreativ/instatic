@@ -6,7 +6,7 @@
 
 .label {
   color: var(--text-subtle);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   letter-spacing: 0;
   line-height: 1.2;
@@ -27,6 +27,6 @@
 .empty {
   padding: 2px 4px;
   color: var(--text-subtle);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   line-height: 1.3;
 }
