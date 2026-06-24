@@ -16,6 +16,8 @@ export function createSessionToken(): string {
 }
 
 export async function hashSessionToken(token: string): Promise<string> {
+  // Session cookies are 256-bit random bearer tokens, not user passwords.
+  // codeql[js/insufficient-password-hash]
   return createHash('sha256').update(token).digest('hex')
 }
 
