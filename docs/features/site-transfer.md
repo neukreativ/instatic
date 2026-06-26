@@ -17,7 +17,7 @@ The **Export site** dialog (`src/admin/pages/data/components/ExportDialog`) is a
   - `GET /admin/api/cms/export/summary` — total counts of the non-table categories (media, folders, redirects) so the dialog can label/disable them
   - `POST /admin/api/cms/import/preview` — analyze a bundle without applying (diff summary)
   - `POST /admin/api/cms/import[?strategy=...]` — apply the bundle
-  - `POST /admin/api/cms/import/archive[?strategy=...]` — apply the user-facing ZIP archive, streaming media bytes to disk
+  - `POST /admin/api/cms/import/archive[?strategy=...]` — apply the user-facing ZIP archive, validating and staging selected media before data import
 - Export categories: **theme & settings** (the shell), each **content table**, the **media library**, **media folders**, and **redirects** — all on by default.
 - Import categories use the same selection model: the Site Import Review step can include or exclude the shell, tables/rows, media files, folders, and redirects before applying a bundle.
 - The admin dialog starts downloads with a same-origin form POST, not `fetch().blob()`, so large media-heavy bundles are streamed by the browser's download stack instead of being materialized in JavaScript blob storage.
@@ -101,7 +101,7 @@ interface SiteBundleArchiveManifest {
 
 `media[].folderIds` carries each asset's folder membership; on import it's restored only into folders that arrived in `mediaFolders`. The export keeps the bundle self-consistent: it only includes a redirect when both its table and its target row are part of the same bundle, so the import never hits a dangling foreign key.
 
-The archive manifest parses through TypeBox before import. The admin import path reads only the first stored manifest entry for preview. Commit sends the original ZIP to `/admin/api/cms/import/archive`, which applies the validated manifest and streams each `media/<storagePath>` entry directly to `uploads/<storagePath>`.
+The archive manifest parses through TypeBox before import. The admin import path reads only the first stored manifest entry for preview. Commit sends the original ZIP to `/admin/api/cms/import/archive`, which applies the validated manifest and streams selected `media/<storagePath>` entries through temporary files before moving them to `uploads/<storagePath>`.
 
 `MediaAssetExport.storagePath` (and `posterPath`) are constrained at the schema level: the TypeBox pattern forbids a leading `/` and any `..` segment. The import handler enforces a second containment check at the write sink — `assertPathWithin(uploadsDir, join(uploadsDir, storagePath))` in `server/handlers/cms/import.ts` — so a tampered bundle cannot write bytes outside the uploads root even if the schema check were bypassed.
 
@@ -250,11 +250,12 @@ The archive handler:
 1. Capability-gates on `data.import`.
 2. Reads and validates the first ZIP entry as `.instatic/site-bundle.json`.
 3. Applies the optional selection filter and row slug overrides to the manifest.
-4. Delegates the manifest's site/data/folder/redirect content to the JSON import handler without media bytes.
-5. Streams each declared media entry from the request body to disk and upserts the matching media row.
-6. Returns the same `ImportResult` shape with `mediaImported` from the streamed entries.
+4. Streams selected media entries into temporary files, validating declared size, CRC descriptors, missing selected entries, and unexpected archive entries before data is mutated.
+5. Delegates the manifest's site/data/folder/redirect content to the JSON import handler without media bytes.
+6. Moves staged media into `uploads/<storagePath>` and upserts the matching media row.
+7. Returns the same `ImportResult` shape with `mediaImported` from the staged entries.
 
-The transaction is **all-or-nothing** for the DB side — if any insert fails, the DB rolls back. Media may have been partially written; the warning reports which bytes landed.
+The transaction is **all-or-nothing** for the DB side — if any insert fails, the DB rolls back. Malformed archive media is rejected before the DB transaction starts. A disk failure while moving already-validated staged media can still leave media partially written after the data import, matching the JSON import handler's best-effort filesystem semantics.
 
 ### Conflict resolution
 

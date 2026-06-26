@@ -4,14 +4,17 @@
  *   POST /admin/api/cms/import/archive?strategy=<strategy>
  *
  * Accepts the user-facing ZIP archive emitted by `/admin/api/cms/export`.
- * The manifest is the first stored entry, so the handler can validate and
- * apply site data before streaming media bytes directly to disk.
+ * The manifest is the first stored entry, so the handler can validate the
+ * selected media stream before applying site data. Selected media bytes are
+ * staged in temporary files first, then moved into uploads after the data
+ * import succeeds.
  */
 
 import { createWriteStream } from 'node:fs'
-import { mkdir } from 'node:fs/promises'
+import { copyFile, mkdir, mkdtemp, rm, rename, unlink } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { once } from 'node:events'
+import { tmpdir } from 'node:os'
 import type { DbClient } from '../../db/client'
 import { requireCapability } from '../../auth/authz'
 import { jsonResponse, badRequest } from '../../http'
@@ -61,6 +64,16 @@ interface LocalHeader {
   uncompressedSize: number | null
 }
 
+interface StagedArchiveMedia {
+  stagingDir: string
+  entries: StagedArchiveMediaEntry[]
+}
+
+interface StagedArchiveMediaEntry {
+  asset: NonNullable<SiteBundleArchiveManifest['media']>[number]
+  stagedPath: string
+}
+
 export async function handleImportArchiveRoute(
   req: Request,
   db: DbClient,
@@ -91,42 +104,222 @@ export async function handleImportArchiveRoute(
     ? filterArchiveManifestForSelection(manifest, selection)
     : manifest
 
-  const dataBundle = siteBundleWithoutMediaBytes(selectedManifest)
-  const dataImportReq = makeInternalImportRequest(req, strategy, dataBundle)
-  const dataImportRes = await handleImportRoute(dataImportReq, db, options)
-  if (!dataImportRes || !dataImportRes.ok) {
-    return dataImportRes ?? jsonResponse({ error: 'Import route did not handle archive manifest' }, { status: 500 })
-  }
-
-  const baseResult = parseValue(ImportResultSchema, await dataImportRes.json())
-  const importedFolderIds = new Set(
-    strategy === 'replace'
-      ? selectedManifest.mediaFolders?.map((folder) => folder.id) ?? []
-      : [],
-  )
-
-  let mediaImported = 0
+  let stagedMedia: StagedArchiveMedia | null = null
   if (selectedManifest.media && selectedManifest.media.length > 0 && options.uploadsDir) {
     try {
-      mediaImported = await importArchiveMediaEntries({
+      stagedMedia = await stageArchiveMediaEntries({
         reader,
-        db,
-        uploadsDir: options.uploadsDir,
         archiveManifest: manifest,
         selectedManifest,
-        importedFolderIds,
       })
     } catch (err) {
       return badRequest(err instanceof Error ? err.message : 'Invalid CMS bundle archive')
     }
   }
 
-  const result: ImportResult = {
-    ...baseResult,
-    mediaImported,
+  try {
+    const dataBundle = siteBundleWithoutMediaBytes(selectedManifest)
+    const dataImportReq = makeInternalImportRequest(req, strategy, dataBundle)
+    const dataImportRes = await handleImportRoute(dataImportReq, db, options)
+    if (!dataImportRes || !dataImportRes.ok) {
+      return dataImportRes ?? jsonResponse({ error: 'Import route did not handle archive manifest' }, { status: 500 })
+    }
+
+    const baseResult = parseValue(ImportResultSchema, await dataImportRes.json())
+    const importedFolderIds = new Set(
+      strategy === 'replace'
+        ? selectedManifest.mediaFolders?.map((folder) => folder.id) ?? []
+        : [],
+    )
+
+    let mediaImported = 0
+    if (stagedMedia && options.uploadsDir) {
+      try {
+        mediaImported = await importStagedArchiveMediaEntries({
+          stagedMedia,
+          db,
+          uploadsDir: options.uploadsDir,
+          importedFolderIds,
+        })
+      } catch (err) {
+        return badRequest(err instanceof Error ? err.message : 'Invalid CMS bundle archive')
+      }
+    }
+
+    const result: ImportResult = {
+      ...baseResult,
+      mediaImported,
+    }
+    parseValue(ImportResultSchema, result)
+    return jsonResponse(result)
+  } finally {
+    if (stagedMedia) {
+      await cleanupStagedMedia(stagedMedia)
+    }
   }
-  parseValue(ImportResultSchema, result)
-  return jsonResponse(result)
+}
+
+async function cleanupStagedMedia(stagedMedia: StagedArchiveMedia): Promise<void> {
+  try {
+    await rm(stagedMedia.stagingDir, { recursive: true, force: true })
+  } catch (err) {
+    console.warn('[importArchive] Failed to clean up staged media:', err)
+  }
+}
+
+async function importStagedArchiveMediaEntries(input: {
+  stagedMedia: StagedArchiveMedia
+  db: DbClient
+  uploadsDir: string
+  importedFolderIds: Set<string>
+}): Promise<number> {
+  let imported = 0
+
+  for (const { asset, stagedPath } of input.stagedMedia.entries) {
+    const target = join(input.uploadsDir, asset.storagePath)
+    assertPathWithin(input.uploadsDir, target)
+    await mkdir(dirname(target), { recursive: true })
+    await moveFile(stagedPath, target)
+
+    await importMediaAsset(input.db, {
+      id: asset.id,
+      filename: asset.filename,
+      mimeType: asset.mimeType,
+      sizeBytes: asset.sizeBytes,
+      storagePath: asset.storagePath,
+      publicPath: `/uploads/${asset.storagePath}`,
+      altText: asset.altText,
+      caption: asset.caption,
+      title: asset.title,
+      tags: asset.tags,
+      width: asset.width,
+      height: asset.height,
+      durationMs: asset.durationMs,
+      dominantColor: asset.dominantColor,
+      blurHash: asset.blurHash,
+      posterPath: asset.posterPath,
+    })
+
+    const targetFolders = asset.folderIds.filter((id) => input.importedFolderIds.has(id))
+    if (targetFolders.length > 0) {
+      await assignAssetToFolders(input.db, asset.id, { add: targetFolders })
+    }
+    imported++
+  }
+
+  return imported
+}
+
+async function moveFile(source: string, target: string): Promise<void> {
+  try {
+    await rename(source, target)
+  } catch (err) {
+    if (!errorHasCode(err, 'EXDEV')) throw err
+    await copyFile(source, target)
+    await unlink(source)
+  }
+}
+
+function errorHasCode(err: unknown, code: string): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'code' in err &&
+    err.code === code
+  )
+}
+
+async function stageArchiveMediaEntries(input: {
+  reader: ZipBodyReader
+  archiveManifest: SiteBundleArchiveManifest
+  selectedManifest: SiteBundleArchiveManifest
+}): Promise<StagedArchiveMedia> {
+  const stagedMedia: StagedArchiveMedia = {
+    stagingDir: await mkdtemp(join(tmpdir(), 'instatic-import-media-')),
+    entries: [],
+  }
+
+  try {
+    await readArchiveMediaEntries({
+      ...input,
+      async onSelectedMedia(asset, reader) {
+        const stagedPath = join(stagedMedia.stagingDir, `${stagedMedia.entries.length}.bin`)
+        const crc = createCrc32()
+        await writeEntryToFile(reader, stagedPath, asset.sizeBytes, crc)
+        stagedMedia.entries.push({ asset, stagedPath })
+        return crc.digest()
+      },
+      async onUnselectedMedia(archivedAsset, reader) {
+        const crc = createCrc32()
+        await drainEntry(reader, archivedAsset.sizeBytes, crc)
+        return crc.digest()
+      },
+    })
+    return stagedMedia
+  } catch (err) {
+    await cleanupStagedMedia(stagedMedia)
+    throw err
+  }
+}
+
+async function readArchiveMediaEntries(input: {
+  reader: ZipBodyReader
+  archiveManifest: SiteBundleArchiveManifest
+  selectedManifest: SiteBundleArchiveManifest
+  onSelectedMedia: (
+    asset: NonNullable<SiteBundleArchiveManifest['media']>[number],
+    reader: ZipBodyReader,
+  ) => Promise<number>
+  onUnselectedMedia: (
+    asset: NonNullable<SiteBundleArchiveManifest['media']>[number],
+    reader: ZipBodyReader,
+  ) => Promise<number>
+}): Promise<void> {
+  const allMediaByArchivePath = new Map(
+    (input.archiveManifest.media ?? []).map((asset) => [mediaArchivePath(asset.storagePath), asset]),
+  )
+  const selectedMediaByArchivePath = new Map(
+    (input.selectedManifest.media ?? []).map((asset) => [mediaArchivePath(asset.storagePath), asset]),
+  )
+
+  while (true) {
+    const header = await input.reader.readLocalHeader()
+    if (!header) {
+      const missingPath = selectedMediaByArchivePath.keys().next().value
+      if (typeof missingPath === 'string') {
+        throw new Error(`Archive is missing media file "${missingPath}"`)
+      }
+      return
+    }
+    if (header.compression !== ZIP_STORED_METHOD) {
+      throw new Error(`Archive entry "${header.path}" is compressed; CMS bundle media must be stored`)
+    }
+
+    const archivedAsset = allMediaByArchivePath.get(header.path)
+    if (!archivedAsset) {
+      throw new Error(`Unexpected entry in CMS bundle archive: ${header.path}`)
+    }
+    if ((header.flags & ZIP_DATA_DESCRIPTOR_FLAG) === 0) {
+      if (header.compressedSize !== archivedAsset.sizeBytes || header.uncompressedSize !== archivedAsset.sizeBytes) {
+        throw new Error(`Archive entry "${header.path}" size does not match the manifest`)
+      }
+    }
+
+    const asset = selectedMediaByArchivePath.get(header.path)
+    const crc32 = asset
+      ? await input.onSelectedMedia(asset, input.reader)
+      : await input.onUnselectedMedia(archivedAsset, input.reader)
+
+    if ((header.flags & ZIP_DATA_DESCRIPTOR_FLAG) !== 0) {
+      await input.reader.readAndValidateDataDescriptor({
+        crc32,
+        sizeBytes: archivedAsset.sizeBytes,
+      })
+    }
+
+    allMediaByArchivePath.delete(header.path)
+    selectedMediaByArchivePath.delete(header.path)
+  }
 }
 
 function parseImportStrategy(url: URL): ImportStrategy | Response {
@@ -289,101 +482,6 @@ async function readArchiveManifest(reader: ZipBodyReader): Promise<SiteBundleArc
   } catch {
     const firstPath = compiled(SiteBundleArchiveManifestSchema).Errors(parsed).First()?.path ?? ''
     throw new Error(`Archive manifest does not match schema at ${firstPath}: ${formatValueErrors(SiteBundleArchiveManifestSchema, parsed)}`)
-  }
-}
-
-async function importArchiveMediaEntries(input: {
-  reader: ZipBodyReader
-  db: DbClient
-  uploadsDir: string
-  archiveManifest: SiteBundleArchiveManifest
-  selectedManifest: SiteBundleArchiveManifest
-  importedFolderIds: Set<string>
-}): Promise<number> {
-  const allMediaByArchivePath = new Map(
-    (input.archiveManifest.media ?? []).map((asset) => [mediaArchivePath(asset.storagePath), asset]),
-  )
-  const selectedMediaByArchivePath = new Map(
-    (input.selectedManifest.media ?? []).map((asset) => [mediaArchivePath(asset.storagePath), asset]),
-  )
-  let imported = 0
-
-  while (true) {
-    const header = await input.reader.readLocalHeader()
-    if (!header) {
-      const missingPath = selectedMediaByArchivePath.keys().next().value
-      if (typeof missingPath === 'string') {
-        throw new Error(`Archive is missing media file "${missingPath}"`)
-      }
-      return imported
-    }
-    if (header.compression !== ZIP_STORED_METHOD) {
-      throw new Error(`Archive entry "${header.path}" is compressed; CMS bundle media must be stored`)
-    }
-
-    const archivedAsset = allMediaByArchivePath.get(header.path)
-    if (!archivedAsset) {
-      throw new Error(`Unexpected entry in CMS bundle archive: ${header.path}`)
-    }
-    if ((header.flags & ZIP_DATA_DESCRIPTOR_FLAG) === 0) {
-      if (header.compressedSize !== archivedAsset.sizeBytes || header.uncompressedSize !== archivedAsset.sizeBytes) {
-        throw new Error(`Archive entry "${header.path}" size does not match the manifest`)
-      }
-    }
-
-    const asset = selectedMediaByArchivePath.get(header.path)
-    if (!asset) {
-      const crc = createCrc32()
-      await drainEntry(input.reader, archivedAsset.sizeBytes, crc)
-      if ((header.flags & ZIP_DATA_DESCRIPTOR_FLAG) !== 0) {
-        await input.reader.readAndValidateDataDescriptor({
-          crc32: crc.digest(),
-          sizeBytes: archivedAsset.sizeBytes,
-        })
-      }
-      allMediaByArchivePath.delete(header.path)
-      continue
-    }
-
-    const target = join(input.uploadsDir, asset.storagePath)
-    assertPathWithin(input.uploadsDir, target)
-    await mkdir(dirname(target), { recursive: true })
-
-    const crc = createCrc32()
-    await writeEntryToFile(input.reader, target, asset.sizeBytes, crc)
-    if ((header.flags & ZIP_DATA_DESCRIPTOR_FLAG) !== 0) {
-      await input.reader.readAndValidateDataDescriptor({
-        crc32: crc.digest(),
-        sizeBytes: asset.sizeBytes,
-      })
-    }
-
-    await importMediaAsset(input.db, {
-      id: asset.id,
-      filename: asset.filename,
-      mimeType: asset.mimeType,
-      sizeBytes: asset.sizeBytes,
-      storagePath: asset.storagePath,
-      publicPath: `/uploads/${asset.storagePath}`,
-      altText: asset.altText,
-      caption: asset.caption,
-      title: asset.title,
-      tags: asset.tags,
-      width: asset.width,
-      height: asset.height,
-      durationMs: asset.durationMs,
-      dominantColor: asset.dominantColor,
-      blurHash: asset.blurHash,
-      posterPath: asset.posterPath,
-    })
-
-    const targetFolders = asset.folderIds.filter((id) => input.importedFolderIds.has(id))
-    if (targetFolders.length > 0) {
-      await assignAssetToFolders(input.db, asset.id, { add: targetFolders })
-    }
-    allMediaByArchivePath.delete(header.path)
-    selectedMediaByArchivePath.delete(header.path)
-    imported++
   }
 }
 

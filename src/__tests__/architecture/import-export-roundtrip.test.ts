@@ -794,6 +794,61 @@ describe('archive import validation', () => {
     }
   })
 
+  test('rejects malformed replace archives before mutating existing data', async () => {
+    const uploadsDir = await mkdtemp(join(tmpdir(), 'instatic-import-atomic-media-'))
+    try {
+      const db = createSqliteClient(':memory:')
+      await runMigrations(db, sqliteMigrations)
+      const cookie = await seedRoundtripAuth(db, 'atomic-media@roundtrip.test')
+      const existingRow = await createDataRow(db, {
+        tableId: 'posts',
+        cells: { title: 'Keep me', slug: 'keep-me' },
+        slug: 'keep-me',
+      })
+      const manifest = {
+        schemaVersion: 1,
+        exportedAt: new Date().toISOString(),
+        tables: [],
+        rows: [],
+        media: [
+          {
+            id: 'asset-missing',
+            filename: 'missing.png',
+            mimeType: 'image/png',
+            sizeBytes: 4,
+            altText: '',
+            caption: '',
+            title: '',
+            tags: [],
+            width: null,
+            height: null,
+            durationMs: null,
+            dominantColor: null,
+            blurHash: null,
+            storagePath: 'missing.png',
+            posterPath: null,
+            folderIds: [],
+          },
+        ],
+      }
+      const archiveBytes = zipSync({
+        [BUNDLE_ARCHIVE_MANIFEST_PATH]: strToU8(JSON.stringify(manifest)),
+      }, { level: 0 })
+
+      const req = new Request('http://localhost/admin/api/cms/import/archive?strategy=replace', {
+        method: 'POST',
+        headers: { 'content-type': 'application/zip' },
+        body: archiveBytes,
+      })
+      req.headers.set('cookie', cookie)
+      const res = await handleImportArchiveRoute(req, db, { uploadsDir })
+      expect(res!.status).toBe(400)
+      expect(await getDataRow(db, existingRow.id)).not.toBeNull()
+    } finally {
+      await rm(uploadsDir, { recursive: true, force: true })
+    }
+  })
+
   test('merge-add archive import skips rows whose slug is already used locally', async () => {
     const uploadsDir = await mkdtemp(join(tmpdir(), 'instatic-import-slug-conflict-'))
     try {
