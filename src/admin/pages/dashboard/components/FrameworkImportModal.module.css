@@ -1,0 +1,145 @@
+/**
+ * FrameworkImportModal — two selectable mode cards inside the shared Dialog.
+ *
+ * Cards follow the borderless tile pattern: a lighter `--bg-surface-2` tone on
+ * the dialog body, a selection ring (not a recolored border) marks the active
+ * choice. Font sizes use the global fluid text scale; spacing uses the global
+ * space scale (admin token policy).
+ */
+
+.lede {
+    margin: 0 0 var(--space-4xl);
+    font-size: var(--text-m);
+    line-height: 1.5;
+    color: var(--text-muted);
+}
+
+.options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-xl);
+}
+
+.option {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-m);
+    padding: var(--space-3xl);
+    text-align: left;
+    background: var(--bg-surface-2);
+    border: 0;
+    border-radius: var(--panel-radius);
+    cursor: pointer;
+    transition:
+        background 120ms ease,
+        box-shadow 120ms ease;
+}
+
+.option:hover {
+    background: var(--bg-surface-3);
+}
+
+.option:disabled {
+    cursor: default;
+    opacity: 0.6;
+}
+
+.optionSelected {
+    box-shadow: inset 0 0 0 2px var(--canvas-selection-ring);
+}
+
+.optionSelected:hover {
+    background: var(--bg-surface-2);
+}
+
+.optionHead {
+    display: flex;
+    align-items: center;
+    gap: var(--space-m);
+}
+
+.optionIcon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius);
+    background: var(--bg-surface);
+    color: var(--text);
+}
+
+.optionTitle {
+    font-size: var(--text-l);
+    font-weight: 600;
+    color: var(--text-bright);
+}
+
+.optionTick {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--canvas-selection-ring);
+    color: var(--bg-surface);
+}
+
+.optionDesc {
+    font-size: var(--text-s);
+    line-height: 1.45;
+    color: var(--text-muted);
+}
+
+.optionBullets {
+    margin: var(--space-3xs) 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3xs);
+}
+
+.optionBullets li {
+    position: relative;
+    padding-left: var(--space-xl);
+    font-size: var(--text-xs);
+    line-height: 1.4;
+    color: var(--text-muted);
+}
+
+.optionBullets li::before {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: 6px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--text-muted);
+}
+
+.note {
+    margin: var(--space-3xl) 0 0;
+    padding: var(--space-m) var(--space-l);
+    font-size: var(--text-s);
+    line-height: 1.45;
+    color: var(--info-text);
+    background: var(--bg-surface-2);
+    border-radius: var(--radius);
+}
+
+.error {
+    margin: var(--space-xl) 0 0;
+    font-size: var(--text-s);
+    line-height: 1.45;
+    color: var(--danger-text);
+}
+
+@media (max-width: 560px) {
+    .options {
+        grid-template-columns: 1fr;
+    }
+}
