@@ -78,42 +78,37 @@ function getDOMPurify(): DOMPurifyRuntime | null {
   return null
 }
 
-// Mirror the proven server-side SVG sanitizer: remove the full block, THEN the
-// bare opener. Stripping `<script>…</script>` alone can leave a `<script`
-// opener behind (split-tag obfuscation / unbalanced tags), so each block regex
-// is paired with an opener regex that removes the residual `<script` / `<style`
-// — that pairing is what makes the `<script`/`<style` substring provably gone.
-// Close-tag patterns use `(?:[\s/][^>]*)?` because the HTML parser ends a tag
-// at the first `>` (`</script bar>` closes a script) — CodeQL js/bad-tag-filter.
-const FALLBACK_SCRIPT_BLOCK_RE = /<script\b[^>]*>[\s\S]*?<\/script(?:[\s/][^>]*)?>/gi
-const FALLBACK_SCRIPT_OPEN_RE = /<script\b[^>]*\/?>/gi
-const FALLBACK_STYLE_BLOCK_RE = /<style\b[^>]*>[\s\S]*?<\/style(?:[\s/][^>]*)?>/gi
-const FALLBACK_STYLE_OPEN_RE = /<style\b[^>]*\/?>/gi
-const FALLBACK_TAG_RE = /<[^>]*>/g
-
 /**
  * Regex HTML strip used ONLY when no DOMPurify runtime is available (one-off
- * scripts; browser + Bun server both configure DOMPurify). Iterates to a
- * fixpoint so split-tag obfuscation (`<scr<script>ipt>`) can't survive a single
- * pass — CodeQL js/incomplete-multi-character-sanitization. Each pass only
- * shrinks the string, so termination is guaranteed; the bound is defensive.
+ * scripts; browser + Bun server both configure DOMPurify).
+ *
+ * Three stages, each looped to a fixpoint with a single literal regex — the
+ * exact do-while-until-stable form CodeQL recognises as a complete sanitizer
+ * (js/incomplete-multi-character-sanitization). Looping matters because removing
+ * one match can reveal another: split-tag obfuscation `<scr<script>ipt>` only
+ * collapses after the inner match goes. Close tags use `(?:[\s/][^>]*)?` since
+ * the HTML parser ends a tag at the first `>` (js/bad-tag-filter). Each pass
+ * strictly shrinks the string, so every loop terminates.
+ *
+ * 1. drop `<script>…</script>` blocks (removes the JS source, not just the tag)
+ * 2. drop `<style>…</style>` blocks (CSS can carry `@import url(javascript:…)`)
+ * 3. drop every remaining tag, incl. bare/unbalanced `<script`/`<style` openers
  */
-function stripHtmlOnce(value: string): string {
-  return value
-    .replace(FALLBACK_SCRIPT_BLOCK_RE, '')
-    .replace(FALLBACK_SCRIPT_OPEN_RE, '')
-    .replace(FALLBACK_STYLE_BLOCK_RE, '')
-    .replace(FALLBACK_STYLE_OPEN_RE, '')
-    .replace(FALLBACK_TAG_RE, '')
-}
-
 function stripHtmlFallback(value: string): string {
   let current = value
-  for (let i = 0; i < 100; i++) {
-    const next = stripHtmlOnce(current)
-    if (next === current) return current
-    current = next
-  }
+  let previous: string
+  do {
+    previous = current
+    current = current.replace(/<script\b[^>]*>[\s\S]*?<\/script(?:[\s/][^>]*)?>/gi, '')
+  } while (current !== previous)
+  do {
+    previous = current
+    current = current.replace(/<style\b[^>]*>[\s\S]*?<\/style(?:[\s/][^>]*)?>/gi, '')
+  } while (current !== previous)
+  do {
+    previous = current
+    current = current.replace(/<[^>]*>/g, '')
+  } while (current !== previous)
   return current
 }
 
