@@ -78,12 +78,17 @@ function getDOMPurify(): DOMPurifyRuntime | null {
   return null
 }
 
-// Close-tag matcher mirrors the SVG sanitizer: the HTML parser ends a tag at
-// the first `>`, so `</script bar>` and `</script\t\n>` both close a script.
-// `(?:[\s/][^>]*)?` accepts that trailing junk; a bare `<\/x\s*>` missed it
-// (CodeQL js/bad-tag-filter).
-const FALLBACK_SCRIPT_RE = /<script\b[^>]*>[\s\S]*?<\/script(?:[\s/][^>]*)?>/gi
-const FALLBACK_STYLE_RE = /<style\b[^>]*>[\s\S]*?<\/style(?:[\s/][^>]*)?>/gi
+// Mirror the proven server-side SVG sanitizer: remove the full block, THEN the
+// bare opener. Stripping `<script>…</script>` alone can leave a `<script`
+// opener behind (split-tag obfuscation / unbalanced tags), so each block regex
+// is paired with an opener regex that removes the residual `<script` / `<style`
+// — that pairing is what makes the `<script`/`<style` substring provably gone.
+// Close-tag patterns use `(?:[\s/][^>]*)?` because the HTML parser ends a tag
+// at the first `>` (`</script bar>` closes a script) — CodeQL js/bad-tag-filter.
+const FALLBACK_SCRIPT_BLOCK_RE = /<script\b[^>]*>[\s\S]*?<\/script(?:[\s/][^>]*)?>/gi
+const FALLBACK_SCRIPT_OPEN_RE = /<script\b[^>]*\/?>/gi
+const FALLBACK_STYLE_BLOCK_RE = /<style\b[^>]*>[\s\S]*?<\/style(?:[\s/][^>]*)?>/gi
+const FALLBACK_STYLE_OPEN_RE = /<style\b[^>]*\/?>/gi
 const FALLBACK_TAG_RE = /<[^>]*>/g
 
 /**
@@ -97,8 +102,10 @@ function stripHtmlFallback(value: string): string {
   let current = value
   for (let i = 0; i < 100; i++) {
     const next = current
-      .replace(FALLBACK_SCRIPT_RE, '')
-      .replace(FALLBACK_STYLE_RE, '')
+      .replace(FALLBACK_SCRIPT_BLOCK_RE, '')
+      .replace(FALLBACK_SCRIPT_OPEN_RE, '')
+      .replace(FALLBACK_STYLE_BLOCK_RE, '')
+      .replace(FALLBACK_STYLE_OPEN_RE, '')
       .replace(FALLBACK_TAG_RE, '')
     if (next === current) return current
     current = next
