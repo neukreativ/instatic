@@ -40,6 +40,11 @@ import {
 import { bagToReactStyle } from '@core/publisher'
 import { getCanvasNodeClassIds, getCanvasNodeClassName } from './canvasNodeClassName'
 import { findEnclosingComponentRef, type AnnotatedPageNode } from './canvasSelectionUtils'
+import {
+  eventClickTarget,
+  isCanvasNodeEventForElement,
+  resolvePreferredCanvasNodeIdFromEvent,
+} from './canvasEventTarget'
 import { useLoopPreviewItems } from './useLoopPreviewItems'
 import styles from './NodeRenderer.module.css'
 
@@ -113,6 +118,9 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
   const { onNodeClick, onNodeHover, onNodeContextMenu, onNodeDoubleClick } = use(CanvasSelectionContext)
 
   const handleNodeClick = (clickedNodeId: string, e: React.MouseEvent) => {
+    const clickTarget = eventClickTarget(e)
+    const preferredNodeId =
+      resolvePreferredCanvasNodeIdFromEvent(clickTarget) ?? clickedNodeId
     // B3 — VC lock-down: redirect clicks inside inlined VC bodies to the ref node.
     // Imperative store access is correct here (event handler, not render path).
     const state = useEditorStore.getState()
@@ -121,16 +129,23 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
       if (page) {
         const enclosing = findEnclosingComponentRef(
           page.nodes as Record<string, AnnotatedPageNode>,
-          clickedNodeId,
+          preferredNodeId,
         )
         if (enclosing !== null && !enclosing.isInsideSlotContent) {
           // Clicked inside a VC body (not slot content) — route to the ref.
-          onNodeClick(enclosing.refId, e, breakpointId)
+          onNodeClick(enclosing.refId, e, breakpointId, clickTarget)
           return
         }
       }
     }
-    onNodeClick(clickedNodeId, e, breakpointId)
+    onNodeClick(preferredNodeId, e, breakpointId, clickTarget)
+  }
+
+  const handleNodeDoubleClick = (clickedNodeId: string, e: React.MouseEvent) => {
+    const clickTarget = eventClickTarget(e)
+    const preferredNodeId =
+      resolvePreferredCanvasNodeIdFromEvent(clickTarget) ?? clickedNodeId
+    onNodeDoubleClick(preferredNodeId, e, breakpointId)
   }
 
   const handleNodeContextMenu = (clickedNodeId: string, e: React.MouseEvent) => {
@@ -261,6 +276,7 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
     ...(inlineStyle ? { style: inlineStyle } : {}),
     ...(isHovered && !isSelected ? { 'data-hovered': 'true' as const } : {}),
     onPointerDownCapture: (e) => {
+      if (!isClosestCanvasNodeTarget(e.target, e.currentTarget)) return
       if (!shouldSuppressAuthoredFormControlEvent(e.target, e.currentTarget)) return
       e.preventDefault()
       e.stopPropagation()
@@ -268,6 +284,7 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
       handleNodeClick(nodeId, e as unknown as React.MouseEvent)
     },
     onMouseDownCapture: (e) => {
+      if (!isClosestCanvasNodeTarget(e.target, e.currentTarget)) return
       if (!shouldSuppressAuthoredFormControlEvent(e.target, e.currentTarget)) return
       e.preventDefault()
       e.stopPropagation()
@@ -303,7 +320,7 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
       if (isCanvasEditorControlTarget(e.target, e.currentTarget)) return
       e.preventDefault()
       e.stopPropagation()
-      onNodeDoubleClick(nodeId, e as unknown as React.MouseEvent, breakpointId)
+      handleNodeDoubleClick(nodeId, e as unknown as React.MouseEvent)
     },
     onDoubleClick: (e) => {
       if (!isClosestCanvasNodeTarget(e.target, e.currentTarget)) return
@@ -313,7 +330,7 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
       }
       e.preventDefault()
       e.stopPropagation()
-      onNodeDoubleClick(nodeId, e as unknown as React.MouseEvent, breakpointId)
+      handleNodeDoubleClick(nodeId, e as unknown as React.MouseEvent)
     },
     onContextMenuCapture: (e) => {
       if (!isClosestCanvasNodeTarget(e.target, e.currentTarget)) return
@@ -494,7 +511,6 @@ function LoopIterationsPreview({ node, baseTemplateContext }: LoopIterationsPrev
 // element the canvas does, so the canvas DOM matches the published DOM 1:1.
 
 const CANVAS_EDITOR_CONTROL_SELECTOR = '[data-canvas-interactive="true"]'
-const CANVAS_NODE_SELECTOR = '[data-node-id]'
 const CANVAS_FORM_CONTROL_SELECTOR = 'input, textarea, select, button, option, optgroup'
 let latestSuppressedPointerTarget: EventTarget | null = null
 
@@ -531,12 +547,7 @@ function isClosestCanvasNodeTarget(
   target: EventTarget | null,
   currentTarget: EventTarget | null,
 ): boolean {
-  if (!isElementLike(target) || !isElementLike(currentTarget)) {
-    return true
-  }
-
-  const closestNode = target.closest(CANVAS_NODE_SELECTOR)
-  return closestNode === currentTarget
+  return isCanvasNodeEventForElement(target, currentTarget)
 }
 
 function isCanvasEditorControlTarget(

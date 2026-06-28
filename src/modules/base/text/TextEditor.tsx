@@ -32,9 +32,7 @@ export const TextEditor: React.FC<ModuleComponentProps<TextStoredProps>> = ({
   // Editing: the element becomes the contentEditable surface (content seeded
   // from the frozen initial HTML inside inlineEditableElementProps). `tag: none`
   // has no published element, but an active edit session still needs a host —
-  // a `<span>` is the minimal one. This branch is effectively unreachable for
-  // tag:none from the canvas: the display branch below renders no element, so
-  // there is nothing to double-click to start a session.
+  // a `<span>` is the minimal one.
   if (inlineEdit) {
     const EditTag = (tag === 'none' ? 'span' : tag) as React.ElementType
     return React.createElement(EditTag, {
@@ -45,16 +43,19 @@ export const TextEditor: React.FC<ModuleComponentProps<TextStoredProps>> = ({
     })
   }
 
-  // Display: `tag: none` emits NO element, exactly like the publisher
-  // (`src/modules/base/text/index.ts` render() returns bare text). Wrapping it
-  // in any element here would let descendant selectors such as `.parent span`
-  // paint the text in the canvas while leaving the published page untouched —
-  // a canvas/publish fidelity break. Bare text keeps the canvas DOM identical
-  // to the published DOM. The cost: a tag:none node owns no element, so it has
-  // no in-canvas selection ring / hover / inline-edit; it is selected and
-  // edited via the Layers + Properties panels instead.
+  // Display: `tag: none` publishes bare text with no wrapper element. The canvas
+  // still needs a host for selection/hover/inline-edit, so wrap the fragment in
+  // a canvas-only inline span that carries the module's editor attributes.
   if (tag === 'none') {
-    return <BareText text={props.text ?? ''} />
+    return (
+      <span
+        {...nodeWrapperProps}
+        className={mcClassName}
+        data-instatic-canvas-text-host=""
+      >
+        <BareText text={props.text ?? ''} />
+      </span>
+    )
   }
 
   // Display: escaped text with newlines as <br>, matching the publisher.
