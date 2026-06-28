@@ -788,6 +788,56 @@ describe('LayoutSection — grid block', () => {
     expect(fourColsSegment.getAttribute('aria-pressed')).toBe('true')
   })
 
+  it('shows tablet grid columns on the mobile tab via viewport cascade', () => {
+    const { nodeId, classIds } = loadSiteWithClasses(1)
+    const clsId = classIds[0]
+    useEditorStore.getState().updateClassStyles(clsId, {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(4, 1fr)',
+    })
+    useEditorStore.getState().setClassContextStyles(clsId, 'tablet', {
+      gridTemplateColumns: 'repeat(3, 1fr)',
+    })
+    useEditorStore.setState({ activeBreakpointId: 'mobile' } as Parameters<typeof useEditorStore.setState>[0])
+    selectNode(nodeId)
+    render(<PropertiesPanel />)
+
+    fireEvent.click(screen.getByRole('button', { name: /edit class \.class-1/i }))
+
+    const columnGroup = screen.getByRole('group', { name: /grid template columns/i })
+    const threeColsSegment = columnGroup.querySelector('button[aria-label="3 tracks"]') as HTMLButtonElement
+    expect(threeColsSegment.getAttribute('aria-pressed')).toBe('true')
+
+    // Inherited from tablet — nothing stored on the mobile override bag.
+    expect(screen.queryByTestId('class-style-section-dot-layout')).toBeNull()
+  })
+
+  it('writes mobile-only overrides without touching tablet or base', () => {
+    const { nodeId, classIds } = loadSiteWithClasses(1)
+    const clsId = classIds[0]
+    useEditorStore.getState().updateClassStyles(clsId, {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(4, 1fr)',
+    })
+    useEditorStore.getState().setClassContextStyles(clsId, 'tablet', {
+      gridTemplateColumns: 'repeat(3, 1fr)',
+    })
+    useEditorStore.setState({ activeBreakpointId: 'mobile' } as Parameters<typeof useEditorStore.setState>[0])
+    selectNode(nodeId)
+    render(<PropertiesPanel />)
+
+    fireEvent.click(screen.getByRole('button', { name: /edit class \.class-1/i }))
+
+    const columnGroup = screen.getByRole('group', { name: /grid template columns/i })
+    const twoColsSegment = columnGroup.querySelector('button[aria-label="2 tracks"]') as HTMLButtonElement
+    fireEvent.click(twoColsSegment)
+
+    const rule = useEditorStore.getState().site!.styleRules[clsId]
+    expect(rule.styles.gridTemplateColumns).toBe('repeat(4, 1fr)')
+    expect(rule.contextStyles.tablet?.gridTemplateColumns).toBe('repeat(3, 1fr)')
+    expect(rule.contextStyles.mobile?.gridTemplateColumns).toBe('repeat(2, 1fr)')
+  })
+
   it('falls back to a custom-value chip when gridTemplateColumns is a non-preset template', () => {
     const { nodeId, classIds } = loadSiteWithClasses(1)
     const clsId = classIds[0]
