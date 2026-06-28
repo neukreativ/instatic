@@ -93,6 +93,7 @@ export function StyleSurface({
 }: StyleSurfaceProps) {
   // scrollRef → outer grid which is also the scroll container
   const scrollRef = useRef<HTMLDivElement>(null)
+  const lastStyleScrollKeyRef = useRef<string | null>(null)
   const [styleQuery, setStyleQuery] = useState('')
 
   // Active section + click-to-scroll behaviour (shared with SelectorInspector).
@@ -162,7 +163,6 @@ export function StyleSurface({
   })
 
   // Scroll to the first section that owns a set value matching the query.
-  const lastStyleScrollKeyRef = useRef<string | null>(null)
   useEffect(() => {
     const normalizedQuery = styleQuery.trim()
     if (!normalizedQuery || !activeClass) {
@@ -178,9 +178,8 @@ export function StyleSurface({
     lastStyleScrollKeyRef.current = scrollKey
     handleSectionClick(sectionId)
   }, [styleQuery, activeClassId, activeClass, activeContextId, handleSectionClick])
-  const sectionSetCounts = getClassStyleSectionSetCounts(storedStyles)
 
-  const clearStyleQuery = () => setStyleQuery('')
+  const sectionSetCounts = getClassStyleSectionSetCounts(storedStyles)
 
   // Module section visibility: always visible unless search has no match.
   const hasModuleContent = definition != null && moduleContent != null

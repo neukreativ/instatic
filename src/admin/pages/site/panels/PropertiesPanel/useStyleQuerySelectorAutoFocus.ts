@@ -1,11 +1,11 @@
 /**
- * useStyleQuerySelectorAutoFocus — when the style search query matches a set
- * property on another selector pill, activate that pill automatically.
+ * useStyleQuerySelectorAutoFocus — when the style search query changes, activate
+ * the strongest selector pill that already sets a property matching the query.
  *
  * Manual pill clicks are unaffected: this hook only reacts to query changes.
  */
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { isUserVisibleClass, type StyleRule } from '@core/page-tree'
 import { useEditorStore, selectActiveCanvasPage } from '@site/store/store'
 import { findRenderedCanvasNodeElement } from '@site/canvas/canvasNodeLookup'
@@ -32,12 +32,21 @@ export function useStyleQuerySelectorAutoFocus({
     nodeId ? selectActiveCanvasPage(s)?.nodes[nodeId] ?? null : null,
   )
   const setActiveClass = useEditorStore((s) => s.setActiveClass)
+  const lastAutoFocusQueryRef = useRef('')
 
   useEffect(() => {
     if (inlineStyleEditing || !nodeId || !site || !node) return
 
     const normalizedQuery = styleQuery.trim()
-    if (!normalizedQuery) return
+    if (!normalizedQuery) {
+      lastAutoFocusQueryRef.current = ''
+      return
+    }
+
+    // Only auto-focus when the query itself changes — not when the user
+    // manually clicks a different selector pill while the query stays put.
+    if (lastAutoFocusQueryRef.current === normalizedQuery) return
+    lastAutoFocusQueryRef.current = normalizedQuery
 
     const visibleRules = Object.fromEntries(
       Object.entries(site.styleRules).filter(([, rule]) => isUserVisibleClass(rule)),

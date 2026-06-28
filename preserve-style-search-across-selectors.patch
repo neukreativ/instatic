@@ -1,0 +1,509 @@
+From 4cadc429ada5d498c69c0d1cec133a4de4a04e50 Mon Sep 17 00:00:00 2001
+From: Martin Schenk <martin.schenk@neukreativ.com>
+Date: Sun, 28 Jun 2026 18:57:14 +0200
+Subject: [PATCH] Preserve style search when switching selector pills
+
+Keep the Properties panel style search query when authors click
+different selector pills on the same element, and auto-focus the
+strongest matching pill that already sets a property for the query.
+
+Co-authored-by: Cursor <cursoragent@cursor.com>
+---
+ src/__tests__/panels/styleQueryUtils.test.ts  |  89 +++++++++++
+ .../PropertiesPanel/StyleSectionsEditor.tsx   |  19 +--
+ .../panels/PropertiesPanel/StyleSurface.tsx   |  59 +++++--
+ .../panels/PropertiesPanel/styleQueryUtils.ts | 146 ++++++++++++++++++
+ .../useStyleQuerySelectorAutoFocus.ts         |  75 +++++++++
+ 5 files changed, 360 insertions(+), 28 deletions(-)
+ create mode 100644 src/__tests__/panels/styleQueryUtils.test.ts
+ create mode 100644 src/admin/pages/site/panels/PropertiesPanel/styleQueryUtils.ts
+ create mode 100644 src/admin/pages/site/panels/PropertiesPanel/useStyleQuerySelectorAutoFocus.ts
+
+diff --git a/src/__tests__/panels/styleQueryUtils.test.ts b/src/__tests__/panels/styleQueryUtils.test.ts
+new file mode 100644
+index 00000000..70ce6dba
+--- /dev/null
++++ b/src/__tests__/panels/styleQueryUtils.test.ts
+@@ -0,0 +1,89 @@
++import { describe, expect, it } from 'bun:test'
++import type { StyleRule } from '@core/page-tree'
++import type { SelectorPillItem } from '@site/panels/PropertiesPanel/selectorPickerModel'
++import {
++  findBestSelectorForStyleQuery,
++  findFirstMatchingStyleSectionId,
++  resolveAutoFocusSelectorForStyleQuery,
++  ruleHasSetPropertyMatchingQuery,
++} from '@site/panels/PropertiesPanel/styleQueryUtils'
++
++function makeRule(
++  id: string,
++  name: string,
++  styles: Record<string, unknown> = {},
++): StyleRule {
++  return {
++    id,
++    name,
++    kind: 'class',
++    selector: `.${name}`,
++    order: 0,
++    styles,
++    contextStyles: {},
++  }
++}
++
++function pill(rule: StyleRule): SelectorPillItem {
++  return {
++    rule,
++    match: { kind: 'direct' },
++    active: false,
++    removable: true,
++  }
++}
++
++describe('styleQueryUtils', () => {
++  it('detects set border properties matching a section query', () => {
++    const rule = makeRule('soft', 'soft', { borderTopWidth: '1px' })
++    expect(ruleHasSetPropertyMatchingQuery(rule, 'border', null)).toBe(true)
++    expect(ruleHasSetPropertyMatchingQuery(rule, 'typography', null)).toBe(false)
++  })
++
++  it('prefers the strongest selector pill that owns a set match', () => {
++    const section = makeRule('section', 'section')
++    const soft = makeRule('soft', 'soft', { borderTopWidth: '2px' })
++    const pills = [pill(section), pill(soft)]
++
++    expect(findBestSelectorForStyleQuery(pills, 'border', null)).toBe('soft')
++  })
++
++  it('does not auto-focus when the active rule already has a set match', () => {
++    const section = makeRule('section', 'section', { borderTopWidth: '1px' })
++    const soft = makeRule('soft', 'soft', { borderTopWidth: '2px' })
++    const pills = [pill(section), pill(soft)]
++
++    expect(
++      resolveAutoFocusSelectorForStyleQuery({
++        query: 'border',
++        pills,
++        activeClassId: 'section',
++        activeContextId: null,
++        activeClass: section,
++      }),
++    ).toBeNull()
++  })
++
++  it('auto-focuses the strongest selector when the active rule lacks a set match', () => {
++    const section = makeRule('section', 'section')
++    const soft = makeRule('soft', 'soft', { borderTopWidth: '2px' })
++    const pills = [pill(section), pill(soft)]
++
++    expect(
++      resolveAutoFocusSelectorForStyleQuery({
++        query: 'border',
++        pills,
++        activeClassId: 'section',
++        activeContextId: null,
++        activeClass: section,
++      }),
++    ).toBe('soft')
++  })
++
++  it('finds the first section id with a set matching property', () => {
++    expect(
++      findFirstMatchingStyleSectionId({ borderTopWidth: '1px' }, 'border'),
++    ).toBe('border')
++    expect(findFirstMatchingStyleSectionId({}, 'border')).toBeNull()
++  })
++})
+diff --git a/src/admin/pages/site/panels/PropertiesPanel/StyleSectionsEditor.tsx b/src/admin/pages/site/panels/PropertiesPanel/StyleSectionsEditor.tsx
+index 8882dd31..d4f99913 100644
+--- a/src/admin/pages/site/panels/PropertiesPanel/StyleSectionsEditor.tsx
++++ b/src/admin/pages/site/panels/PropertiesPanel/StyleSectionsEditor.tsx
+@@ -22,10 +22,13 @@ import { LayoutSection } from './LayoutSection'
+ import { PositionSection } from './PositionSection'
+ import {
+   CLASS_STYLE_SECTIONS,
+-  cssPropertyLabel,
+   getCSSPropertyDefaultValue,
+   type ClassStyleSectionDefinition,
+ } from './cssControlTypes'
++import {
++  propertyMatchesStyleQuery,
++  sectionMatchesStyleQuery,
++} from './styleQueryUtils'
+ import { hasStyleValue } from './styleValueUtils'
+ import { useEditorPreference } from '@site/preferences/editorPreferences'
+ import styles from './StyleRuleComposer.module.css'
+@@ -338,18 +341,8 @@ function getVisibleStyleSections(query: string): ReadonlyArray<ClassStyleSection
+     properties: section.properties.filter(
+       (prop) =>
+         !normalizedQuery ||
+-        sectionMatchesQuery(section, normalizedQuery) ||
+-        propertyMatchesQuery(prop, normalizedQuery),
++        sectionMatchesStyleQuery(section, normalizedQuery) ||
++        propertyMatchesStyleQuery(prop, normalizedQuery),
+     ),
+   })).filter((section) => section.properties.length > 0)
+ }
+-
+-function sectionMatchesQuery(section: ClassStyleSectionDefinition, query: string): boolean {
+-  return section.id.toLowerCase().includes(query) || section.title.toLowerCase().includes(query)
+-}
+-
+-function propertyMatchesQuery(prop: keyof CSSPropertyBag, query: string): boolean {
+-  const raw = String(prop).toLowerCase()
+-  const label = cssPropertyLabel(String(prop)).toLowerCase()
+-  return raw.includes(query) || label.includes(query)
+-}
+diff --git a/src/admin/pages/site/panels/PropertiesPanel/StyleSurface.tsx b/src/admin/pages/site/panels/PropertiesPanel/StyleSurface.tsx
+index 310d6d06..4ef7b840 100644
+--- a/src/admin/pages/site/panels/PropertiesPanel/StyleSurface.tsx
++++ b/src/admin/pages/site/panels/PropertiesPanel/StyleSurface.tsx
+@@ -8,11 +8,11 @@
+  *   1. Module settings — wrapped in a Section accordion, always first.
+  *   2. CSS area — StyleRuleComposer (all CSS sections) or locked preview.
+  *
+- * The search bar is bound to the active editable class and filters across
+- * module settings (by prop key/label) and the class's CSS properties
+- * simultaneously. It is hidden when there is no active class (locked
+- * preview) or when the active class is a locked generated utility — neither
+- * state has editable CSS rows to search.
++ * The search bar filters module settings and CSS properties for the active
++ * selector. The query persists when switching selector pills on the same
++ * element so authors can hunt a property across selectors; it resets only
++ * when the selected node changes. Typing a query auto-activates the strongest
++ * matching selector pill that already sets a matching property.
+  *
+  * Rail icons are scroll-anchor shortcuts; the active icon is derived from
+  * scroll position.
+@@ -21,7 +21,7 @@
+  *   Module section and Module rail button are hidden.
+  */
+ 
+-import { useState, useRef, type ReactNode } from 'react'
++import { useState, useRef, useEffect, type ReactNode } from 'react'
+ import { useEditorStore } from '@site/store/store'
+ import type { AnyModuleDefinition } from '@core/module-engine'
+ import type { StyleRule, CSSPropertyBag } from '@core/page-tree'
+@@ -34,6 +34,8 @@ import { InlineStyleComposer } from './InlineStyleComposer'
+ import { ClassPropertyRow } from './ClassPropertyRow'
+ import { StyleCategoryRail, MODULE_CATEGORY_ID } from './StyleCategoryRail'
+ import { useScrollSpy } from './useScrollSpy'
++import { useStyleQuerySelectorAutoFocus } from './useStyleQuerySelectorAutoFocus'
++import { findFirstMatchingStyleSectionId } from './styleQueryUtils'
+ import {
+   CLASS_STYLE_SECTIONS,
+   getCSSPropertyDefaultValue,
+@@ -103,13 +105,16 @@ export function StyleSurface({
+     resetKey: nodeId,
+   })
+ 
+-  // Reset search query when active class changes (no state leak between pills).
+-  const [lastActiveClassId, setLastActiveClassId] = useState<string | null>(null)
+-  if (lastActiveClassId !== activeClassId) {
+-    setLastActiveClassId(activeClassId)
++  // Reset search when the selected node changes — not when switching selector
++  // pills, so authors can hunt a property across selectors with one query.
++  const [lastNodeId, setLastNodeId] = useState<string | null>(null)
++  if (lastNodeId !== nodeId) {
++    setLastNodeId(nodeId)
+     if (styleQuery !== '') setStyleQuery('')
+   }
+ 
++  const clearStyleQuery = () => setStyleQuery('')
++
+   // Inline-vs-class edit target lives in the store (mutually exclusive with the
+   // active class; reset on selection change in selectionSlice).
+   const inlineStyleEditing = useEditorStore((s) => s.inlineStyleEditing)
+@@ -120,8 +125,6 @@ export function StyleSurface({
+   // sections receive it through StyleRuleComposer → StyleSectionsEditor.
+   const sectionsExpanded = useEditorPreference('propertiesSectionsExpanded')
+ 
+-  const clearStyleQuery = () => setStyleQuery('')
+-
+   // Rail dot badges from stored styles at the active editing context. The
+   // context switcher (canvas toolbar) can target a custom condition, which
+   // wins over the viewport breakpoint; otherwise we fall back to the
+@@ -141,9 +144,6 @@ export function StyleSurface({
+   // base-only, so the breakpoint/condition context is irrelevant here.
+   const permissions = useEditorPermissions()
+   const canEditStyleHere = permissions.canEditStyle
+-  // `inlineStyleEditing` is the single source of truth for the edit target
+-  // (seeded on selection for inline-only nodes, toggled via the Inline pill /
+-  // "Style inline" button). It's mutually exclusive with an active class.
+   const showInline = canEditStyleHere && nodeId != null && activeClass == null && inlineStyleEditing
+ 
+   const storedStyles: Record<string, unknown> = showInline
+@@ -151,8 +151,37 @@ export function StyleSurface({
+     : activeClass
+       ? (activeContextId ? (activeClass.contextStyles[activeContextId] ?? {}) : activeClass.styles)
+       : {}
++
++  useStyleQuerySelectorAutoFocus({
++    nodeId,
++    styleQuery,
++    activeClassId,
++    activeClass,
++    activeContextId,
++    inlineStyleEditing,
++  })
++
++  // Scroll to the first section that owns a set value matching the query.
++  const lastStyleScrollKeyRef = useRef<string | null>(null)
++  useEffect(() => {
++    const normalizedQuery = styleQuery.trim()
++    if (!normalizedQuery || !activeClass) {
++      lastStyleScrollKeyRef.current = null
++      return
++    }
++    const stylesForScroll = activeContextId
++      ? (activeClass.contextStyles[activeContextId] ?? {})
++      : activeClass.styles
++    const sectionId = findFirstMatchingStyleSectionId(stylesForScroll, normalizedQuery)
++    const scrollKey = `${activeClassId ?? ''}:${activeContextId ?? ''}:${normalizedQuery}:${sectionId ?? ''}`
++    if (!sectionId || lastStyleScrollKeyRef.current === scrollKey) return
++    lastStyleScrollKeyRef.current = scrollKey
++    handleSectionClick(sectionId)
++  }, [styleQuery, activeClassId, activeClass, activeContextId, handleSectionClick])
+   const sectionSetCounts = getClassStyleSectionSetCounts(storedStyles)
+ 
++  const clearStyleQuery = () => setStyleQuery('')
++
+   // Module section visibility: always visible unless search has no match.
+   const hasModuleContent = definition != null && moduleContent != null
+   const moduleVisible = hasModuleContent && (!styleQuery || moduleMatchesQuery(styleQuery, definition!))
+diff --git a/src/admin/pages/site/panels/PropertiesPanel/styleQueryUtils.ts b/src/admin/pages/site/panels/PropertiesPanel/styleQueryUtils.ts
+new file mode 100644
+index 00000000..c0126b25
+--- /dev/null
++++ b/src/admin/pages/site/panels/PropertiesPanel/styleQueryUtils.ts
+@@ -0,0 +1,146 @@
++/**
++ * styleQueryUtils — shared style-search matching + selector auto-focus helpers.
++ *
++ * Used by StyleSurface (preserve search across selector pills + auto-jump to
++ * the pill whose rule actually sets a property matching the query) and by
++ * StyleSectionsEditor (filter visible property rows).
++ */
++
++import type { CSSPropertyBag, StyleRule } from '@core/page-tree'
++import {
++  CLASS_STYLE_SECTIONS,
++  cssPropertyLabel,
++  type ClassStyleSectionDefinition,
++} from './cssControlTypes'
++import { hasStyleValue } from './styleValueUtils'
++import type { SelectorPillItem } from './selectorPickerModel'
++
++export function propertyMatchesStyleQuery(
++  prop: keyof CSSPropertyBag,
++  query: string,
++): boolean {
++  const normalizedQuery = query.trim().toLowerCase()
++  if (!normalizedQuery) return true
++  const raw = String(prop).toLowerCase()
++  const label = cssPropertyLabel(String(prop)).toLowerCase()
++  return raw.includes(normalizedQuery) || label.includes(normalizedQuery)
++}
++
++export function sectionMatchesStyleQuery(
++  section: ClassStyleSectionDefinition,
++  query: string,
++): boolean {
++  const normalizedQuery = query.trim().toLowerCase()
++  if (!normalizedQuery) return true
++  return (
++    section.id.toLowerCase().includes(normalizedQuery) ||
++    section.title.toLowerCase().includes(normalizedQuery)
++  )
++}
++
++export function resolveRuleStoredStyles(
++  rule: StyleRule,
++  activeContextId: string | null,
++): Record<string, unknown> {
++  return activeContextId ? (rule.contextStyles[activeContextId] ?? {}) : rule.styles
++}
++
++/** True when the rule has at least one *set* property matching the query. */
++export function ruleHasSetPropertyMatchingQuery(
++  rule: StyleRule,
++  query: string,
++  activeContextId: string | null,
++): boolean {
++  const normalizedQuery = query.trim()
++  if (!normalizedQuery) return false
++
++  const storedStyles = resolveRuleStoredStyles(rule, activeContextId)
++
++  for (const section of CLASS_STYLE_SECTIONS) {
++    const sectionMatches = sectionMatchesStyleQuery(section, normalizedQuery)
++    for (const prop of section.properties) {
++      const propertyMatches =
++        sectionMatches || propertyMatchesStyleQuery(prop, normalizedQuery)
++      if (propertyMatches && hasStyleValue(storedStyles[prop])) {
++        return true
++      }
++    }
++  }
++
++  return false
++}
++
++/**
++ * Among the element's selector pills (weakest → strongest), return the id of
++ * the strongest rule that has a set property matching the query.
++ */
++export function findBestSelectorForStyleQuery(
++  pills: readonly SelectorPillItem[],
++  query: string,
++  activeContextId: string | null,
++): string | null {
++  const normalizedQuery = query.trim()
++  if (!normalizedQuery) return null
++
++  for (let i = pills.length - 1; i >= 0; i--) {
++    const { rule } = pills[i]
++    if (ruleHasSetPropertyMatchingQuery(rule, normalizedQuery, activeContextId)) {
++      return rule.id
++    }
++  }
++
++  return null
++}
++
++/**
++ * When the user searches style properties, auto-focus the selector pill that
++ * actually owns a matching set value — but only if the currently active rule
++ * does not already have one.
++ */
++export function resolveAutoFocusSelectorForStyleQuery(input: {
++  query: string
++  pills: readonly SelectorPillItem[]
++  activeClassId: string | null
++  activeContextId: string | null
++  activeClass: StyleRule | null
++}): string | null {
++  const { query, pills, activeClassId, activeContextId, activeClass } = input
++  const normalizedQuery = query.trim()
++  if (!normalizedQuery || pills.length === 0) return null
++
++  if (
++    activeClass &&
++    ruleHasSetPropertyMatchingQuery(activeClass, normalizedQuery, activeContextId)
++  ) {
++    return null
++  }
++
++  const bestId = findBestSelectorForStyleQuery(
++    pills,
++    normalizedQuery,
++    activeContextId,
++  )
++  if (!bestId || bestId === activeClassId) return null
++  return bestId
++}
++
++/** First curated section id with a set property matching the query. */
++export function findFirstMatchingStyleSectionId(
++  storedStyles: Record<string, unknown>,
++  query: string,
++): string | null {
++  const normalizedQuery = query.trim()
++  if (!normalizedQuery) return null
++
++  for (const section of CLASS_STYLE_SECTIONS) {
++    const hasSetMatch = section.properties.some(
++      (prop) =>
++        (sectionMatchesStyleQuery(section, normalizedQuery) ||
++          propertyMatchesStyleQuery(prop, normalizedQuery)) &&
++        hasStyleValue(storedStyles[prop]),
++    )
++    if (hasSetMatch) return section.id
++  }
++
++  return null
++}
+diff --git a/src/admin/pages/site/panels/PropertiesPanel/useStyleQuerySelectorAutoFocus.ts b/src/admin/pages/site/panels/PropertiesPanel/useStyleQuerySelectorAutoFocus.ts
+new file mode 100644
+index 00000000..84b8809d
+--- /dev/null
++++ b/src/admin/pages/site/panels/PropertiesPanel/useStyleQuerySelectorAutoFocus.ts
+@@ -0,0 +1,75 @@
++/**
++ * useStyleQuerySelectorAutoFocus — when the style search query matches a set
++ * property on another selector pill, activate that pill automatically.
++ *
++ * Manual pill clicks are unaffected: this hook only reacts to query changes.
++ */
++
++import { useEffect } from 'react'
++import { isUserVisibleClass, type StyleRule } from '@core/page-tree'
++import { useEditorStore, selectActiveCanvasPage } from '@site/store/store'
++import { findRenderedCanvasNodeElement } from '@site/canvas/canvasNodeLookup'
++import { deriveSelectorPickerModel } from './selectorPickerModel'
++import { resolveAutoFocusSelectorForStyleQuery } from './styleQueryUtils'
++
++export function useStyleQuerySelectorAutoFocus({
++  nodeId,
++  styleQuery,
++  activeClassId,
++  activeClass,
++  activeContextId,
++  inlineStyleEditing,
++}: {
++  nodeId: string | null
++  styleQuery: string
++  activeClassId: string | null
++  activeClass: StyleRule | null
++  activeContextId: string | null
++  inlineStyleEditing: boolean
++}): void {
++  const site = useEditorStore((s) => s.site)
++  const node = useEditorStore((s) =>
++    nodeId ? selectActiveCanvasPage(s)?.nodes[nodeId] ?? null : null,
++  )
++  const setActiveClass = useEditorStore((s) => s.setActiveClass)
++
++  useEffect(() => {
++    if (inlineStyleEditing || !nodeId || !site || !node) return
++
++    const normalizedQuery = styleQuery.trim()
++    if (!normalizedQuery) return
++
++    const visibleRules = Object.fromEntries(
++      Object.entries(site.styleRules).filter(([, rule]) => isUserVisibleClass(rule)),
++    )
++    const selectedElement = findRenderedCanvasNodeElement(nodeId)
++    const { pills } = deriveSelectorPickerModel({
++      rules: visibleRules,
++      node,
++      selectedElement,
++      activeRuleId: activeClassId,
++    })
++
++    const nextActiveId = resolveAutoFocusSelectorForStyleQuery({
++      query: normalizedQuery,
++      pills,
++      activeClassId,
++      activeContextId,
++      activeClass,
++    })
++
++    if (nextActiveId) {
++      setActiveClass(nextActiveId)
++    }
++  }, [
++    styleQuery,
++    nodeId,
++    site,
++    node,
++    activeClassId,
++    activeClass,
++    activeContextId,
++    inlineStyleEditing,
++    setActiveClass,
++  ])
++}
+-- 
+2.50.1 (Apple Git-155)
+
