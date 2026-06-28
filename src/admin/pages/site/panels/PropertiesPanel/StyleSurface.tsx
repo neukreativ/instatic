@@ -8,11 +8,11 @@
  *   1. Module settings — wrapped in a Section accordion, always first.
  *   2. CSS area — StyleRuleComposer (all CSS sections) or locked preview.
  *
- * The search bar is bound to the active editable class and filters across
- * module settings (by prop key/label) and the class's CSS properties
- * simultaneously. It is hidden when there is no active class (locked
- * preview) or when the active class is a locked generated utility — neither
- * state has editable CSS rows to search.
+ * The search bar filters module settings and CSS properties for the active
+ * selector. The query persists when switching selector pills on the same
+ * element so authors can hunt a property across selectors; it resets only
+ * when the selected node changes. Typing a query auto-activates the strongest
+ * matching selector pill that already sets a matching property.
  *
  * Rail icons are scroll-anchor shortcuts; the active icon is derived from
  * scroll position.
@@ -21,7 +21,7 @@
  *   Module section and Module rail button are hidden.
  */
 
-import { useState, useRef, type ReactNode } from 'react'
+import { useState, useRef, useEffect, type ReactNode } from 'react'
 import { useEditorStore } from '@site/store/store'
 import type { AnyModuleDefinition } from '@core/module-engine'
 import type { StyleRule, CSSPropertyBag } from '@core/page-tree'
@@ -34,6 +34,8 @@ import { InlineStyleComposer } from './InlineStyleComposer'
 import { ClassPropertyRow } from './ClassPropertyRow'
 import { StyleCategoryRail, MODULE_CATEGORY_ID } from './StyleCategoryRail'
 import { useScrollSpy } from './useScrollSpy'
+import { useStyleQuerySelectorAutoFocus } from './useStyleQuerySelectorAutoFocus'
+import { findFirstMatchingStyleSectionId } from './styleQueryUtils'
 import {
   CLASS_STYLE_SECTIONS,
   getCSSPropertyDefaultValue,
@@ -103,12 +105,15 @@ export function StyleSurface({
     resetKey: nodeId,
   })
 
-  // Reset search query when active class changes (no state leak between pills).
-  const [lastActiveClassId, setLastActiveClassId] = useState<string | null>(null)
-  if (lastActiveClassId !== activeClassId) {
-    setLastActiveClassId(activeClassId)
+  // Reset search when the selected node changes — not when switching selector
+  // pills, so authors can hunt a property across selectors with one query.
+  const [lastNodeId, setLastNodeId] = useState<string | null>(null)
+  if (lastNodeId !== nodeId) {
+    setLastNodeId(nodeId)
     if (styleQuery !== '') setStyleQuery('')
   }
+
+  const clearStyleQuery = () => setStyleQuery('')
 
   // Inline-vs-class edit target lives in the store (mutually exclusive with the
   // active class; reset on selection change in selectionSlice).
@@ -119,8 +124,6 @@ export function StyleSurface({
   // by the `propertiesSectionsExpanded` preference. Read once here; the CSS
   // sections receive it through StyleRuleComposer → StyleSectionsEditor.
   const sectionsExpanded = useEditorPreference('propertiesSectionsExpanded')
-
-  const clearStyleQuery = () => setStyleQuery('')
 
   // Rail dot badges from stored styles at the active editing context. The
   // context switcher (canvas toolbar) can target a custom condition, which
@@ -141,9 +144,6 @@ export function StyleSurface({
   // base-only, so the breakpoint/condition context is irrelevant here.
   const permissions = useEditorPermissions()
   const canEditStyleHere = permissions.canEditStyle
-  // `inlineStyleEditing` is the single source of truth for the edit target
-  // (seeded on selection for inline-only nodes, toggled via the Inline pill /
-  // "Style inline" button). It's mutually exclusive with an active class.
   const showInline = canEditStyleHere && nodeId != null && activeClass == null && inlineStyleEditing
 
   const storedStyles: Record<string, unknown> = showInline
@@ -151,7 +151,36 @@ export function StyleSurface({
     : activeClass
       ? (activeContextId ? (activeClass.contextStyles[activeContextId] ?? {}) : activeClass.styles)
       : {}
+
+  useStyleQuerySelectorAutoFocus({
+    nodeId,
+    styleQuery,
+    activeClassId,
+    activeClass,
+    activeContextId,
+    inlineStyleEditing,
+  })
+
+  // Scroll to the first section that owns a set value matching the query.
+  const lastStyleScrollKeyRef = useRef<string | null>(null)
+  useEffect(() => {
+    const normalizedQuery = styleQuery.trim()
+    if (!normalizedQuery || !activeClass) {
+      lastStyleScrollKeyRef.current = null
+      return
+    }
+    const stylesForScroll = activeContextId
+      ? (activeClass.contextStyles[activeContextId] ?? {})
+      : activeClass.styles
+    const sectionId = findFirstMatchingStyleSectionId(stylesForScroll, normalizedQuery)
+    const scrollKey = `${activeClassId ?? ''}:${activeContextId ?? ''}:${normalizedQuery}:${sectionId ?? ''}`
+    if (!sectionId || lastStyleScrollKeyRef.current === scrollKey) return
+    lastStyleScrollKeyRef.current = scrollKey
+    handleSectionClick(sectionId)
+  }, [styleQuery, activeClassId, activeClass, activeContextId, handleSectionClick])
   const sectionSetCounts = getClassStyleSectionSetCounts(storedStyles)
+
+  const clearStyleQuery = () => setStyleQuery('')
 
   // Module section visibility: always visible unless search has no match.
   const hasModuleContent = definition != null && moduleContent != null

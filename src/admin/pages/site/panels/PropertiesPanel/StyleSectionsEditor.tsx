@@ -22,10 +22,13 @@ import { LayoutSection } from './LayoutSection'
 import { PositionSection } from './PositionSection'
 import {
   CLASS_STYLE_SECTIONS,
-  cssPropertyLabel,
   getCSSPropertyDefaultValue,
   type ClassStyleSectionDefinition,
 } from './cssControlTypes'
+import {
+  propertyMatchesStyleQuery,
+  sectionMatchesStyleQuery,
+} from './styleQueryUtils'
 import { hasStyleValue } from './styleValueUtils'
 import { useEditorPreference } from '@site/preferences/editorPreferences'
 import styles from './StyleRuleComposer.module.css'
@@ -338,18 +341,8 @@ function getVisibleStyleSections(query: string): ReadonlyArray<ClassStyleSection
     properties: section.properties.filter(
       (prop) =>
         !normalizedQuery ||
-        sectionMatchesQuery(section, normalizedQuery) ||
-        propertyMatchesQuery(prop, normalizedQuery),
+        sectionMatchesStyleQuery(section, normalizedQuery) ||
+        propertyMatchesStyleQuery(prop, normalizedQuery),
     ),
   })).filter((section) => section.properties.length > 0)
-}
-
-function sectionMatchesQuery(section: ClassStyleSectionDefinition, query: string): boolean {
-  return section.id.toLowerCase().includes(query) || section.title.toLowerCase().includes(query)
-}
-
-function propertyMatchesQuery(prop: keyof CSSPropertyBag, query: string): boolean {
-  const raw = String(prop).toLowerCase()
-  const label = cssPropertyLabel(String(prop)).toLowerCase()
-  return raw.includes(query) || label.includes(query)
 }
