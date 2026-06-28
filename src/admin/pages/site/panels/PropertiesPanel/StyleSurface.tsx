@@ -33,6 +33,7 @@ import { StyleRuleComposer } from './StyleRuleComposer'
 import { InlineStyleComposer } from './InlineStyleComposer'
 import { ClassPropertyRow } from './ClassPropertyRow'
 import { StyleCategoryRail, MODULE_CATEGORY_ID } from './StyleCategoryRail'
+import { isContentTextModuleId } from '@site/canvas/canvasEventTarget'
 import { useScrollSpy } from './useScrollSpy'
 import { useStyleQuerySelectorAutoFocus } from './useStyleQuerySelectorAutoFocus'
 import { findFirstMatchingStyleSectionId } from './styleQueryUtils'
@@ -42,7 +43,8 @@ import {
   getClassStyleSectionSetCounts,
   getActiveStyleTab,
 } from './cssControlTypes'
-import { useEditorPreference } from '@site/preferences/editorPreferences'
+import { usePropertiesSectionsMode } from '@site/preferences/editorPreferences'
+import { resolveSectionDefaultOpen } from './propertiesSectionsMode'
 import { useEditorPermissions } from '@site/editorPermissionsContext'
 import { EmptyState } from '@ui/components/EmptyState'
 import styles from './StyleSurface.module.css'
@@ -122,9 +124,9 @@ export function StyleSurface({
   const setInlineStyleEditing = useEditorStore((s) => s.setInlineStyleEditing)
 
   // Default open/closed state for every property section (Module + CSS), driven
-  // by the `propertiesSectionsExpanded` preference. Read once here; the CSS
+  // by the `propertiesSectionsMode` preference. Read once here; the CSS
   // sections receive it through StyleRuleComposer → StyleSectionsEditor.
-  const sectionsExpanded = useEditorPreference('propertiesSectionsExpanded')
+  const sectionsMode = usePropertiesSectionsMode()
 
   // Rail dot badges from stored styles at the active editing context. The
   // context switcher (canvas toolbar) can target a custom condition, which
@@ -184,6 +186,14 @@ export function StyleSurface({
   // Module section visibility: always visible unless search has no match.
   const hasModuleContent = definition != null && moduleContent != null
   const moduleVisible = hasModuleContent && (!styleQuery || moduleMatchesQuery(styleQuery, definition!))
+
+  // In "active expanded" mode, open the Module section when this element's
+  // copy is edited there (Text, Button label, childless Link text, …) — not
+  // for canvas inline editing, but so the right-side fields are visible.
+  const moduleSectionOpen = resolveSectionDefaultOpen(
+    sectionsMode,
+    isContentTextModuleId(definition?.id) ? 1 : 0,
+  )
 
   // The search bar is bound to the active class — both its placeholder and
   // the rows it filters belong to that class. It only renders when the class
@@ -280,9 +290,10 @@ export function StyleSurface({
         {moduleVisible && (
           <div data-style-section={MODULE_CATEGORY_ID}>
             <Section
+              key={`module-${nodeId}`}
               title={definition!.name}
               icon={ModuleIcon}
-              defaultOpen={sectionsExpanded}
+              defaultOpen={moduleSectionOpen}
               flush
             >
               {/* sectionBody gives the same display:grid + gap as CSS sections.

@@ -30,7 +30,8 @@ import {
   sectionMatchesStyleQuery,
 } from './styleQueryUtils'
 import { hasStyleValue } from './styleValueUtils'
-import { useEditorPreference } from '@site/preferences/editorPreferences'
+import { usePropertiesSectionsMode } from '@site/preferences/editorPreferences'
+import { resolveSectionDefaultOpen } from './propertiesSectionsMode'
 import styles from './StyleRuleComposer.module.css'
 import sectionStyles from '@ui/components/Section/Section.module.css'
 
@@ -80,7 +81,7 @@ export function StyleSectionsEditor({
   const visibleStyleSections = getVisibleStyleSections(styleQuery)
 
   // Default open/closed state for every section, from the user preference.
-  const sectionsExpanded = useEditorPreference('propertiesSectionsExpanded')
+  const sectionsMode = usePropertiesSectionsMode()
 
   return (
     <div className={styles.styleSections}>
@@ -91,7 +92,11 @@ export function StyleSectionsEditor({
             currentStyles={currentStyles}
             storedStyles={storedStyles}
             activeTab={sectionKey}
-            defaultOpen={sectionsExpanded}
+            defaultOpen={resolveSectionDefaultOpen(
+              sectionsMode,
+              section.properties.filter((prop) => hasStyleValue(storedStyles[prop])).length,
+            )}
+            sectionResetKey={sectionKey}
             onChange={onChange}
             onRemove={onRemove}
             onClearProperty={onClearProperty}
@@ -108,7 +113,7 @@ export function StyleSectionsEditor({
           <CustomPropertiesSection
             key={sectionKey}
             storedStyles={storedStyles}
-            defaultOpen={sectionsExpanded}
+            sectionsMode={sectionsMode}
             onChange={onChange}
             onRemove={onRemove}
           />
@@ -130,8 +135,9 @@ interface StyleSectionGroupProps {
   currentStyles: Record<string, unknown>
   storedStyles: Record<string, unknown>
   activeTab: string
-  /** Initial open/closed state, from the `propertiesSectionsExpanded` preference. */
+  /** Initial open/closed state, from the `propertiesSectionsMode` preference. */
   defaultOpen: boolean
+  sectionResetKey: string
   onChange: (property: keyof CSSPropertyBag, value: string | number | undefined) => void
   onRemove: (property: keyof CSSPropertyBag) => void
   onClearProperty: (property: keyof CSSPropertyBag) => void
@@ -146,6 +152,7 @@ function StyleSectionGroup({
   storedStyles,
   activeTab,
   defaultOpen,
+  sectionResetKey,
   onChange,
   onRemove,
   onClearProperty,
@@ -163,6 +170,7 @@ function StyleSectionGroup({
 
   return (
     <Section
+      key={`${sectionResetKey}-${section.id}`}
       title={section.title}
       icon={section.icon}
       defaultOpen={defaultOpen}

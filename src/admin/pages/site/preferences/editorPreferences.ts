@@ -219,6 +219,51 @@ export function readAutoSaveDelayMs(): number {
   return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 30_000
 }
 
+export type PropertiesSectionsMode = 'expanded' | 'collapsed' | 'active'
+
+const PROPERTIES_SECTIONS_MODES = new Set<PropertiesSectionsMode>([
+  'expanded',
+  'collapsed',
+  'active',
+])
+
+/**
+ * Read the style-section expand mode. Migrates the legacy boolean
+ * `propertiesSectionsExpanded` preference when present.
+ */
+export function readPropertiesSectionsMode(): PropertiesSectionsMode {
+  const prefs = readEditorPrefs() as Record<string, unknown>
+  const raw = prefs.propertiesSectionsMode
+  if (
+    typeof raw === 'string' &&
+    PROPERTIES_SECTIONS_MODES.has(raw as PropertiesSectionsMode)
+  ) {
+    return raw as PropertiesSectionsMode
+  }
+
+  const legacy = prefs.propertiesSectionsExpanded
+  if (typeof legacy === 'boolean') {
+    return legacy ? 'expanded' : 'collapsed'
+  }
+
+  return 'expanded'
+}
+
+/** React hook for the style-section expand mode. */
+export function usePropertiesSectionsMode(): PropertiesSectionsMode {
+  const [value, setValue] = useState<PropertiesSectionsMode>(() =>
+    readPropertiesSectionsMode(),
+  )
+
+  useEffect(() => {
+    return subscribeToEditorPrefsChanged(() => {
+      setValue(readPropertiesSectionsMode())
+    })
+  }, [])
+
+  return value
+}
+
 // ---------------------------------------------------------------------------
 // Event bus
 //

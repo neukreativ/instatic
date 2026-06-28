@@ -255,12 +255,31 @@ export const PREFERENCE_CATALOG = [
     default: true,
   },
   {
-    id: 'propertiesSectionsExpanded',
-    type: 'boolean',
+    id: 'propertiesSectionsMode',
+    type: 'select',
     category: 'properties',
-    label: 'Expand style sections by default',
-    description: 'Open every property section (Module, Layout, Typography, …) when an element is selected. Turn off to start with all sections collapsed.',
-    default: true,
+    label: 'Style section default state',
+    description:
+      'Choose whether property sections start expanded, collapsed, or only open when they contain set values. Active mode also picks the element and selector with the most style overrides when you click the canvas.',
+    options: [
+      {
+        value: 'expanded',
+        label: 'Always expanded',
+        description: 'Open every section (Module, Layout, Typography, …) when an element is selected.',
+      },
+      {
+        value: 'collapsed',
+        label: 'Always collapsed',
+        description: 'Start with all sections folded — expand only what you need.',
+      },
+      {
+        value: 'active',
+        label: 'Active expanded',
+        description:
+          'Open only sections that already have set values, auto-select the styled child element, and focus the selector with the most overrides.',
+      },
+    ],
+    default: 'expanded',
   },
 
   // ── Command palette (spotlight) ──────────────────────────────────────────

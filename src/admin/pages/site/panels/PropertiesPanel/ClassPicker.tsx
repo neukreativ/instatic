@@ -12,13 +12,12 @@ import {
   type Ref,
 } from 'react'
 import { useEditorStore, selectActiveCanvasPage } from '@site/store/store'
-import { useEditorPreference } from '@site/preferences/editorPreferences'
-import { classifySelectorCreateInput, styleRuleSelector } from '@core/page-tree'
+import { useEditorPreference, readPropertiesSectionsMode } from '@site/preferences/editorPreferences'
+import { classifySelectorCreateInput } from '@core/page-tree'
 import { recordClassUsage } from '@site/preferences/classUsage'
 import { getErrorMessage } from '@core/utils/errorMessage'
 import {
   deriveSelectorPickerModel,
-  type SelectorPillItem,
   type SelectorSuggestionItem,
 } from './selectorPickerModel'
 import {
@@ -30,6 +29,7 @@ import {
 import { classPickerUiReducer, initialClassPickerUiState } from './classPickerUiState'
 import { escapeCssAttributeValue } from '@site/canvas/canvasNodeLookup'
 import { useClassPickerDerivedState } from './useClassPickerDerivedState'
+import { pickAutoActiveSelectorId, resolveActiveStyleContextId } from './styleSelectionUtils'
 import { PillContextMenuPortal } from './ClassPillContextMenu'
 import { ClassRenameDialog } from './ClassRenameDialog'
 import styles from './ClassPicker.module.css'
@@ -37,27 +37,6 @@ import styles from './ClassPicker.module.css'
 interface UnmatchedSelectorNoticeState {
   ruleId: string
   selector: string
-}
-
-/**
- * The selector to auto-activate when a node is selected and nothing is active
- * yet: the highest-specificity *direct* match, skipping the universal `*`
- * (activating it on every element would be noise). Pills arrive sorted
- * weakest→strongest, so the strongest direct match is the last one.
- *
- * This restores click-to-edit for elements styled purely by ambient/descendant
- * selectors (e.g. `.hero-title em`) — they carry no own class, so the
- * store-level selection logic (which only reads `node.classIds`) can't pick
- * them up.
- */
-function pickAutoActiveSelectorId(pills: SelectorPillItem[]): string | null {
-  for (let i = pills.length - 1; i >= 0; i--) {
-    const pill = pills[i]
-    if (pill.match.kind !== 'direct') continue
-    if (styleRuleSelector(pill.rule).trim() === '*') continue
-    return pill.rule.id
-  }
-  return null
 }
 
 function keyboardMenuPosition(element: HTMLElement) {
@@ -107,8 +86,9 @@ export function ClassPicker({ nodeId, trailingAction, ref }: ClassPickerProps) {
 
   useImperativeHandle(ref, () => ({ focusInput: () => inputRef.current?.focus() }))
 
-  const {
-    visibleAssignedIds,
+  const activeContextId = useEditorStore((s) => resolveActiveStyleContextId(s))
+
+  const {    visibleAssignedIds,
     showInlinePill,
     selectedElement,
     selectorModel,
@@ -238,9 +218,7 @@ export function ClassPicker({ nodeId, trailingAction, ref }: ClassPickerProps) {
   const autoActivatedNodeRef = useRef<string | null>(null)
   useEffect(() => {
     if (autoActivatedNodeRef.current === nodeId) return
-    // An assigned class (set by the store on selection) or inline-style editing
-    // already supplies the edit target — nothing to auto-activate.
-    if (activeClassId !== null || inlineStyleEditing) {
+    if (inlineStyleEditing) {
       autoActivatedNodeRef.current = nodeId
       return
     }
@@ -248,9 +226,16 @@ export function ClassPicker({ nodeId, trailingAction, ref }: ClassPickerProps) {
     // selector matching is real before we commit to "nothing matches".
     if (!selectedElement) return
     autoActivatedNodeRef.current = nodeId
-    const target = pickAutoActiveSelectorId(selectorModel.pills)
-    if (target) setActiveClass(target)
-  }, [nodeId, activeClassId, inlineStyleEditing, selectedElement, selectorModel, setActiveClass])
+
+    const target = pickAutoActiveSelectorId(selectorModel.pills, activeContextId)
+    if (!target) return
+
+    // Active mode always picks the richest selector (assigned or ambient).
+    // Other modes only auto-activate when the store has not already chosen one.
+    if (readPropertiesSectionsMode() === 'active' || activeClassId === null) {
+      setActiveClass(target)
+    }
+  }, [nodeId, activeClassId, inlineStyleEditing, selectedElement, selectorModel, setActiveClass, activeContextId])
 
   useEffect(() => {
     if (!hoverPreviewEnabled) clearPreviewNodeClass(nodeId)

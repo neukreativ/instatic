@@ -10,6 +10,7 @@ import { useEditorStore } from '@site/store/store'
 import type { StyleRule, CSSPropertyBag } from '@core/page-tree'
 import { StyleSectionsEditor } from './StyleSectionsEditor'
 import { getActiveStyleTab } from './cssControlTypes'
+import { resolveRuleCurrentStyles } from './breakpointStyleCascade'
 
 // ---------------------------------------------------------------------------
 // Props
@@ -34,6 +35,7 @@ export function StyleRuleComposer({
   mode: _mode = 'contextual',
 }: StyleRuleComposerProps) {
   const activeBreakpointId = useEditorStore((s) => s.activeBreakpointId)
+  const breakpoints = useEditorStore((s) => s.site?.breakpoints ?? [])
   // The editing context is owned by the canvas toolbar's context switcher:
   // either the active viewport (base / breakpoint) or a custom condition. The
   // selector validates the active condition id against the registry and returns
@@ -66,9 +68,13 @@ export function StyleRuleComposer({
   const storedStyles: Record<string, unknown> = activeContextId
     ? (cls.contextStyles[activeContextId] ?? {})
     : cls.styles
-  const currentStyles: Record<string, unknown> = activeContextId
-    ? { ...cls.styles, ...storedStyles }
-    : cls.styles
+  const currentStyles = resolveRuleCurrentStyles({
+    rule: cls,
+    breakpoints,
+    activeContextId,
+    activeBreakpointId,
+    onCondition,
+  })
 
   const handleChange = (key: keyof CSSPropertyBag, value: string | number | undefined) => {
     const patch = { [key]: value ?? null } as Partial<CSSPropertyBag>

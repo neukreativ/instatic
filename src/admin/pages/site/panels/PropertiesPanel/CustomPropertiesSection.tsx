@@ -26,14 +26,16 @@ import { CloseIcon } from 'pixel-art-icons/icons/close'
 import { PlusIcon } from 'pixel-art-icons/icons/plus'
 import { SlidersHorizontalIcon } from 'pixel-art-icons/icons/sliders-horizontal'
 import { getCustomProperties, isCuratedProperty } from './cssControlTypes'
+import type { PropertiesSectionsMode } from '@site/preferences/editorPreferences'
+import { resolveSectionDefaultOpen } from './propertiesSectionsMode'
 import sectionStyles from '@ui/components/Section/Section.module.css'
 import styles from './CustomPropertiesSection.module.css'
 
 interface CustomPropertiesSectionProps {
   /** Active-tab stored styles (no inherited base merge). */
   storedStyles: Record<string, unknown>
-  /** Initial open/closed state, from the `propertiesSectionsExpanded` preference. */
-  defaultOpen: boolean
+  /** Style-section expand mode from editor preferences. */
+  sectionsMode: PropertiesSectionsMode
   onChange: (property: keyof CSSPropertyBag, value: string | number | undefined) => void
   onRemove: (property: keyof CSSPropertyBag) => void
 }
@@ -64,11 +66,12 @@ const PROPERTY_NAME_RE = /^-{0,2}[a-zA-Z][a-zA-Z0-9-]*$/
 
 export function CustomPropertiesSection({
   storedStyles,
-  defaultOpen,
+  sectionsMode,
   onChange,
   onRemove,
 }: CustomPropertiesSectionProps) {
   const customKeys = getCustomProperties(storedStyles)
+  const defaultOpen = resolveSectionDefaultOpen(sectionsMode, customKeys.length)
 
   const [adding, setAdding] = useState(false)
   const [newName, setNewName] = useState('')
