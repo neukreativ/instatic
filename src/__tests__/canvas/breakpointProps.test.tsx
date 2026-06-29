@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach } from 'bun:test'
 import React from 'react'
 import { act, fireEvent, render, screen, cleanup } from '@testing-library/react'
+import { DndContext } from '@dnd-kit/core'
 import { readFileSync } from 'fs'
 import { useEditorStore } from '@site/store/store'
 import { BreakpointFrame } from '@site/canvas/BreakpointFrame'
@@ -14,7 +15,11 @@ import {
 import '@modules/base'
 
 function renderCanvas() {
-  return render(<CanvasRoot />)
+  return render(
+    <DndContext>
+      <CanvasRoot />
+    </DndContext>,
+  )
 }
 
 const BREAKPOINT_FRAME_CSS = new URL(
@@ -24,6 +29,7 @@ const BREAKPOINT_FRAME_CSS = new URL(
 
 beforeEach(() => {
   cleanup()
+  localStorage.clear()
   useEditorStore.setState({
     site: null,
     _historyPast: [],
@@ -36,6 +42,7 @@ beforeEach(() => {
     activeDocument: null,
     activePageId: null,
     activeBreakpointId: 'desktop',
+    canvasView: 'design',
     propertiesPanel: { collapsed: false, x: 0, y: 0, width: 360 },
     propertiesPanelMode: 'docked',
     hasUnsavedChanges: false,
@@ -144,7 +151,11 @@ describe('canvas breakpoint rendering', () => {
       propertiesPanelMode: 'docked',
     } as Parameters<typeof useEditorStore.setState>[0])
 
-    const { rerender } = render(<CanvasRoot />)
+    const { rerender } = render(
+      <DndContext>
+        <CanvasRoot />
+      </DndContext>,
+    )
 
     const tabletFrame = document.querySelector('[data-breakpoint-id="tablet"]')?.parentElement
     const mobileFrame = document.querySelector('[data-breakpoint-id="mobile"]')?.parentElement

@@ -410,7 +410,7 @@ describe('SettingsModal — PreferencesSection toggles', () => {
     openModal('preferences')
     render(<SettingsModal />)
     const switches = screen.getAllByRole('switch')
-    expect(switches.length).toBe(12)
+    expect(switches.length).toBe(11)
   })
 
   it('Auto-save toggle has aria-checked="true" by default', () => {

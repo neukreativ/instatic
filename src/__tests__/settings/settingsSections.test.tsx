@@ -59,11 +59,9 @@ describe('PreferencesSection — catalog-driven rendering', () => {
     //   layersShowIcon, layersShowTag, layersShowClasses,
     //   layersAutoExpandSelected, layersSmoothScroll,
     //   dimInactiveBreakpoints, propertiesSmoothScroll,
-    //   propertiesSectionsExpanded,
     //   spotlightTelemetryEnabled  ← Phase 6: opt-in command-usage telemetry
-    // Adding/removing a boolean preference is one catalog edit and this
-    // assertion updates with it.
-    expect(screen.getAllByRole('switch')).toHaveLength(12)
+    // propertiesSectionsMode is a select (not a boolean switch).
+    expect(screen.getAllByRole('switch')).toHaveLength(11)
     expect(screen.getByRole('switch', { name: /auto-save/i })).toBeDefined()
     expect(screen.getByRole('switch', { name: /preview suggestions on hover/i })).toBeDefined()
     expect(screen.getByRole('switch', { name: /confirm before deleting/i })).toBeDefined()
@@ -74,20 +72,21 @@ describe('PreferencesSection — catalog-driven rendering', () => {
     expect(screen.getByRole('switch', { name: /smooth scroll to selected/i })).toBeDefined()
     expect(screen.getByRole('switch', { name: /dim inactive viewports/i })).toBeDefined()
     expect(screen.getByRole('switch', { name: /smooth scroll on tab change/i })).toBeDefined()
-    expect(screen.getByRole('switch', { name: /expand style sections by default/i })).toBeDefined()
     expect(screen.getByRole('switch', { name: /track command usage/i })).toBeDefined()
+    expect(screen.queryByRole('switch', { name: /expand style sections by default/i })).toBeNull()
     expect(screen.queryByRole('switch', { name: /snap to grid/i })).toBeNull()
     expect(screen.queryByRole('switch', { name: /reduce motion/i })).toBeNull()
   })
 
   it('auto-renders one combobox per select catalog entry', () => {
     render(<PreferencesSection />)
-    // Select preferences: autoSaveDelay, density, defaultBreakpoint
+    // Select preferences: autoSaveDelay, density, defaultBreakpoint, propertiesSectionsMode
     const selects = screen.getAllByRole('combobox')
-    expect(selects.length).toBe(3)
+    expect(selects.length).toBe(4)
     expect(screen.getByRole('combobox', { name: /auto-save delay/i })).toBeDefined()
     expect(screen.getByRole('combobox', { name: /ui density/i })).toBeDefined()
     expect(screen.getByRole('combobox', { name: /default viewport/i })).toBeDefined()
+    expect(screen.getByRole('combobox', { name: /style section default state/i })).toBeDefined()
   })
 })
 

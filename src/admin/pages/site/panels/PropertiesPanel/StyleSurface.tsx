@@ -10,8 +10,7 @@
  *
  * The search bar filters module settings and CSS properties for the active
  * selector. The query persists when switching selector pills on the same
- * element so authors can hunt a property across selectors; it resets only
- * when the selected node changes. Typing a query auto-activates the strongest
+ * class; it resets when the selected node or active class changes. Typing a query auto-activates the strongest
  * matching selector pill that already sets a matching property.
  *
  * Rail icons are scroll-anchor shortcuts; the active icon is derived from
@@ -110,9 +109,10 @@ export function StyleSurface({
 
   // Reset search when the selected node changes — not when switching selector
   // pills, so authors can hunt a property across selectors with one query.
-  const [lastNodeId, setLastNodeId] = useState<string | null>(null)
-  if (lastNodeId !== nodeId) {
-    setLastNodeId(nodeId)
+  const styleQueryScopeKey = `${nodeId ?? ''}:${activeClassId ?? ''}`
+  const [lastStyleQueryScopeKey, setLastStyleQueryScopeKey] = useState('')
+  if (lastStyleQueryScopeKey !== styleQueryScopeKey) {
+    setLastStyleQueryScopeKey(styleQueryScopeKey)
     if (styleQuery !== '') setStyleQuery('')
   }
 

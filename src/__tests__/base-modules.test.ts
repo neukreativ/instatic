@@ -277,11 +277,9 @@ describe('base.text — unified text module', () => {
     expect(html).toContain('&lt;script&gt;')
   })
 
-  // Canvas/publish DOM fidelity: `tag: none` emits NO element on the published
-  // page (render() returns bare text), so the canvas must do the same. A
-  // phantom wrapper (e.g. a `<span>`) would be caught by descendant selectors
-  // like `.parent span`, painting the text in the canvas but not on publish.
-  it('renders tag "none" as bare text with no wrapper element in the canvas', () => {
+  // Canvas display: `tag: none` publishes bare text; the canvas uses a minimal
+  // inline host span so click-to-select has a DOM target (not emitted on publish).
+  it('renders tag "none" with a canvas-only text host span, not a semantic wrapper', () => {
     const { container } = renderReact(
       React.createElement(TextModule.component, {
         props: { text: '4', tag: 'none', htmlAttributes: {} },
@@ -293,14 +291,13 @@ describe('base.text — unified text module', () => {
     )
 
     expect(container.textContent).toBe('4')
-    // No wrapping element at all — not a span, and nothing carrying the
-    // canvas identity/class that the publisher's bare text wouldn't have.
-    expect(container.querySelector('span')).toBeNull()
-    expect(container.querySelector('[data-node-id]')).toBeNull()
-    expect(container.querySelector('.ist-x')).toBeNull()
+    const host = container.querySelector('[data-instatic-canvas-text-host]')
+    expect(host?.tagName).toBe('SPAN')
+    expect(host?.getAttribute('data-node-id')).toBe('n1')
+    expect(host?.className).toBe('ist-x')
   })
 
-  it('renders tag "none" multiline as bare text with <br> breaks and no wrapper', () => {
+  it('renders tag "none" multiline with <br> breaks inside the canvas host', () => {
     const { container } = renderReact(
       React.createElement(TextModule.component, {
         props: { text: 'a\nb', tag: 'none', htmlAttributes: {} },
@@ -311,8 +308,9 @@ describe('base.text — unified text module', () => {
       } as never),
     )
 
-    expect(container.querySelector('span')).toBeNull()
-    expect(container.querySelector('br')).not.toBeNull()
+    const host = container.querySelector('[data-instatic-canvas-text-host]')
+    expect(host).not.toBeNull()
+    expect(host!.querySelector('br')).not.toBeNull()
     expect(container.textContent).toBe('ab')
   })
 

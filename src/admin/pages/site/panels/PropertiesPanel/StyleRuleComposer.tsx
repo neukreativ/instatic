@@ -7,7 +7,7 @@
  */
 
 import { useEditorStore } from '@site/store/store'
-import type { StyleRule, CSSPropertyBag } from '@core/page-tree'
+import type { Breakpoint, StyleRule, CSSPropertyBag } from '@core/page-tree'
 import { StyleSectionsEditor } from './StyleSectionsEditor'
 import { getActiveStyleTab } from './cssControlTypes'
 import { resolveRuleCurrentStyles } from './breakpointStyleCascade'
@@ -24,6 +24,8 @@ interface StyleRuleComposerProps {
   mode?: 'contextual' | 'global'
 }
 
+const EMPTY_BREAKPOINTS: Breakpoint[] = []
+
 // ---------------------------------------------------------------------------
 // StyleRuleComposer
 // ---------------------------------------------------------------------------
@@ -35,7 +37,7 @@ export function StyleRuleComposer({
   mode: _mode = 'contextual',
 }: StyleRuleComposerProps) {
   const activeBreakpointId = useEditorStore((s) => s.activeBreakpointId)
-  const breakpoints = useEditorStore((s) => s.site?.breakpoints ?? [])
+  const breakpoints = useEditorStore((s) => s.site?.breakpoints ?? EMPTY_BREAKPOINTS)
   // The editing context is owned by the canvas toolbar's context switcher:
   // either the active viewport (base / breakpoint) or a custom condition. The
   // selector validates the active condition id against the registry and returns

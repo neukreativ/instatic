@@ -9,7 +9,7 @@
 
 import type { Breakpoint, StyleRule } from '@core/page-tree'
 import { breakpointMediaQuery } from '@core/page-tree'
-import { compareViewportContextCascade } from '@core/publisher/classCss'
+import { compareViewportContextCascade } from '@core/publisher'
 
 const PURE_MAX_WIDTH_QUERY_RE = /^\(\s*max-width\s*:\s*(\d+(?:\.\d+)?)\s*px\s*\)$/i
 const PURE_MIN_WIDTH_QUERY_RE = /^\(\s*min-width\s*:\s*(\d+(?:\.\d+)?)\s*px\s*\)$/i
