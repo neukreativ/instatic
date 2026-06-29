@@ -72,17 +72,20 @@ Ohne `--push` bleiben Rebase-Ergebnisse **lokal** — sicher zum Inspizieren. Mi
 
 ## Editor-Features (Stand Juni 2026)
 
-Jedes Feature = **eigener Branch** auf `origin`.
+**Inline-Text-Edit auf dem Canvas ist bereits Core** (`docs/editor.md`, `inlineEditSlice`, Doppelklick/Enter). Kein eigener Fork-PR dafür.
+
+Jedes **neukreativ-eigene** Feature = **eigener Branch** auf `origin`. Alles zusammen testen: **`feat/all-editor-qa`**.
 
 | Branch | Reihenfolge Core-PR | Kurzbeschreibung | Manueller Test |
 | ------ | ------------------- | ---------------- | -------------- |
-| `feat/preserve-style-search-across-selectors` | 1 | Style-Suche bleibt bei Pill-Wechsel | Style-Panel: suchen, Pill wechseln |
+| `feat/preserve-style-search-across-selectors` | 1 | Style-Suche bleibt bei Selector-Pill-Wechsel | Style-Panel: suchen, Selector-Pill wechseln |
 | `feat/editor-canvas-text-click-selects-content` | 2 | Canvas-Text-Klick → Text-Modul | Text anklicken → Modul selektiert |
-| `fix/editor-breakpoint-style-cascade-panel` | parallel | Breakpoint-CSS-Kaskade im Panel | Breakpoint + Vererbung prüfen |
-| `feat/editor-inline-text-edit-canvas` | 4 | Doppelklick/Enter Inline-Edit | Live-Mode, kleine Viewports |
-| `feat/editor-active-expanded-property-sections` | 5 | „Active“ Property-Sections | Modus umschalten, Auswahl wechseln |
+| `fix/editor-breakpoint-style-cascade-panel` | parallel zu 2 | Breakpoint-CSS-Kaskade im Panel | Breakpoint + Vererbung prüfen |
+| `feat/editor-active-expanded-property-sections` | 3 (nach Style-Search) | „Active“ Property-Sections | Modus umschalten, Auswahl wechseln |
 
-Referenz (alles zusammen, kein Core-PR): `wip/all-editor-improvements`
+Verworfen / nicht an Core: `feat/editor-inline-text-edit-canvas` (Duplikat zu Core).
+
+Referenz (historisch): `wip/all-editor-improvements`
 
 ### Feature manuell testen
 

@@ -30,17 +30,15 @@ run feat/editor-canvas-text-click-selects-content \
 - [ ] Manual QA complete
 EOF
 
-run feat/editor-inline-text-edit-canvas \
-  "feat(editor): inline text edit on canvas via double-click and Enter" \
+run fix/editor-breakpoint-style-cascade-panel \
+  "fix(editor): show breakpoint style cascade in properties panel" \
   - <<'EOF'
 ## Summary
-- Double-click and Enter start in-place contentEditable; design + live + all breakpoints.
+- Properties panel shows effective styles like CSS cascade across breakpoints.
 
 ## Test plan
-- [x] `bun test src/__tests__/canvas/inlineTextEditModes.test.tsx`
+- [x] `bun test src/__tests__/panels/breakpointStyleCascade.test.ts`
 - [ ] Manual QA complete
-
-**Note:** Rebase onto merged text-click PR before marking ready.
 EOF
 
 run feat/editor-active-expanded-property-sections \
@@ -54,17 +52,6 @@ run feat/editor-active-expanded-property-sections \
 - [ ] Manual QA complete
 
 **Note:** Rebase onto merged style-search PR before marking ready.
-EOF
-
-run fix/editor-breakpoint-style-cascade-panel \
-  "fix(editor): show breakpoint style cascade in properties panel" \
-  - <<'EOF'
-## Summary
-- Properties panel shows effective styles like CSS cascade across breakpoints.
-
-## Test plan
-- [x] `bun test src/__tests__/panels/breakpointStyleCascade.test.ts`
-- [ ] Manual QA complete
 EOF
 
 echo "All draft PRs opened from neukreativ/instatic."

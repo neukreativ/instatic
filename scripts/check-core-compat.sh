@@ -16,7 +16,6 @@ FEATURE_BRANCHES=(
   feat/preserve-style-search-across-selectors
   feat/editor-canvas-text-click-selects-content
   fix/editor-breakpoint-style-cascade-panel
-  feat/editor-inline-text-edit-canvas
   feat/editor-active-expanded-property-sections
 )
 
