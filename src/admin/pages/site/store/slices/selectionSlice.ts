@@ -5,6 +5,12 @@ import type { BaseNode } from '@core/page-tree'
 import type { NodeTree } from '@core/page-tree'
 import type { PageNode } from '@core/page-tree'
 import { flattenSubtree, getParent } from '@core/page-tree'
+import { readPropertiesSectionsMode } from '@site/preferences/editorPreferences'
+import {
+  pickClassIdWithMostSetProperties,
+  resolveActiveStyleContextId,
+  resolveStylePreferredNodeId,
+} from '@site/panels/PropertiesPanel/styleSelectionUtils'
 
 /**
  * Selection mode for `selectNode`:
@@ -18,6 +24,8 @@ type SelectionMode = 'replace' | 'toggle' | 'range'
 
 interface SelectNodeOptions {
   preservePropertiesPanelCollapse?: boolean
+  /** DOM target from the originating canvas click — used to preserve text hits. */
+  clickTarget?: EventTarget | null
 }
 
 interface SelectionSlice {
@@ -126,7 +134,8 @@ export const createSelectionSlice: EditorStoreSliceCreator<SelectionSlice> = (se
       }
     } else {
       // 'replace'
-      nextIds = [id]
+      const clickTarget = options?.clickTarget ?? null
+      nextIds = [resolveStylePreferredNodeId(current, id, clickTarget)]
     }
 
     applySelection(set, current, nextIds, options)
@@ -403,6 +412,17 @@ function getSelectionActiveClassId(state: EditorStore, nodeId: string | null): s
   })
 
   if (visibleClassIds.length === 0) return null
+
+  if (readPropertiesSectionsMode() === 'active') {
+    const richest = pickClassIdWithMostSetProperties(
+      state,
+      visibleClassIds,
+      resolveActiveStyleContextId(state),
+    )
+    if (richest) return richest
+    return null
+  }
+
   if (state.activeClassId && visibleClassIds.includes(state.activeClassId)) {
     return state.activeClassId
   }
